@@ -2,12 +2,12 @@
 
 # Ryvos
 
-### The secure, high-performance AI agent runtime — written in Rust.
+### Your autonomous AI assistant — secure, fast, and always on.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
 
-**Multi-provider LLM · Parallel tool execution · MCP-native · Sandboxed by default**
+**Multi-provider LLM · Multi-channel inbox · MCP-native · Sandboxed by default · Single binary**
 
 [Quick Start](#quick-start) · [Why Ryvos](#why-ryvos) · [Features](#features) · [Architecture](#architecture) · [Security](#security-model) · [Roadmap](#roadmap)
 
@@ -17,33 +17,33 @@
 
 ## What is Ryvos?
 
-Ryvos is an open-source AI agent runtime that lets developers build, deploy, and operate autonomous AI agents. It connects to any LLM provider (Anthropic, OpenAI, Ollama, or any OpenAI-compatible API), executes tools in a sandboxed environment, and deploys anywhere as a single binary — no Node.js, no Python, no Docker required.
+Ryvos is an open-source, autonomous personal AI assistant you run on your own hardware. It connects to any LLM (Anthropic, OpenAI, Ollama, or any OpenAI-compatible API), executes tasks through sandboxed tools, and reaches you on the channels you already use — Telegram, Discord, Slack — plus a built-in Web UI and terminal interface. Written in Rust. Ships as a single binary. Uses 15–30 MB of RAM.
 
 ```bash
 cargo install --path .
 ryvos init          # Pick your LLM provider, paste an API key
-ryvos               # Start talking to your agent
+ryvos               # Start talking to your assistant
 ```
 
-Three commands. Under 30MB of RAM. Running.
+Three commands. Under 30MB of RAM. Your assistant is running.
 
 ---
 
 ## Why Ryvos?
 
-The AI agent ecosystem today is built on Python and TypeScript runtimes that were never designed for autonomous tool execution at scale. They ship with:
+Autonomous AI assistants are exploding — OpenClaw hit 140K GitHub stars in six weeks. But the current generation is built on TypeScript and Python runtimes that were never designed for always-on, autonomous operation:
 
-- **No security model** — community plugins run arbitrary code with full system access
-- **High resource usage** — 200-500MB RAM idle, GC pauses, slow cold starts
-- **No deployment story** — require container orchestration just to run a single agent
+- **No security model** — community skills run arbitrary code with full system access. Cisco's security team [found OpenClaw skills performing data exfiltration](https://blogs.cisco.com/ai/personal-ai-agents-like-openclaw-are-a-security-nightmare) without user awareness.
+- **High resource usage** — 200-500MB RAM idle, garbage collection pauses, slow cold starts. Not what you want from an always-on assistant.
+- **Fragile deployment** — requires Node.js ≥22, npm ecosystem, container orchestration. Breaks on updates.
 
-Ryvos takes a different approach:
+Ryvos is built from scratch in Rust with a different set of priorities:
 
-| | Typical agent runtimes | Ryvos |
+| | Typical AI assistants | Ryvos |
 |---|---|---|
-| **Language** | Python / TypeScript | Rust |
+| **Language** | TypeScript / Python | Rust |
 | **Memory** | 200–500 MB | 15–30 MB |
-| **Tool security** | None (arbitrary code) | 5-tier classification + sandboxing |
+| **Tool security** | None (arbitrary code) | 5-tier classification + Docker sandboxing |
 | **Dangerous command detection** | None | 9 built-in patterns (rm -rf, DROP TABLE, curl\|bash, etc.) |
 | **Deployment** | npm/pip + runtime + Docker | Single static binary |
 | **MCP support** | Plugin/community | Native (stdio + SSE/Streamable HTTP) |
@@ -55,12 +55,21 @@ Ryvos takes a different approach:
 
 ## Features
 
-### Agent Runtime
+### Autonomous Assistant
 - **ReAct agent loop** with tool use, reflexion, and streaming responses
 - **Parallel tool execution** — multiple tools run concurrently when independent
 - **Multi-provider LLM** — Anthropic, OpenAI, Ollama, or any OpenAI-compatible endpoint
-- **Session persistence** — SQLite-backed conversation history and memory
-- **Sub-agent spawning** — agents can spawn child agents with stricter security policies
+- **Session persistence** — SQLite-backed conversation history and memory across restarts
+- **Sub-agent spawning** — your assistant can delegate tasks to child agents with stricter security
+- **Lifecycle hooks** — trigger shell commands on start, message, tool call, and response events
+
+### Multi-Channel Inbox
+- **Telegram, Discord, Slack** — talk to your assistant on the platforms you already use
+- **Per-channel DM policies** — allowlist, open, or disabled access control per channel
+- **HTTP/WebSocket Gateway** — Axum-based server with embedded Web UI for browser access
+- **Terminal UI** — full ratatui-based TUI for power users
+- **Interactive REPL** — quick command-line usage
+- **Daemon mode** — always-on background service with `--gateway` flag
 
 ### Security (Built-in, Not Bolted-on)
 - **5-tier tool classification** (T0 safe → T4 critical) with automatic tier escalation
@@ -70,20 +79,13 @@ Ryvos takes a different approach:
 - **Sandboxed skills** — user extensions run in Lua/Rhai, not arbitrary system code
 - **Sub-agent restrictions** — spawned agents default to stricter security policies
 
-### Deployment
-- **Gateway** — Axum HTTP/WebSocket server with embedded Web UI
-- **Role-based API keys** — Viewer, Operator, Admin roles for gateway access
-- **Channel adapters** — Telegram, Discord, Slack with per-channel DM policies (allowlist/open/disabled)
-- **Daemon mode** — run as a background service with `--gateway` flag
-- **TUI** — full terminal UI built on ratatui
-- **Interactive REPL** — for quick command-line usage
-- **Lifecycle hooks** — shell commands on start, message, tool call, and response events
-
-### Extensibility
+### Tools & Extensibility
+- **Built-in tools** — shell, file I/O, web search, and more out of the box
 - **MCP-native** — connect to Model Context Protocol servers (stdio + SSE/Streamable HTTP transports)
 - **Drop-in skills** — Lua/Rhai scripts in `~/.ryvos/skills/` with manifest-declared schemas and sandbox requirements
-- **Tool registry** — built-in tools (shell, file I/O, web search) + custom tools via MCP or skills
-- **Event bus** — subscribe to agent events for monitoring, logging, or custom integrations
+- **Tool registry** — built-in tools + custom tools via MCP or skills
+- **Role-based API keys** — Viewer, Operator, Admin roles for gateway access
+- **Event bus** — subscribe to assistant events for monitoring, logging, or custom integrations
 
 ---
 
@@ -96,19 +98,19 @@ cargo install --path .
 # Interactive setup — pick a provider, paste an API key
 ryvos init
 
-# Start the REPL
+# Start talking to your assistant
 ryvos
 
-# Or run a single prompt
-ryvos run "Summarize the files in this directory"
+# Or ask a quick question
+ryvos run "What meetings do I have tomorrow?"
 
 # Launch the terminal UI
 ryvos tui
 
-# Start the HTTP/WebSocket gateway with Web UI
+# Start the Web UI + HTTP/WebSocket gateway
 ryvos serve
 
-# Run as a daemon with Telegram + Discord + Slack
+# Always-on assistant: Telegram + Discord + Slack + gateway
 ryvos daemon --gateway
 ```
 
@@ -116,16 +118,16 @@ ryvos daemon --gateway
 
 | Command | Description |
 |---------|-------------|
-| `ryvos` | Interactive REPL (default) |
-| `ryvos run <prompt>` | Single prompt, then exit |
+| `ryvos` | Interactive conversation (default) |
+| `ryvos run <prompt>` | Ask a question, get an answer, exit |
 | `ryvos tui` | Terminal UI |
-| `ryvos serve` | HTTP/WebSocket gateway with Web UI |
-| `ryvos daemon` | Channel adapters (Telegram, Discord, Slack) |
-| `ryvos daemon --gateway` | Channels + gateway in one process |
+| `ryvos serve` | Web UI + HTTP/WebSocket gateway |
+| `ryvos daemon` | Always-on assistant (Telegram, Discord, Slack) |
+| `ryvos daemon --gateway` | Always-on + Web UI in one process |
 | `ryvos init` | Interactive setup wizard |
 | `ryvos init -y` | Non-interactive setup with defaults |
 | `ryvos config` | Print resolved configuration |
-| `ryvos doctor` | Run system health checks |
+| `ryvos doctor` | System health checks |
 | `ryvos health` | Tool health statistics |
 | `ryvos mcp list` | List configured MCP servers |
 | `ryvos mcp add <name>` | Add an MCP server |
@@ -135,7 +137,7 @@ ryvos daemon --gateway
 
 ## Architecture
 
-Ryvos is a Cargo workspace with 10 crates, each with a single responsibility:
+Ryvos is a Cargo workspace with 10 crates. Together they form a complete autonomous assistant — LLM reasoning, tool execution, security enforcement, persistent memory, multi-channel inbox, and a web dashboard — all in one binary.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -163,7 +165,7 @@ Ryvos is a Cargo workspace with 10 crates, each with a single responsibility:
 | `ryvos-core` | Config, error types, event bus, security policy, traits |
 | `ryvos-llm` | LLM client abstraction with streaming support |
 | `ryvos-tools` | Tool registry, built-in tools (shell, file I/O, web search) |
-| `ryvos-agent` | ReAct agent loop, SecurityGate, ApprovalBroker, session management |
+| `ryvos-agent` | Autonomous ReAct loop, SecurityGate, ApprovalBroker, session management |
 | `ryvos-memory` | SQLite-backed session and history storage |
 | `ryvos-gateway` | Axum HTTP/WS server, Web UI, role-based auth middleware |
 | `ryvos-channels` | Telegram, Discord, Slack adapters with DM policy enforcement |
@@ -267,12 +269,17 @@ See [`ryvos.toml.example`](ryvos.toml.example) for the full reference.
 
 - [ ] Pre-built binaries (Windows, macOS, Linux) via GitHub Releases
 - [ ] `cargo install ryvos` from crates.io
-- [ ] Ryvos Cloud — hosted gateway with managed sessions
+- [ ] WhatsApp, Signal, iMessage, and Google Chat channel adapters
+- [ ] Voice mode — wake word detection + speech-to-text + TTS
+- [ ] Mobile companion apps (iOS, Android) via WebSocket
+- [ ] Browser control — navigate, click, extract, screenshot
+- [ ] Cron scheduler — recurring tasks and automated workflows
+- [ ] Live Canvas — real-time document/artifact editing in Web UI
+- [ ] Ryvos Cloud — hosted assistant with managed sessions
 - [ ] SOC 2 compliance documentation
-- [ ] Plugin marketplace with signed, verified skills
+- [ ] Signed & verified skill marketplace
 - [ ] Multi-agent collaboration protocols
 - [ ] Observability dashboard (token usage, tool latency, security events)
-- [ ] WhatsApp and Signal channel adapters
 
 ---
 
