@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ryvos</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <!-- Login overlay -->
+  <div id="login-overlay" class="overlay hidden">
+    <div class="login-box">
+      <h2>Ryvos</h2>
+      <p>Enter your API key to connect.</p>
+      <input type="password" id="api-key-input" placeholder="API key (Bearer token)" autofocus>
+      <button id="login-btn">Connect</button>
+      <p class="login-hint">Leave blank if no auth is configured.</p>
+    </div>
+  </div>
+
+  <!-- Main layout -->
+  <div id="app" class="app-layout">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h1>Ryvos</h1>
+        <button id="new-session-btn" title="New session">+</button>
+      </div>
+      <div id="session-list" class="session-list"></div>
+      <div class="sidebar-footer">
+        <button id="logout-btn" class="btn-link">Disconnect</button>
+      </div>
+    </aside>
+
+    <!-- Chat area -->
+    <main id="chat" class="chat-area">
+      <div id="messages" class="messages"></div>
+      <div class="input-bar">
+        <textarea id="message-input" placeholder="Type a message..." rows="1"></textarea>
+        <button id="send-btn">Send</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

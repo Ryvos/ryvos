@@ -1,0 +1,15 @@
+[package]
+name = "ryvos-tui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ryvos-core.workspace = true
+ryvos-agent.workspace = true
+tokio.workspace = true
+futures.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+anyhow.workspace = true

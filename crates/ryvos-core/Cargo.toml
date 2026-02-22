@@ -1,0 +1,17 @@
+[package]
+name = "ryvos-core"
+version.workspace = true
+edition.workspace = true
+description = "Core types, traits, and error hierarchy for Ryvos"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+futures.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+regex.workspace = true

@@ -1,0 +1,14 @@
+[package]
+name = "ryvos-mcp"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ryvos-core.workspace = true
+ryvos-tools.workspace = true
+tokio.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+rmcp.workspace = true

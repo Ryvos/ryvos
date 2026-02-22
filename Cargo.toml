@@ -1,0 +1,132 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ryvos-core",
+    "crates/ryvos-llm",
+    "crates/ryvos-tools",
+    "crates/ryvos-agent",
+    "crates/ryvos-memory",
+    "crates/ryvos-gateway",
+    "crates/ryvos-tui",
+    "crates/ryvos-mcp",
+    "crates/ryvos-channels",
+    "crates/ryvos-skills",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Async
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# HTTP
+reqwest = { version = "0.12", features = ["stream", "json"] }
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled", "vtab"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
+dialoguer = "0.11"
+
+# Misc
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+rand = "0.8"
+tiktoken-rs = "0.6"
+regex = "1"
+cron = "0.13"
+bollard = "0.18"
+
+# WebSocket
+tokio-tungstenite = "0.26"
+
+# Web framework
+axum = { version = "0.8", features = ["ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors"] }
+
+# Embedded assets
+rust-embed = { version = "8", features = ["axum"] }
+mime_guess = "2"
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# MCP
+rmcp = { version = "0.16", features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"] }
+
+# Internal crates
+ryvos-core = { path = "crates/ryvos-core" }
+ryvos-llm = { path = "crates/ryvos-llm" }
+ryvos-tools = { path = "crates/ryvos-tools" }
+ryvos-agent = { path = "crates/ryvos-agent" }
+ryvos-memory = { path = "crates/ryvos-memory" }
+ryvos-gateway = { path = "crates/ryvos-gateway" }
+ryvos-tui = { path = "crates/ryvos-tui" }
+ryvos-mcp = { path = "crates/ryvos-mcp" }
+ryvos-channels = { path = "crates/ryvos-channels" }
+ryvos-skills = { path = "crates/ryvos-skills" }
+
+[package]
+name = "ryvos"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "ryvos"
+path = "src/main.rs"
+
+[dependencies]
+ryvos-core.workspace = true
+ryvos-llm.workspace = true
+ryvos-tools.workspace = true
+ryvos-agent.workspace = true
+ryvos-memory.workspace = true
+ryvos-gateway.workspace = true
+ryvos-tui.workspace = true
+ryvos-mcp.workspace = true
+ryvos-channels.workspace = true
+ryvos-skills.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+dialoguer.workspace = true
+uuid.workspace = true
+cron.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

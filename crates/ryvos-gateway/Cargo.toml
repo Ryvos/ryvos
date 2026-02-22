@@ -1,0 +1,23 @@
+[package]
+name = "ryvos-gateway"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ryvos-core.workspace = true
+ryvos-agent.workspace = true
+ryvos-tools.workspace = true
+ryvos-memory.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+uuid.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+rust-embed.workspace = true
+mime_guess.workspace = true

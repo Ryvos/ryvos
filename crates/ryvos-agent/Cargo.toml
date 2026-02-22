@@ -1,0 +1,24 @@
+[package]
+name = "ryvos-agent"
+version.workspace = true
+edition.workspace = true
+description = "Agent runtime with ReAct loop and streaming"
+
+[dependencies]
+ryvos-core.workspace = true
+ryvos-llm.workspace = true
+ryvos-tools.workspace = true
+ryvos-memory.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+tiktoken-rs.workspace = true
+cron.workspace = true
+rusqlite.workspace = true
+reqwest.workspace = true

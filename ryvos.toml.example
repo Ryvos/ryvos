@@ -1,0 +1,71 @@
+# Ryvos Configuration
+
+[agent]
+max_turns = 25
+max_duration_secs = 600
+workspace = "~/.ryvos"
+
+[model]
+# Provider: "anthropic", "openai", "ollama", or any OpenAI-compatible API
+provider = "anthropic"
+model_id = "claude-sonnet-4-20250514"
+api_key = "${ANTHROPIC_API_KEY}"
+max_tokens = 8192
+# temperature = 0.0
+
+# Uncomment for OpenAI:
+# provider = "openai"
+# model_id = "gpt-4o"
+# api_key = "${OPENAI_API_KEY}"
+
+# Uncomment for Ollama (local):
+# provider = "ollama"
+# model_id = "llama3.2"
+# base_url = "http://localhost:11434/v1/chat/completions"
+
+# [gateway]
+# bind = "127.0.0.1:18789"
+# token = "${RYVOS_GATEWAY_TOKEN}"
+# password = "my-secret-password"   # Alternative to token auth
+
+# Named API keys for gateway auth (Bearer token)
+# [[gateway.api_keys]]
+# name = "web-ui"
+# key = "rk_..."
+# role = "operator"    # viewer | operator | admin
+
+# [channels.telegram]
+# bot_token = "${TELEGRAM_BOT_TOKEN}"
+# dm_policy = "allowlist"           # allowlist | open | disabled
+# allowed_users = [123456789]
+
+# [channels.discord]
+# bot_token = "${DISCORD_BOT_TOKEN}"
+# dm_policy = "allowlist"           # allowlist | open | disabled
+# allowed_users = [123456789012345678]
+
+# [channels.slack]
+# bot_token = "${SLACK_BOT_TOKEN}"
+# app_token = "${SLACK_APP_TOKEN}"
+# dm_policy = "allowlist"           # allowlist | open | disabled
+# allowed_users = ["U01234ABC"]
+
+# Lifecycle hooks — shell commands fired on events
+# [hooks]
+# on_start = ["notify-send 'Ryvos started'"]
+# on_message = ["logger -t ryvos 'Received: $RYVOS_TEXT'"]
+# on_tool_call = ["logger -t ryvos 'Tool: $RYVOS_TOOL'"]
+# on_response = ["logger -t ryvos 'Response sent'"]
+
+# MCP (Model Context Protocol) servers
+# [mcp.servers.filesystem]
+# transport = { type = "stdio", command = "npx", args = ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"] }
+# auto_connect = true
+
+# [mcp.servers.github]
+# transport = { type = "stdio", command = "npx", args = ["-y", "@modelcontextprotocol/server-github"] }
+# auto_connect = true
+
+# [mcp.servers.remote]
+# transport = { type = "sse", url = "http://localhost:3001/sse" }
+# auto_connect = false
