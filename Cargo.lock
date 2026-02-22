@@ -2549,6 +2549,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "tui-banner",
  "uuid",
 ]
 
@@ -2729,6 +2730,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "tui-banner",
 ]
 
 [[package]]
@@ -3767,6 +3769,12 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "tui-banner"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab1a86bf143377f5992d4a2a7ced3a38279b0d3c89b3c51572d6f5d3b9ea4df7"
 
 [[package]]
 name = "tungstenite"

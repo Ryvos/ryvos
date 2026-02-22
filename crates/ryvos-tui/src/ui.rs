@@ -3,23 +3,49 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
+use tui_banner::Banner;
 
 use crate::app::{App, MessageRole};
+
+fn render_tui_banner() -> String {
+    Banner::new("RYVOS")
+        .and_then(|b| {
+            Ok(b.style(tui_banner::Style::NeonCyber)
+                .render())
+        })
+        .unwrap_or_else(|_| String::from("RYVOS"))
+}
 
 /// Draw the TUI layout.
 pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
+            Constraint::Length(8),     // Banner area
             Constraint::Min(1),        // Messages area
             Constraint::Length(1),     // Status bar
             Constraint::Length(3),     // Input area
         ])
         .split(f.area());
 
-    draw_messages(f, app, chunks[0]);
-    draw_status_bar(f, app, chunks[1]);
-    draw_input(f, app, chunks[2]);
+    draw_banner(f, chunks[0]);
+    draw_messages(f, app, chunks[1]);
+    draw_status_bar(f, app, chunks[2]);
+    draw_input(f, app, chunks[3]);
+}
+
+fn draw_banner(f: &mut Frame, area: Rect) {
+    let banner_text = render_tui_banner();
+    let lines: Vec<Line> = banner_text
+        .lines()
+        .map(|l| Line::from(Span::styled(l.to_string(), Style::default().fg(Color::Cyan))))
+        .collect();
+
+    let banner = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::BOTTOM))
+        .style(Style::default());
+
+    f.render_widget(banner, area);
 }
 
 fn draw_messages(f: &mut Frame, app: &App, area: Rect) {
@@ -78,7 +104,7 @@ fn draw_messages(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let messages = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(" Ryvos "))
+        .block(Block::default().borders(Borders::ALL).title(" Messages "))
         .wrap(Wrap { trim: false })
         .scroll((scroll as u16, 0));
 

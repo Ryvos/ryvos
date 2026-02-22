@@ -122,6 +122,7 @@ toml.workspace = true
 dialoguer.workspace = true
 uuid.workspace = true
 cron.workspace = true
+tui-banner = "0.1.4"
 
 [dev-dependencies]
 tempfile = "3"
