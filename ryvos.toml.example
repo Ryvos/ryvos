@@ -5,6 +5,14 @@ max_turns = 25
 max_duration_secs = 600
 workspace = "~/.ryvos"
 
+# Guardian watchdog — detects doom loops, stalls, and token budget overruns
+# [agent.guardian]
+# enabled = true
+# doom_loop_threshold = 3       # identical tool calls to trigger
+# stall_timeout_secs = 120      # seconds without progress
+# token_budget = 0              # 0 = unlimited
+# token_warn_pct = 80           # soft warning at this %
+
 [model]
 # Provider: "anthropic", "openai", "ollama", or any OpenAI-compatible API
 provider = "anthropic"

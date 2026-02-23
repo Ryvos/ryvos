@@ -1,2 +1,27 @@
-/target
+# Build artifacts
+/target/
 *.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Config with secrets (the example is fine)
+config.toml
+.env
+
+# Ryvos workspace data
+.ryvos/

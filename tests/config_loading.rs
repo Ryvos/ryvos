@@ -114,3 +114,49 @@ model_id = "llama3.2"
     assert!(config.mcp.is_none());
     assert!(config.hooks.is_none());
 }
+
+#[test]
+fn test_guardian_config_defaults_from_minimal_toml() {
+    let toml_content = r#"
+[model]
+model_id = "llama3.2"
+"#;
+
+    let mut tmp = tempfile::NamedTempFile::new().expect("create temp file");
+    tmp.write_all(toml_content.as_bytes()).expect("write toml");
+
+    let config = AppConfig::load(tmp.path()).expect("load config");
+
+    // Guardian should get sensible defaults even without [agent.guardian] section
+    assert!(config.agent.guardian.enabled);
+    assert_eq!(config.agent.guardian.doom_loop_threshold, 3);
+    assert_eq!(config.agent.guardian.stall_timeout_secs, 120);
+    assert_eq!(config.agent.guardian.token_budget, 0);
+    assert_eq!(config.agent.guardian.token_warn_pct, 80);
+}
+
+#[test]
+fn test_guardian_config_custom_values() {
+    let toml_content = r#"
+[model]
+model_id = "llama3.2"
+
+[agent.guardian]
+enabled = false
+doom_loop_threshold = 5
+stall_timeout_secs = 60
+token_budget = 100000
+token_warn_pct = 90
+"#;
+
+    let mut tmp = tempfile::NamedTempFile::new().expect("create temp file");
+    tmp.write_all(toml_content.as_bytes()).expect("write toml");
+
+    let config = AppConfig::load(tmp.path()).expect("load config");
+
+    assert!(!config.agent.guardian.enabled);
+    assert_eq!(config.agent.guardian.doom_loop_threshold, 5);
+    assert_eq!(config.agent.guardian.stall_timeout_secs, 60);
+    assert_eq!(config.agent.guardian.token_budget, 100000);
+    assert_eq!(config.agent.guardian.token_warn_pct, 90);
+}

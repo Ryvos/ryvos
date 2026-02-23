@@ -287,6 +287,16 @@ pub enum AgentEvent {
     ApprovalResolved { request_id: String, approved: bool },
     /// Tool blocked by security policy.
     ToolBlocked { name: String, tier: SecurityTier, reason: String },
+    /// Guardian detected a stall (no progress for N seconds).
+    GuardianStall { session_id: SessionId, turn: usize, elapsed_secs: u64 },
+    /// Guardian detected a doom loop (same tool called repeatedly).
+    GuardianDoomLoop { session_id: SessionId, tool_name: String, consecutive_calls: usize },
+    /// Guardian budget alert (soft warning or hard stop).
+    GuardianBudgetAlert { session_id: SessionId, used_tokens: u64, budget_tokens: u64, is_hard_stop: bool },
+    /// Guardian injected a corrective hint.
+    GuardianHint { session_id: SessionId, message: String },
+    /// Token usage update from the agent loop.
+    UsageUpdate { input_tokens: u64, output_tokens: u64 },
 }
 
 /// Thinking level for extended thinking / reasoning tokens.

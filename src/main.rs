@@ -14,7 +14,7 @@ use ryvos_core::event::EventBus;
 use ryvos_core::security::ApprovalDecision;
 use ryvos_core::types::{AgentEvent, SessionId, ThinkingLevel};
 
-use ryvos_agent::{AgentRuntime, ApprovalBroker, SecurityGate};
+use ryvos_agent::{AgentRuntime, ApprovalBroker, Guardian, SecurityGate};
 use ryvos_memory::SqliteStore;
 use ryvos_tools::ToolRegistry;
 
@@ -372,12 +372,24 @@ async fn main() -> anyhow::Result<()> {
     if let Some(ref j) = journal {
         runtime_inner.set_journal(j.clone());
     }
-    let runtime = Arc::new(runtime_inner);
 
     let session_id = cli
         .session
         .map(|s| SessionId::from_str(&s))
         .unwrap_or_else(SessionId::new);
+
+    // Spawn Guardian watchdog if enabled
+    if config.agent.guardian.enabled {
+        let (guardian, hint_rx) = Guardian::new(
+            config.agent.guardian.clone(),
+            event_bus.clone(),
+            runtime_inner.cancel_token(),
+        );
+        runtime_inner.set_guardian_hints(hint_rx);
+        tokio::spawn(guardian.run(session_id.clone()));
+    }
+
+    let runtime = Arc::new(runtime_inner);
 
     match cli.command {
         Some(Commands::Doctor) => {
@@ -652,6 +664,17 @@ async fn run_once(
                     eprintln!("\n[error: {}]", error);
                     break;
                 }
+                AgentEvent::GuardianStall { elapsed_secs, turn, .. } => {
+                    eprintln!("\n[GUARDIAN] Stall detected: {}s at turn {}", elapsed_secs, turn);
+                }
+                AgentEvent::GuardianDoomLoop { tool_name, consecutive_calls, .. } => {
+                    eprintln!("\n[GUARDIAN] Doom loop: {} x{}", tool_name, consecutive_calls);
+                }
+                AgentEvent::GuardianBudgetAlert { used_tokens, budget_tokens, is_hard_stop, .. } => {
+                    let kind = if is_hard_stop { "HARD STOP" } else { "warning" };
+                    eprintln!("\n[GUARDIAN] Budget {}: {}/{} tokens", kind, used_tokens, budget_tokens);
+                }
+                AgentEvent::GuardianHint { .. } | AgentEvent::UsageUpdate { .. } => {}
                 _ => {}
             }
         }

@@ -91,10 +91,33 @@ Ryvos is built from scratch in Rust with a different set of priorities:
 
 ## Quick Start
 
-```bash
-# Install from source
-cargo install --path .
+### Install
 
+```bash
+# One-line install (Linux / macOS) — no Rust required
+curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
+```
+
+Or download a binary directly from [GitHub Releases](https://github.com/Ryvos/ryvos/releases).
+
+<details>
+<summary>Other install methods</summary>
+
+```bash
+# Pin a specific version
+RYVOS_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
+
+# Custom install directory
+RYVOS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
+
+# Build from source (requires Rust 1.75+)
+cargo install --path .
+```
+</details>
+
+### Get Started
+
+```bash
 # Interactive setup — pick a provider, paste an API key
 ryvos init
 
@@ -112,6 +135,13 @@ ryvos serve
 
 # Always-on assistant: Telegram + Discord + Slack + gateway
 ryvos daemon --gateway
+```
+
+### Uninstall
+
+```bash
+rm ~/.local/bin/ryvos
+rm -rf ~/.ryvos   # optional: remove config and data
 ```
 
 ### Commands

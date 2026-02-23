@@ -146,6 +146,26 @@ impl App {
             }
             AgentEvent::TurnComplete { .. } => {}
             AgentEvent::CronFired { .. } => {}
+            AgentEvent::GuardianStall { elapsed_secs, turn, .. } => {
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!("[GUARDIAN] Stall detected: {}s at turn {}", elapsed_secs, turn),
+                });
+            }
+            AgentEvent::GuardianDoomLoop { tool_name, consecutive_calls, .. } => {
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!("[GUARDIAN] Doom loop: {} x{}", tool_name, consecutive_calls),
+                });
+            }
+            AgentEvent::GuardianBudgetAlert { used_tokens, budget_tokens, is_hard_stop, .. } => {
+                let kind = if is_hard_stop { "HARD STOP" } else { "warning" };
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!("[GUARDIAN] Budget {}: {}/{} tokens", kind, used_tokens, budget_tokens),
+                });
+            }
+            AgentEvent::GuardianHint { .. } | AgentEvent::UsageUpdate { .. } => {}
         }
     }
 }

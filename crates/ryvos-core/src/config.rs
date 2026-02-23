@@ -101,6 +101,9 @@ pub struct AgentConfig {
     /// Enable LLM-as-judge self-evaluation after each run (default: false).
     #[serde(default)]
     pub enable_self_eval: bool,
+    /// Guardian watchdog configuration.
+    #[serde(default)]
+    pub guardian: GuardianConfig,
 }
 
 impl Default for AgentConfig {
@@ -117,11 +120,50 @@ impl Default for AgentConfig {
             enable_summarization: default_enable_summarization(),
             sandbox: None,
             enable_self_eval: false,
+            guardian: GuardianConfig::default(),
         }
     }
 }
 
 fn default_enable_summarization() -> bool { true }
+
+/// Guardian watchdog configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GuardianConfig {
+    /// Enable the guardian watchdog (default: true).
+    #[serde(default = "default_guardian_enabled")]
+    pub enabled: bool,
+    /// Number of consecutive identical tool calls to trigger doom loop detection.
+    #[serde(default = "default_doom_loop_threshold")]
+    pub doom_loop_threshold: usize,
+    /// Seconds without progress before triggering stall detection.
+    #[serde(default = "default_stall_timeout_secs")]
+    pub stall_timeout_secs: u64,
+    /// Total token budget (0 = unlimited).
+    #[serde(default = "default_token_budget")]
+    pub token_budget: u64,
+    /// Percentage of budget at which to emit a soft warning.
+    #[serde(default = "default_token_warn_pct")]
+    pub token_warn_pct: u8,
+}
+
+impl Default for GuardianConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_guardian_enabled(),
+            doom_loop_threshold: default_doom_loop_threshold(),
+            stall_timeout_secs: default_stall_timeout_secs(),
+            token_budget: default_token_budget(),
+            token_warn_pct: default_token_warn_pct(),
+        }
+    }
+}
+
+fn default_guardian_enabled() -> bool { true }
+fn default_doom_loop_threshold() -> usize { 3 }
+fn default_stall_timeout_secs() -> u64 { 120 }
+fn default_token_budget() -> u64 { 0 }
+fn default_token_warn_pct() -> u8 { 80 }
 
 fn default_max_turns() -> usize { 25 }
 fn default_max_duration() -> u64 { 600 }

@@ -14,6 +14,7 @@ use ryvos_tools::ToolRegistry;
 
 use crate::context;
 use crate::gate::SecurityGate;
+use crate::guardian::GuardianAction;
 use crate::healing::{FailureJournal, FailureRecord, reflexion_hint_with_history};
 use crate::intelligence::{
     compact_tool_output, prune_to_budget, reflexion_hint, summarize_and_prune, FailureTracker,
@@ -37,6 +38,7 @@ pub struct AgentRuntime {
     event_bus: Arc<EventBus>,
     cancel: CancellationToken,
     journal: Option<Arc<FailureJournal>>,
+    guardian_hints: Option<Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<GuardianAction>>>>,
 }
 
 impl AgentRuntime {
@@ -56,6 +58,7 @@ impl AgentRuntime {
             event_bus,
             cancel: CancellationToken::new(),
             journal: None,
+            guardian_hints: None,
         }
     }
 
@@ -77,12 +80,18 @@ impl AgentRuntime {
             event_bus,
             cancel: CancellationToken::new(),
             journal: None,
+            guardian_hints: None,
         }
     }
 
     /// Set the failure journal for self-healing pattern tracking.
     pub fn set_journal(&mut self, journal: Arc<FailureJournal>) {
         self.journal = Some(journal);
+    }
+
+    /// Set the Guardian hint receiver for receiving corrective actions.
+    pub fn set_guardian_hints(&mut self, rx: tokio::sync::mpsc::Receiver<GuardianAction>) {
+        self.guardian_hints = Some(Arc::new(tokio::sync::Mutex::new(rx)));
     }
 
     /// Get a cancellation token for this runtime.
@@ -195,6 +204,22 @@ impl AgentRuntime {
                 ));
             }
 
+            // Drain Guardian hints (non-blocking)
+            if let Some(ref hints_rx) = self.guardian_hints {
+                let mut rx = hints_rx.lock().await;
+                while let Ok(action) = rx.try_recv() {
+                    match action {
+                        GuardianAction::InjectHint(hint) => {
+                            debug!(hint = %hint, "Guardian hint injected");
+                            messages.push(ChatMessage::user(&hint));
+                        }
+                        GuardianAction::CancelRun(_) => {
+                            return Err(RyvosError::Cancelled);
+                        }
+                    }
+                }
+            }
+
             debug!(turn, "Starting agent turn");
 
             // Stream from LLM
@@ -247,6 +272,10 @@ impl AgentRuntime {
                     } => {
                         total_input_tokens += input_tokens;
                         total_output_tokens += output_tokens;
+                        self.event_bus.publish(AgentEvent::UsageUpdate {
+                            input_tokens,
+                            output_tokens,
+                        });
                     }
                     StreamDelta::MessageId(_) => {}
                 }

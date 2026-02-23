@@ -144,6 +144,11 @@ pub async fn handle_connection(
                 AgentEvent::TurnComplete { .. } => None,
                 AgentEvent::CronFired { .. } => None,
                 AgentEvent::ApprovalResolved { .. } => None,
+                AgentEvent::GuardianStall { .. }
+                | AgentEvent::GuardianDoomLoop { .. }
+                | AgentEvent::GuardianBudgetAlert { .. }
+                | AgentEvent::GuardianHint { .. }
+                | AgentEvent::UsageUpdate { .. } => None,
             };
 
             if let Some(evt) = server_event {
