@@ -153,7 +153,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Handle init before config loading
     if let Some(Commands::Init { yes, provider, model_id, api_key, telegram_token, discord_token, gateway, no_channels }) = cli.command {
-        let dest = if cli.config == PathBuf::from("ryvos.toml") {
+        let dest = if cli.config == *"ryvos.toml" {
             dirs_home()
                 .map(|h| h.join(".ryvos").join("config.toml"))
                 .unwrap_or_else(|| cli.config.clone())
@@ -243,9 +243,9 @@ async fn main() -> anyhow::Result<()> {
     if let Some(project_mcp) = load_mcp_json() {
         for (name, entry) in project_mcp.mcp_servers {
             if let Some(server_config) = entry.to_server_config() {
-                if !mcp_config.servers.contains_key(&name) {
+                if let std::collections::hash_map::Entry::Vacant(e) = mcp_config.servers.entry(name.clone()) {
                     info!(server = %name, "Loaded MCP server from .mcp.json");
-                    mcp_config.servers.insert(name, server_config);
+                    e.insert(server_config);
                 }
             }
         }
@@ -375,7 +375,7 @@ async fn main() -> anyhow::Result<()> {
 
     let session_id = cli
         .session
-        .map(|s| SessionId::from_str(&s))
+        .map(|s| SessionId::from_string(&s))
         .unwrap_or_else(SessionId::new);
 
     // Spawn Guardian watchdog if enabled
@@ -387,6 +387,25 @@ async fn main() -> anyhow::Result<()> {
         );
         runtime_inner.set_guardian_hints(hint_rx);
         tokio::spawn(guardian.run(session_id.clone()));
+    }
+
+    // Spawn RunLogger if logging is enabled
+    if let Some(ref log_config) = config.agent.log {
+        if log_config.enabled {
+            let log_dir = log_config
+                .log_dir
+                .as_ref()
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| workspace.join("logs"));
+            let logger = ryvos_agent::RunLogger::new(log_dir, log_config.level);
+            let log_bus = event_bus.clone();
+            let log_session = session_id.clone();
+            let log_cancel = runtime_inner.cancel_token();
+            tokio::spawn(async move {
+                logger.run(log_bus, log_session, log_cancel).await;
+            });
+            info!("RunLogger started (level {})", log_config.level);
+        }
     }
 
     let runtime = Arc::new(runtime_inner);
@@ -674,7 +693,17 @@ async fn run_once(
                     let kind = if is_hard_stop { "HARD STOP" } else { "warning" };
                     eprintln!("\n[GUARDIAN] Budget {}: {}/{} tokens", kind, used_tokens, budget_tokens);
                 }
-                AgentEvent::GuardianHint { .. } | AgentEvent::UsageUpdate { .. } => {}
+                AgentEvent::GoalEvaluated { evaluation, .. } => {
+                    let status = if evaluation.passed { "PASSED" } else { "FAILED" };
+                    eprintln!(
+                        "\n[GOAL {}] score: {:.0}%",
+                        status,
+                        evaluation.overall_score * 100.0
+                    );
+                }
+                AgentEvent::GuardianHint { .. }
+                | AgentEvent::UsageUpdate { .. }
+                | AgentEvent::DecisionMade { .. } => {}
                 _ => {}
             }
         }
@@ -1234,9 +1263,7 @@ fn handle_mcp_cli(action: &McpAction, config_path: &PathBuf) -> anyhow::Result<(
                     let pairs: Vec<String> = env
                         .iter()
                         .filter_map(|e| {
-                            let mut parts = e.splitn(2, '=');
-                            let k = parts.next()?;
-                            let v = parts.next()?;
+                            let (k, v) = e.split_once('=')?;
                             Some(format!("{} = \"{}\"", k, v))
                         })
                         .collect();

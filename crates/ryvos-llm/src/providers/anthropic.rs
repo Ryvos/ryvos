@@ -114,6 +114,7 @@ enum ContentBlockInfo {
 
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type")]
+#[allow(clippy::enum_variant_names)]
 enum DeltaInfo {
     #[serde(rename = "text_delta")]
     TextDelta { text: String },

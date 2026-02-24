@@ -112,7 +112,7 @@ impl CronScheduler {
                             prompt: job.prompt.clone(),
                         });
 
-                        let session_id = SessionId::from_str(&format!("cron:{}", job.name));
+                        let session_id = SessionId::from_string(&format!("cron:{}", job.name));
                         match self.runtime.run(&session_id, &job.prompt).await {
                             Ok(_) => info!(job = %job.name, "Cron job completed"),
                             Err(e) => error!(job = %job.name, error = %e, "Cron job failed"),

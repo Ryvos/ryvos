@@ -6,7 +6,9 @@ pub mod gate;
 pub mod guardian;
 pub mod healing;
 pub mod intelligence;
+pub mod output_validator;
 pub mod prime;
+pub mod run_log;
 pub mod scheduler;
 pub mod session;
 
@@ -16,6 +18,9 @@ pub use gate::SecurityGate;
 pub use guardian::{Guardian, GuardianAction};
 pub use prime::PrimeOrchestrator;
 pub use healing::FailureJournal;
+pub use evaluator::GoalEvaluator;
+pub use output_validator::{OutputCleaner, OutputValidator};
+pub use run_log::RunLogger;
 pub use scheduler::CronScheduler;
 pub use session::SessionManager;
 

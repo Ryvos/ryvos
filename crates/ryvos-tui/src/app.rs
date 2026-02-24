@@ -165,7 +165,16 @@ impl App {
                     text: format!("[GUARDIAN] Budget {}: {}/{} tokens", kind, used_tokens, budget_tokens),
                 });
             }
-            AgentEvent::GuardianHint { .. } | AgentEvent::UsageUpdate { .. } => {}
+            AgentEvent::GoalEvaluated { evaluation, .. } => {
+                let status = if evaluation.passed { "PASSED" } else { "FAILED" };
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!("[GOAL {}] score: {:.0}%", status, evaluation.overall_score * 100.0),
+                });
+            }
+            AgentEvent::GuardianHint { .. }
+            | AgentEvent::UsageUpdate { .. }
+            | AgentEvent::DecisionMade { .. } => {}
         }
     }
 }

@@ -123,8 +123,10 @@ impl Tool for WebFetchTool {
 /// Basic HTML tag stripping using regex.
 fn strip_html_tags(html: &str) -> String {
     // Remove script and style blocks entirely
-    let re_script = regex::Regex::new(r"(?is)<(script|style)[^>]*>.*?</\1>").unwrap();
+    let re_script = regex::Regex::new(r"(?is)<script[^>]*>.*?</script>").unwrap();
     let cleaned = re_script.replace_all(html, "");
+    let re_style = regex::Regex::new(r"(?is)<style[^>]*>.*?</style>").unwrap();
+    let cleaned = re_style.replace_all(&cleaned, "");
 
     // Remove HTML tags
     let re_tags = regex::Regex::new(r"<[^>]+>").unwrap();

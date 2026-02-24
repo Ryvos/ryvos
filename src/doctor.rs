@@ -9,28 +9,15 @@ struct CheckResult {
 }
 
 pub fn run_doctor(config: &AppConfig) {
-    let mut checks = Vec::new();
-
-    // 1. API key configured for primary model
-    checks.push(check_api_key(config));
-
-    // 2. Workspace dir exists and writable
-    checks.push(check_workspace(config));
-
-    // 3. SQLite DB accessible
-    checks.push(check_database(config));
-
-    // 4. Channel tokens non-empty
-    checks.push(check_channels(config));
-
-    // 5. Cron expressions parseable
-    checks.push(check_cron(config));
-
-    // 6. MCP server configs valid
-    checks.push(check_mcp(config));
-
-    // 7. Security policy consistency
-    checks.push(check_security(config));
+    let checks = vec![
+        check_api_key(config),
+        check_workspace(config),
+        check_database(config),
+        check_channels(config),
+        check_cron(config),
+        check_mcp(config),
+        check_security(config),
+    ];
 
     // Print results
     let mut ok_count = 0;
@@ -51,7 +38,7 @@ pub fn run_doctor(config: &AppConfig) {
 }
 
 fn check_api_key(config: &AppConfig) -> CheckResult {
-    let has_key = config.model.api_key.as_ref().map_or(false, |k| {
+    let has_key = config.model.api_key.as_ref().is_some_and(|k| {
         !k.is_empty() && !k.starts_with("${")
     });
     let provider = &config.model.provider;

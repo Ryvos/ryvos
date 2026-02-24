@@ -36,7 +36,7 @@ pub fn prune_to_budget(messages: &mut Vec<ChatMessage>, budget: usize, min_tail:
     let mut removed = 0;
 
     loop {
-        let total: usize = messages.iter().map(|m| estimate_message_tokens(m)).sum();
+        let total: usize = messages.iter().map(estimate_message_tokens).sum();
         if total <= budget {
             break;
         }
@@ -66,7 +66,7 @@ pub async fn summarize_and_prune(
     llm: &dyn LlmClient,
     config: &ModelConfig,
 ) -> Result<usize> {
-    let total: usize = messages.iter().map(|m| estimate_message_tokens(m)).sum();
+    let total: usize = messages.iter().map(estimate_message_tokens).sum();
     if total <= budget {
         return Ok(0);
     }

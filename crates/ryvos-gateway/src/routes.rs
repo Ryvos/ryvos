@@ -56,7 +56,7 @@ pub async fn session_history(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let session_id = SessionId::from_str(&id);
+    let session_id = SessionId::from_string(&id);
     match state.store.load_history(&session_id, q.limit).await {
         Ok(messages) => {
             let msgs: Vec<serde_json::Value> = messages
@@ -95,7 +95,7 @@ pub async fn send_message(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let session_id = SessionId::from_str(&id);
+    let session_id = SessionId::from_string(&id);
     match state.runtime.run(&session_id, &body.message).await {
         Ok(response) => Ok(Json(serde_json::json!({
             "session_id": session_id.to_string(),

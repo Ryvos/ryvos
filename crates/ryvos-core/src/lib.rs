@@ -1,6 +1,7 @@
 pub mod config;
 pub mod error;
 pub mod event;
+pub mod goal;
 pub mod hooks;
 pub mod security;
 pub mod traits;

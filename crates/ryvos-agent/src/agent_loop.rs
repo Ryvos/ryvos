@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use chrono::Utc;
 use futures::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -8,17 +9,20 @@ use tracing::{debug, error, info, warn};
 use ryvos_core::config::AppConfig;
 use ryvos_core::error::{Result, RyvosError};
 use ryvos_core::event::EventBus;
+use ryvos_core::goal::Goal;
 use ryvos_core::traits::{LlmClient, SessionStore};
 use ryvos_core::types::*;
 use ryvos_tools::ToolRegistry;
 
 use crate::context;
+use crate::evaluator::GoalEvaluator;
 use crate::gate::SecurityGate;
 use crate::guardian::GuardianAction;
 use crate::healing::{FailureJournal, FailureRecord, reflexion_hint_with_history};
 use crate::intelligence::{
     compact_tool_output, prune_to_budget, reflexion_hint, summarize_and_prune, FailureTracker,
 };
+use crate::output_validator::OutputCleaner;
 
 /// Accumulator for streaming tool call deltas.
 #[derive(Debug, Default)]
@@ -128,6 +132,17 @@ impl AgentRuntime {
         session_id: &SessionId,
         user_message: &str,
     ) -> Result<String> {
+        self.run_with_goal(session_id, user_message, None).await
+    }
+
+    /// Run the agent loop with an optional goal.
+    /// If a goal is provided, the agent evaluates output against it and retries if not met.
+    pub async fn run_with_goal(
+        &self,
+        session_id: &SessionId,
+        user_message: &str,
+        goal: Option<&Goal>,
+    ) -> Result<String> {
         let start = Instant::now();
         let max_turns = self.config.agent.max_turns;
         let max_duration = Duration::from_secs(self.config.agent.max_duration_secs);
@@ -155,7 +170,7 @@ impl AgentRuntime {
         // Append user message
         let user_msg = ChatMessage::user(user_message);
         self.store
-            .append_messages(session_id, &[user_msg.clone()])
+            .append_messages(session_id, std::slice::from_ref(&user_msg))
             .await?;
         messages.push(user_msg);
 
@@ -310,18 +325,56 @@ impl AgentRuntime {
             };
 
             self.store
-                .append_messages(session_id, &[assistant_msg.clone()])
+                .append_messages(session_id, std::slice::from_ref(&assistant_msg))
                 .await?;
             messages.push(assistant_msg);
 
             self.event_bus.publish(AgentEvent::TurnComplete { turn });
 
             // Check stop reason
+            let is_final_response = tool_calls.is_empty();
             match stop_reason {
                 Some(StopReason::EndTurn) | Some(StopReason::StopSequence) | None => {
-                    if tool_calls.is_empty() {
-                        // No tool calls, we're done
-                        final_text = text_content;
+                    if is_final_response {
+                        // Apply heuristic output repair
+                        let repaired = OutputCleaner::heuristic_repair(&text_content);
+                        final_text = repaired;
+
+                        // Goal evaluation (if goal provided)
+                        if let Some(goal) = goal {
+                            let evaluator =
+                                GoalEvaluator::new(self.llm.clone(), self.config.model.clone());
+                            match evaluator.evaluate(&final_text, goal).await {
+                                Ok(evaluation) => {
+                                    self.event_bus.publish(AgentEvent::GoalEvaluated {
+                                        session_id: session_id.clone(),
+                                        evaluation: evaluation.clone(),
+                                    });
+                                    if !evaluation.passed && turn + 1 < max_turns {
+                                        // Inject retry hint and continue
+                                        let hint = format!(
+                                            "Your response did not meet the goal (score: {:.0}%, threshold: {:.0}%). \
+                                             Failed criteria: {}. Please try again.",
+                                            evaluation.overall_score * 100.0,
+                                            goal.success_threshold * 100.0,
+                                            evaluation
+                                                .criteria_results
+                                                .iter()
+                                                .filter(|r| !r.passed)
+                                                .map(|r| r.reasoning.as_str())
+                                                .collect::<Vec<_>>()
+                                                .join("; ")
+                                        );
+                                        messages.push(ChatMessage::user(&hint));
+                                        continue;
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!(error = %e, "Goal evaluation failed, proceeding");
+                                }
+                            }
+                        }
+
                         info!(
                             turn = turn + 1,
                             input_tokens = total_input_tokens,
@@ -339,8 +392,8 @@ impl AgentRuntime {
                 }
                 Some(StopReason::MaxTokens) => {
                     warn!("LLM hit max tokens");
-                    if tool_calls.is_empty() {
-                        final_text = text_content;
+                    if is_final_response {
+                        final_text = OutputCleaner::heuristic_repair(&text_content);
                         self.event_bus.publish(AgentEvent::RunComplete {
                             session_id: session_id.clone(),
                             total_turns: turn + 1,
@@ -354,6 +407,43 @@ impl AgentRuntime {
                     // Expected, execute tools below
                 }
             }
+
+            // Record decisions for tool calls
+            let decision_ids: Vec<String> = tool_calls
+                .iter()
+                .map(|tc| {
+                    let decision = Decision {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        timestamp: Utc::now(),
+                        session_id: session_id.0.clone(),
+                        turn,
+                        description: format!("Tool call: {}", tc.name),
+                        chosen_option: tc.name.clone(),
+                        alternatives: if tool_calls.len() > 1 {
+                            tool_calls
+                                .iter()
+                                .filter(|other| other.id != tc.id)
+                                .map(|other| DecisionOption {
+                                    name: other.name.clone(),
+                                    confidence: None,
+                                })
+                                .collect()
+                        } else {
+                            vec![]
+                        },
+                        outcome: None,
+                    };
+                    if let Some(ref journal) = self.journal {
+                        journal.record_decision(&decision).ok();
+                    }
+                    self.event_bus.publish(AgentEvent::DecisionMade {
+                        decision: decision.clone(),
+                    });
+                    decision.id
+                })
+                .collect();
+
+            let tool_exec_start = Instant::now();
 
             // Execute tool calls
             // Publish all ToolStart events first (preserves ordering for TUI/gateway)
@@ -428,6 +518,21 @@ impl AgentRuntime {
             let threshold = self.config.agent.reflexion_failure_threshold;
             let mut tool_result_blocks = Vec::new();
 
+            let tool_exec_elapsed_ms = tool_exec_start.elapsed().as_millis() as u64;
+            for (idx, (_name, _id, tool_result)) in tool_results.iter().enumerate() {
+                // Backfill decision outcome
+                if let (Some(ref journal), Some(dec_id)) =
+                    (&self.journal, decision_ids.get(idx))
+                {
+                    let outcome = DecisionOutcome {
+                        tokens_used: 0, // not tracked per-tool
+                        latency_ms: tool_exec_elapsed_ms,
+                        succeeded: !tool_result.is_error,
+                    };
+                    journal.update_decision_outcome(dec_id, &outcome).ok();
+                }
+            }
+
             for (name, id, tool_result) in tool_results {
                 let compacted_content =
                     compact_tool_output(&tool_result.content, max_output_tokens);
@@ -496,7 +601,7 @@ impl AgentRuntime {
             };
 
             self.store
-                .append_messages(session_id, &[results_msg.clone()])
+                .append_messages(session_id, std::slice::from_ref(&results_msg))
                 .await?;
             messages.push(results_msg);
 

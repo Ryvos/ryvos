@@ -1,10 +1,7 @@
 pub fn print_banner() {
     let version = env!("CARGO_PKG_VERSION");
     match tui_banner::Banner::new("RYVOS")
-        .and_then(|b| {
-            Ok(b.style(tui_banner::Style::NeonCyber)
-                .render())
-        })
+        .map(|b| b.style(tui_banner::Style::NeonCyber).render())
     {
         Ok(banner) => {
             println!("{banner}");

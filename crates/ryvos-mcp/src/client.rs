@@ -25,14 +25,20 @@ pub struct McpClientManager {
     event_tx: broadcast::Sender<McpEvent>,
 }
 
-impl McpClientManager {
-    pub fn new() -> Self {
+impl Default for McpClientManager {
+    fn default() -> Self {
         let (event_tx, _) = broadcast::channel(64);
         Self {
             connections: Mutex::new(HashMap::new()),
             server_configs: Mutex::new(HashMap::new()),
             event_tx,
         }
+    }
+}
+
+impl McpClientManager {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Subscribe to MCP events (tools_changed, resources_changed, etc.).
@@ -275,7 +281,7 @@ impl McpClientManager {
         })?;
 
         let params = ReadResourceRequestParams {
-            uri: uri.to_string().into(),
+            uri: uri.to_string(),
             meta: None,
         };
 
@@ -315,7 +321,7 @@ impl McpClientManager {
         })?;
 
         let params = SubscribeRequestParams {
-            uri: uri.to_string().into(),
+            uri: uri.to_string(),
             meta: None,
         };
 
@@ -367,7 +373,7 @@ impl McpClientManager {
         })?;
 
         let params = GetPromptRequestParams {
-            name: prompt_name.to_string().into(),
+            name: prompt_name.to_string(),
             arguments: arguments.map(|m| m.into_iter().collect()),
             meta: None,
         };

@@ -4,6 +4,7 @@ use std::task::{Context, Poll};
 
 /// Parse a raw SSE byte stream into individual events.
 /// SSE format: `event: <type>\ndata: <json>\n\n`
+#[derive(Default)]
 pub struct SseParser {
     buffer: String,
 }
@@ -17,9 +18,7 @@ pub struct SseEvent {
 
 impl SseParser {
     pub fn new() -> Self {
-        Self {
-            buffer: String::new(),
-        }
+        Self::default()
     }
 
     /// Feed bytes into the parser and extract complete events.
@@ -40,9 +39,9 @@ impl SseParser {
                     event_type = Some(val.to_string());
                 } else if let Some(val) = line.strip_prefix("data: ") {
                     data_lines.push(val.to_string());
-                } else if line.starts_with("data:") {
+                } else if let Some(val) = line.strip_prefix("data:") {
                     // data with no space after colon
-                    data_lines.push(line[5..].to_string());
+                    data_lines.push(val.to_string());
                 }
             }
 

@@ -35,6 +35,7 @@ impl RyvosClientHandler {
     }
 }
 
+#[allow(clippy::manual_async_fn)]
 impl ClientHandler for RyvosClientHandler {
     fn on_tool_list_changed(
         &self,

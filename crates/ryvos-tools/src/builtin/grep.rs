@@ -99,7 +99,7 @@ impl Tool for GrepTool {
             let glob_pattern = params
                 .glob_filter
                 .as_deref()
-                .map(|g| glob::Pattern::new(g))
+                .map(glob::Pattern::new)
                 .transpose()
                 .map_err(|e| RyvosError::ToolValidation(format!("Invalid glob filter: {}", e)))?;
 
@@ -185,14 +185,14 @@ fn search_file(
                 if context_lines > 0 {
                     let start = i.saturating_sub(context_lines);
                     let end = (i + context_lines + 1).min(lines.len());
-                    for j in start..end {
+                    for (j, line) in lines.iter().enumerate().take(end).skip(start) {
                         let marker = if j == i { ">" } else { " " };
                         results.push(format!(
                             "{}{}:{}:{}",
                             marker,
                             path.display(),
                             j + 1,
-                            lines[j]
+                            line
                         ));
                     }
                     results.push("--".to_string());

@@ -5,6 +5,8 @@ use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 
+use ryvos_core::types::{Decision, DecisionOutcome};
+
 /// A record of a tool failure for pattern analysis.
 #[derive(Debug, Clone)]
 pub struct FailureRecord {
@@ -57,7 +59,21 @@ impl FailureJournal {
              );
 
              CREATE INDEX IF NOT EXISTS idx_sj_tool
-                 ON success_journal(tool_name, timestamp);",
+                 ON success_journal(tool_name, timestamp);
+
+             CREATE TABLE IF NOT EXISTS decisions (
+                 id TEXT PRIMARY KEY,
+                 timestamp TEXT NOT NULL,
+                 session_id TEXT NOT NULL,
+                 turn INTEGER NOT NULL,
+                 description TEXT NOT NULL,
+                 chosen_option TEXT NOT NULL,
+                 alternatives_json TEXT NOT NULL DEFAULT '[]',
+                 outcome_json TEXT
+             );
+
+             CREATE INDEX IF NOT EXISTS idx_dec_session
+                 ON decisions(session_id, timestamp);",
         )
         .map_err(|e| format!("Failed to initialize journal schema: {}", e))?;
 
@@ -130,6 +146,93 @@ impl FailureJournal {
             records.push(row.map_err(|e| e.to_string())?);
         }
         Ok(records)
+    }
+
+    /// Record a decision made during an agent run.
+    pub fn record_decision(&self, decision: &Decision) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let alts_json = serde_json::to_string(&decision.alternatives).unwrap_or_default();
+        let outcome_json = decision
+            .outcome
+            .as_ref()
+            .and_then(|o| serde_json::to_string(o).ok());
+        conn.execute(
+            "INSERT INTO decisions (id, timestamp, session_id, turn, description, chosen_option, alternatives_json, outcome_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                decision.id,
+                decision.timestamp.to_rfc3339(),
+                decision.session_id,
+                decision.turn as i64,
+                decision.description,
+                decision.chosen_option,
+                alts_json,
+                outcome_json,
+            ],
+        )
+        .map_err(|e| format!("Failed to record decision: {}", e))?;
+        Ok(())
+    }
+
+    /// Update a decision's outcome after execution.
+    pub fn update_decision_outcome(
+        &self,
+        decision_id: &str,
+        outcome: &DecisionOutcome,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let outcome_json = serde_json::to_string(outcome).unwrap_or_default();
+        conn.execute(
+            "UPDATE decisions SET outcome_json = ?1 WHERE id = ?2",
+            params![outcome_json, decision_id],
+        )
+        .map_err(|e| format!("Failed to update decision outcome: {}", e))?;
+        Ok(())
+    }
+
+    /// Load decisions for a session.
+    pub fn load_decisions(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> Result<Vec<Decision>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, timestamp, session_id, turn, description, chosen_option, alternatives_json, outcome_json
+                 FROM decisions
+                 WHERE session_id = ?1
+                 ORDER BY timestamp DESC
+                 LIMIT ?2",
+            )
+            .map_err(|e| format!("Failed to query decisions: {}", e))?;
+
+        let rows = stmt
+            .query_map(params![session_id, limit as i64], |row| {
+                let ts_str: String = row.get(0)?;
+                let alts_str: String = row.get(6)?;
+                let outcome_str: Option<String> = row.get(7)?;
+
+                Ok(Decision {
+                    id: row.get(0)?,
+                    timestamp: DateTime::parse_from_rfc3339(&ts_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                    session_id: row.get(2)?,
+                    turn: row.get::<_, i64>(3)? as usize,
+                    description: row.get(4)?,
+                    chosen_option: row.get(5)?,
+                    alternatives: serde_json::from_str(&alts_str).unwrap_or_default(),
+                    outcome: outcome_str.and_then(|s| serde_json::from_str(&s).ok()),
+                })
+            })
+            .map_err(|e| format!("Failed to fetch decisions: {}", e))?;
+
+        let mut decisions = Vec::new();
+        for row in rows {
+            decisions.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(decisions)
     }
 
     /// Get health statistics per tool since a given time.
@@ -287,6 +390,44 @@ mod tests {
         let (successes, failures) = health.get("read").unwrap();
         assert_eq!(*successes, 2);
         assert_eq!(*failures, 1);
+    }
+
+    #[test]
+    fn test_decision_record_roundtrip() {
+        let journal = temp_journal();
+
+        let decision = Decision {
+            id: "dec-1".to_string(),
+            timestamp: Utc::now(),
+            session_id: "sess-1".to_string(),
+            turn: 3,
+            description: "Which tool to use for file read".to_string(),
+            chosen_option: "read".to_string(),
+            alternatives: vec![
+                ryvos_core::types::DecisionOption {
+                    name: "bash cat".to_string(),
+                    confidence: Some(0.3),
+                },
+            ],
+            outcome: None,
+        };
+
+        journal.record_decision(&decision).unwrap();
+
+        // Update outcome
+        let outcome = DecisionOutcome {
+            tokens_used: 150,
+            latency_ms: 42,
+            succeeded: true,
+        };
+        journal.update_decision_outcome("dec-1", &outcome).unwrap();
+
+        // Load back
+        let decisions = journal.load_decisions("sess-1", 10).unwrap();
+        assert_eq!(decisions.len(), 1);
+        assert_eq!(decisions[0].chosen_option, "read");
+        assert!(decisions[0].outcome.is_some());
+        assert!(decisions[0].outcome.as_ref().unwrap().succeeded);
     }
 
     #[test]

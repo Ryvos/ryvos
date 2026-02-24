@@ -104,6 +104,9 @@ pub struct AgentConfig {
     /// Guardian watchdog configuration.
     #[serde(default)]
     pub guardian: GuardianConfig,
+    /// Runtime logging configuration.
+    #[serde(default)]
+    pub log: Option<LogConfig>,
 }
 
 impl Default for AgentConfig {
@@ -121,6 +124,7 @@ impl Default for AgentConfig {
             sandbox: None,
             enable_self_eval: false,
             guardian: GuardianConfig::default(),
+            log: None,
         }
     }
 }
@@ -158,6 +162,33 @@ impl Default for GuardianConfig {
         }
     }
 }
+
+/// JSONL runtime logging configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogConfig {
+    /// Enable runtime logging (default: true when section is present).
+    #[serde(default = "default_log_enabled")]
+    pub enabled: bool,
+    /// Directory for log files. Default: <workspace>/logs
+    #[serde(default)]
+    pub log_dir: Option<String>,
+    /// Logging level: 1 = run summary only, 2 = per-turn, 3 = per-step (default: 2).
+    #[serde(default = "default_log_level")]
+    pub level: u8,
+}
+
+impl Default for LogConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            log_dir: None,
+            level: 2,
+        }
+    }
+}
+
+fn default_log_enabled() -> bool { true }
+fn default_log_level() -> u8 { 2 }
 
 fn default_guardian_enabled() -> bool { true }
 fn default_doom_loop_threshold() -> usize { 3 }
@@ -589,9 +620,9 @@ impl AppConfig {
     /// Resolve the workspace directory (expand ~).
     pub fn workspace_dir(&self) -> PathBuf {
         let ws = &self.agent.workspace;
-        if ws.starts_with("~/") {
+        if let Some(rest) = ws.strip_prefix("~/") {
             if let Some(home) = dirs_home() {
-                return home.join(&ws[2..]);
+                return home.join(rest);
             }
         }
         PathBuf::from(ws)

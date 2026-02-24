@@ -529,9 +529,9 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
 }
 
 fn resolve_workspace(workspace: &str) -> std::path::PathBuf {
-    if workspace.starts_with("~/") {
+    if let Some(rest) = workspace.strip_prefix("~/") {
         if let Some(home) = dirs_home() {
-            return home.join(&workspace[2..]);
+            return home.join(rest);
         }
     }
     std::path::PathBuf::from(workspace)

@@ -9,10 +9,7 @@ use crate::app::{App, MessageRole};
 
 fn render_tui_banner() -> String {
     Banner::new("RYVOS")
-        .and_then(|b| {
-            Ok(b.style(tui_banner::Style::NeonCyber)
-                .render())
-        })
+        .map(|b| b.style(tui_banner::Style::NeonCyber).render())
         .unwrap_or_else(|_| String::from("RYVOS"))
 }
 

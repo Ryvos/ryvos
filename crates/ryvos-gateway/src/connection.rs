@@ -148,7 +148,9 @@ pub async fn handle_connection(
                 | AgentEvent::GuardianDoomLoop { .. }
                 | AgentEvent::GuardianBudgetAlert { .. }
                 | AgentEvent::GuardianHint { .. }
-                | AgentEvent::UsageUpdate { .. } => None,
+                | AgentEvent::UsageUpdate { .. }
+                | AgentEvent::GoalEvaluated { .. }
+                | AgentEvent::DecisionMade { .. } => None,
             };
 
             if let Some(evt) = server_event {
@@ -272,7 +274,7 @@ async fn process_request(
                 }
                 sid
             } else {
-                let sid = SessionId::from_str(session_id_str);
+                let sid = SessionId::from_string(session_id_str);
                 let mut subs = subscribed.lock().await;
                 if !subs.contains(&sid.to_string()) {
                     subs.push(sid.to_string());
@@ -305,7 +307,7 @@ async fn process_request(
                 return serde_json::json!({"error": "session_id is required"});
             }
             let limit = params["limit"].as_u64().unwrap_or(50) as usize;
-            let session_id = SessionId::from_str(session_id_str);
+            let session_id = SessionId::from_string(session_id_str);
 
             match store.load_history(&session_id, limit).await {
                 Ok(messages) => {

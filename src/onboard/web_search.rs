@@ -70,7 +70,7 @@ fn prompt_search_key(env_var: &str) -> Result<String> {
         Ok(format!("${{{env_var}}}"))
     } else {
         let key = Password::new()
-            .with_prompt(format!("{env_var}"))
+            .with_prompt(env_var.to_string())
             .interact()?;
         Ok(key)
     }

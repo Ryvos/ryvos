@@ -5,6 +5,7 @@ use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::goal::GoalEvaluation;
 use crate::security::{ApprovalRequest, SecurityTier};
 
 /// Unique session identifier.
@@ -16,7 +17,7 @@ impl SessionId {
         Self(Uuid::new_v4().to_string())
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_string(s: &str) -> Self {
         Self(s.to_string())
     }
 }
@@ -257,6 +258,49 @@ pub struct SearchResult {
     pub rank: f64,
 }
 
+/// A decision made during an agent run (for post-hoc analysis).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Decision {
+    /// Unique identifier.
+    pub id: String,
+    /// When the decision was made.
+    pub timestamp: DateTime<Utc>,
+    /// Session this decision belongs to.
+    pub session_id: String,
+    /// Which turn in the agent loop.
+    pub turn: usize,
+    /// What the decision was about.
+    pub description: String,
+    /// Which option was chosen.
+    pub chosen_option: String,
+    /// Alternatives that were available.
+    #[serde(default)]
+    pub alternatives: Vec<DecisionOption>,
+    /// Outcome after execution (backfilled).
+    #[serde(default)]
+    pub outcome: Option<DecisionOutcome>,
+}
+
+/// An alternative option that was available at decision time.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecisionOption {
+    /// Name of the alternative.
+    pub name: String,
+    /// Confidence or relevance score (0.0 to 1.0), if available.
+    pub confidence: Option<f64>,
+}
+
+/// Outcome of a decision after execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecisionOutcome {
+    /// Tokens consumed by this decision.
+    pub tokens_used: u64,
+    /// Latency in milliseconds.
+    pub latency_ms: u64,
+    /// Whether the action succeeded.
+    pub succeeded: bool,
+}
+
 /// Agent event broadcast to all subscribers.
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
@@ -297,6 +341,10 @@ pub enum AgentEvent {
     GuardianHint { session_id: SessionId, message: String },
     /// Token usage update from the agent loop.
     UsageUpdate { input_tokens: u64, output_tokens: u64 },
+    /// Goal evaluation completed.
+    GoalEvaluated { session_id: SessionId, evaluation: GoalEvaluation },
+    /// A decision was made during the agent run.
+    DecisionMade { decision: Decision },
 }
 
 /// Thinking level for extended thinking / reasoning tokens.
