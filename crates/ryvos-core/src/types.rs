@@ -69,6 +69,20 @@ pub enum ContentBlock {
     Thinking { thinking: String },
 }
 
+/// Optional metadata for phase-aware context compaction.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MessageMetadata {
+    /// Phase tag for grouping during compaction (e.g., "planning", "execution").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
+    /// If true, this message is never pruned during context compaction.
+    #[serde(default)]
+    pub protected: bool,
+    /// Keys from tool output that should be preserved in summaries.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub output_keys: Vec<String>,
+}
+
 /// A chat message in the conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -76,6 +90,9 @@ pub struct ChatMessage {
     pub content: Vec<ContentBlock>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<DateTime<Utc>>,
+    /// Optional metadata for context compaction and phase tracking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<MessageMetadata>,
 }
 
 impl ChatMessage {
@@ -84,6 +101,7 @@ impl ChatMessage {
             role: Role::User,
             content: vec![ContentBlock::Text { text: text.into() }],
             timestamp: Some(Utc::now()),
+            metadata: None,
         }
     }
 
@@ -92,6 +110,7 @@ impl ChatMessage {
             role: Role::Assistant,
             content: vec![ContentBlock::Text { text: text.into() }],
             timestamp: Some(Utc::now()),
+            metadata: None,
         }
     }
 
@@ -104,7 +123,24 @@ impl ChatMessage {
                 is_error,
             }],
             timestamp: Some(Utc::now()),
+            metadata: None,
         }
+    }
+
+    /// Set metadata on this message.
+    pub fn with_metadata(mut self, metadata: MessageMetadata) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// Check if this message is protected from compaction.
+    pub fn is_protected(&self) -> bool {
+        self.metadata.as_ref().is_some_and(|m| m.protected)
+    }
+
+    /// Get the phase tag, if any.
+    pub fn phase(&self) -> Option<&str> {
+        self.metadata.as_ref().and_then(|m| m.phase.as_deref())
     }
 
     /// Extract all text content from this message.
@@ -258,6 +294,19 @@ pub struct SearchResult {
     pub rank: f64,
 }
 
+/// Verdict from the Judge system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Verdict {
+    /// Goal met — accept the output.
+    Accept { confidence: f64 },
+    /// Goal not met — retry with a hint.
+    Retry { reason: String, hint: String },
+    /// Goal cannot be met — escalate to the user.
+    Escalate { reason: String },
+    /// Goal evaluation deferred — continue the current loop.
+    Continue,
+}
+
 /// A decision made during an agent run (for post-hoc analysis).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Decision {
@@ -345,6 +394,8 @@ pub enum AgentEvent {
     GoalEvaluated { session_id: SessionId, evaluation: GoalEvaluation },
     /// A decision was made during the agent run.
     DecisionMade { decision: Decision },
+    /// Judge issued a verdict on the agent output.
+    JudgeVerdict { session_id: SessionId, verdict: Verdict },
 }
 
 /// Thinking level for extended thinking / reasoning tokens.

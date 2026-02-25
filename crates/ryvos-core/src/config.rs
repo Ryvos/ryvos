@@ -107,6 +107,9 @@ pub struct AgentConfig {
     /// Runtime logging configuration.
     #[serde(default)]
     pub log: Option<LogConfig>,
+    /// Checkpoint / resume configuration.
+    #[serde(default)]
+    pub checkpoint: Option<CheckpointConfig>,
 }
 
 impl Default for AgentConfig {
@@ -125,11 +128,34 @@ impl Default for AgentConfig {
             enable_self_eval: false,
             guardian: GuardianConfig::default(),
             log: None,
+            checkpoint: None,
         }
     }
 }
 
 fn default_enable_summarization() -> bool { true }
+
+/// Checkpoint / resume configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckpointConfig {
+    /// Enable checkpointing (default: true when section is present).
+    #[serde(default = "default_checkpoint_enabled")]
+    pub enabled: bool,
+    /// Directory for checkpoint files. Default: <workspace>/checkpoints
+    #[serde(default)]
+    pub checkpoint_dir: Option<String>,
+}
+
+impl Default for CheckpointConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            checkpoint_dir: None,
+        }
+    }
+}
+
+fn default_checkpoint_enabled() -> bool { true }
 
 /// Guardian watchdog configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]

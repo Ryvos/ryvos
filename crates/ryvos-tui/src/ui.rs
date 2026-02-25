@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -7,42 +9,115 @@ use tui_banner::Banner;
 
 use crate::app::{App, MessageRole};
 
-fn render_tui_banner() -> String {
-    Banner::new("RYVOS")
-        .map(|b| b.style(tui_banner::Style::NeonCyber).render())
-        .unwrap_or_else(|_| String::from("RYVOS"))
+/// Cached banner — rendered once since it never changes.
+struct BannerCache {
+    lines: Vec<String>,
+    /// Widest line in the banner (character count).
+    width: u16,
+    /// Number of lines.
+    height: u16,
+}
+
+fn cached_banner() -> &'static BannerCache {
+    static CACHE: OnceLock<BannerCache> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let text = Banner::new("RYVOS")
+            .map(|b| b.style(tui_banner::Style::NeonCyber).render())
+            .unwrap_or_else(|_| String::from("RYVOS"));
+        let lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
+        let width = lines.iter().map(|l| l.chars().count() as u16).max().unwrap_or(5);
+        let height = lines.len() as u16;
+        BannerCache { lines, width, height }
+    })
 }
 
 /// Draw the TUI layout.
 pub fn draw(f: &mut Frame, app: &App) {
+    let area = f.area();
+    let term_w = area.width;
+    let term_h = area.height;
+
+    let banner = cached_banner();
+
+    // Decide banner mode based on terminal size:
+    // - Full ASCII art: need enough width for the art AND enough height so messages still have room
+    // - Compact 1-line: when terminal is too small for art but still has some room
+    // - Hidden: when terminal is very small (< 15 rows)
+    let min_messages_rows: u16 = 8; // messages + status + input = at least this many rows
+    let banner_height = if term_h < min_messages_rows + 3 {
+        // Too small — no banner at all
+        0
+    } else if term_w >= banner.width + 2 && term_h >= banner.height + 1 + min_messages_rows {
+        // Full banner fits: art height + 1 (bottom border)
+        banner.height + 1
+    } else {
+        // Compact: version line + bottom border
+        2
+    };
+
+    let constraints = if banner_height > 0 {
+        vec![
+            Constraint::Length(banner_height),
+            Constraint::Min(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ]
+    } else {
+        vec![
+            Constraint::Min(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ]
+    };
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(8),     // Banner area
-            Constraint::Min(1),        // Messages area
-            Constraint::Length(1),     // Status bar
-            Constraint::Length(3),     // Input area
-        ])
-        .split(f.area());
+        .constraints(constraints)
+        .split(area);
 
-    draw_banner(f, chunks[0]);
-    draw_messages(f, app, chunks[1]);
-    draw_status_bar(f, app, chunks[2]);
-    draw_input(f, app, chunks[3]);
+    if banner_height > 0 {
+        draw_banner(f, chunks[0], banner_height);
+        draw_messages(f, app, chunks[1]);
+        draw_status_bar(f, app, chunks[2]);
+        draw_input(f, app, chunks[3]);
+    } else {
+        draw_messages(f, app, chunks[0]);
+        draw_status_bar(f, app, chunks[1]);
+        draw_input(f, app, chunks[2]);
+    }
 }
 
-fn draw_banner(f: &mut Frame, area: Rect) {
-    let banner_text = render_tui_banner();
-    let lines: Vec<Line> = banner_text
-        .lines()
-        .map(|l| Line::from(Span::styled(l.to_string(), Style::default().fg(Color::Cyan))))
-        .collect();
+fn draw_banner(f: &mut Frame, area: Rect, banner_height: u16) {
+    let banner = cached_banner();
 
-    let banner = Paragraph::new(lines)
+    let lines: Vec<Line> = if banner_height > 2 && area.width >= banner.width {
+        // Full ASCII art
+        banner
+            .lines
+            .iter()
+            .map(|l| Line::from(Span::styled(l.clone(), Style::default().fg(Color::Cyan))))
+            .collect()
+    } else {
+        // Compact: styled title
+        vec![Line::from(vec![
+            Span::styled(
+                " RYVOS",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "  Blazingly fast AI agent runtime",
+                Style::default().fg(Color::DarkGray),
+            ),
+        ])]
+    };
+
+    let widget = Paragraph::new(lines)
         .block(Block::default().borders(Borders::BOTTOM))
         .style(Style::default());
 
-    f.render_widget(banner, area);
+    f.render_widget(widget, area);
 }
 
 fn draw_messages(f: &mut Frame, app: &App, area: Rect) {

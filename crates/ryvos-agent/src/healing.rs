@@ -323,6 +323,7 @@ pub fn reflexion_hint_with_history(
         role: ryvos_core::types::Role::User,
         content: vec![ryvos_core::types::ContentBlock::Text { text }],
         timestamp: Some(Utc::now()),
+        metadata: None,
     }
 }
 

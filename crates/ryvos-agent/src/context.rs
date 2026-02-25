@@ -1,9 +1,18 @@
 use std::path::Path;
 use tracing::debug;
 
+use ryvos_core::goal::Goal;
 use ryvos_core::types::ChatMessage;
 
-/// Assemble the system prompt from workspace files.
+/// Assemble the system prompt from workspace files using a three-layer
+/// "onion model":
+///
+/// - **Layer 1 (Identity):** Core personality — SOUL.md + IDENTITY.md.
+///   Innermost layer, always present, defines who the agent is.
+/// - **Layer 2 (Narrative):** Context & conventions — AGENTS.toml, USER.md,
+///   TOOLS.md, BOOT.md, HEARTBEAT.md, conversation summaries.
+/// - **Layer 3 (Focus):** Current task — goal description, constraints,
+///   custom instructions, MCP resources.
 pub struct ContextBuilder {
     parts: Vec<String>,
 }
@@ -56,6 +65,63 @@ impl ContextBuilder {
         self
     }
 
+    // ── Three-Layer Onion Model ──────────────────────────────────────
+
+    /// Layer 1 (Identity): Load SOUL.md and IDENTITY.md.
+    pub fn with_identity_layer(self, workspace: &Path) -> Self {
+        self.with_file(&workspace.join("SOUL.md"), "Agent Personality")
+            .with_file(&workspace.join("IDENTITY.md"), "Agent Identity")
+    }
+
+    /// Layer 2 (Narrative): Load context files that describe conventions,
+    /// tools, operator info, and boot state.
+    pub fn with_narrative_layer(self, workspace: &Path) -> Self {
+        self.with_file(&workspace.join("AGENTS.toml"), "Agent Configuration")
+            .with_file(&workspace.join("TOOLS.md"), "Tool Usage Conventions")
+            .with_file(&workspace.join("USER.md"), "Operator Information")
+            .with_file(&workspace.join("BOOT.md"), "Boot Instructions")
+            .with_file(&workspace.join("HEARTBEAT.md"), "Periodic Status")
+    }
+
+    /// Layer 2b (Narrative): Inject a conversation summary from a prior compaction.
+    pub fn with_summary(mut self, summary: &str) -> Self {
+        if !summary.is_empty() {
+            self.parts.push(format!(
+                "# Previous Conversation Summary\n\n{}",
+                summary.trim()
+            ));
+        }
+        self
+    }
+
+    /// Layer 3 (Focus): Inject the current goal and constraints.
+    pub fn with_focus_layer(mut self, goal: Option<&Goal>) -> Self {
+        if let Some(goal) = goal {
+            let mut section = format!("# Current Goal\n\n{}", goal.description);
+            if !goal.constraints.is_empty() {
+                section.push_str("\n\n## Constraints\n");
+                for c in &goal.constraints {
+                    let kind = match c.kind {
+                        ryvos_core::goal::ConstraintKind::Hard => "MUST",
+                        ryvos_core::goal::ConstraintKind::Soft => "SHOULD",
+                    };
+                    section.push_str(&format!("- [{}] {}\n", kind, c.description));
+                }
+            }
+            if !goal.success_criteria.is_empty() {
+                section.push_str("\n## Success Criteria\n");
+                for c in &goal.success_criteria {
+                    section.push_str(&format!(
+                        "- {} (weight: {:.1})\n",
+                        c.description, c.weight
+                    ));
+                }
+            }
+            self.parts.push(section);
+        }
+        self
+    }
+
     /// Build the final system message.
     pub fn build(self) -> ChatMessage {
         let system_prompt = self.parts.join("\n\n---\n\n");
@@ -65,6 +131,7 @@ impl ContextBuilder {
                 text: system_prompt,
             }],
             timestamp: Some(chrono::Utc::now()),
+            metadata: None,
         }
     }
 }
@@ -115,21 +182,44 @@ pub fn resolve_system_prompt(spec: &str, workspace: &Path) -> String {
     }
 }
 
-/// Build the default context for an agent run.
+/// Build the default context for an agent run using the three-layer onion model.
 ///
 /// When `system_prompt_override` is `Some`, appends it via `with_instructions()`
-/// after workspace files.
+/// in Layer 3 (Focus).
 pub fn build_default_context(workspace: &Path, system_prompt_override: Option<&str>) -> ChatMessage {
     let mut builder = ContextBuilder::new()
         .with_base_prompt(DEFAULT_SYSTEM_PROMPT)
-        .with_file(&workspace.join("AGENTS.toml"), "Agent Configuration")
-        .with_file(&workspace.join("SOUL.md"), "Agent Personality")
-        .with_file(&workspace.join("TOOLS.md"), "Tool Usage Conventions")
-        .with_file(&workspace.join("USER.md"), "Operator Information")
-        .with_file(&workspace.join("IDENTITY.md"), "Agent Identity")
-        .with_file(&workspace.join("BOOT.md"), "Boot Instructions")
-        .with_file(&workspace.join("HEARTBEAT.md"), "Periodic Status");
+        // Layer 1: Identity
+        .with_identity_layer(workspace)
+        // Layer 2: Narrative
+        .with_narrative_layer(workspace);
 
+    // Layer 3: Focus (instructions only — no goal in default context)
+    if let Some(instructions) = system_prompt_override {
+        builder = builder.with_instructions(instructions);
+    }
+
+    builder.build()
+}
+
+/// Build context for a goal-driven agent run.
+///
+/// Same three-layer structure but Layer 3 includes the goal description,
+/// constraints, and success criteria.
+pub fn build_goal_context(
+    workspace: &Path,
+    system_prompt_override: Option<&str>,
+    goal: Option<&Goal>,
+) -> ChatMessage {
+    let mut builder = ContextBuilder::new()
+        .with_base_prompt(DEFAULT_SYSTEM_PROMPT)
+        // Layer 1: Identity
+        .with_identity_layer(workspace)
+        // Layer 2: Narrative
+        .with_narrative_layer(workspace);
+
+    // Layer 3: Focus
+    builder = builder.with_focus_layer(goal);
     if let Some(instructions) = system_prompt_override {
         builder = builder.with_instructions(instructions);
     }
@@ -169,5 +259,76 @@ mod tests {
         let result = resolve_system_prompt(spec, Path::new("/tmp"));
         // Falls back to the literal spec string
         assert_eq!(result, spec);
+    }
+
+    #[test]
+    fn test_onion_model_layers() {
+        let dir = std::env::temp_dir().join("ryvos_test_onion");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("SOUL.md"), "I am helpful.").unwrap();
+        std::fs::write(dir.join("IDENTITY.md"), "I am Ryvos.").unwrap();
+
+        let msg = ContextBuilder::new()
+            .with_base_prompt("base prompt")
+            .with_identity_layer(&dir)
+            .with_narrative_layer(&dir)
+            .build();
+
+        let text = msg.text();
+        assert!(text.contains("base prompt"));
+        assert!(text.contains("I am helpful."));
+        assert!(text.contains("I am Ryvos."));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_focus_layer_with_goal() {
+        use ryvos_core::goal::*;
+
+        let goal = Goal {
+            description: "Write a hello world script".to_string(),
+            success_criteria: vec![SuccessCriterion {
+                id: "c1".to_string(),
+                criterion_type: CriterionType::OutputContains {
+                    pattern: "hello".to_string(),
+                    case_sensitive: false,
+                },
+                weight: 1.0,
+                description: "contains hello".to_string(),
+            }],
+            constraints: vec![Constraint {
+                category: ConstraintCategory::Time,
+                kind: ConstraintKind::Hard,
+                description: "Complete within 60 seconds".to_string(),
+                value: None,
+            }],
+            success_threshold: 0.9,
+        };
+
+        let msg = ContextBuilder::new()
+            .with_base_prompt("test")
+            .with_focus_layer(Some(&goal))
+            .build();
+
+        let text = msg.text();
+        assert!(text.contains("Current Goal"));
+        assert!(text.contains("hello world script"));
+        assert!(text.contains("[MUST]"));
+        assert!(text.contains("contains hello"));
+    }
+
+    #[test]
+    fn test_build_goal_context() {
+        let dir = std::env::temp_dir().join("ryvos_test_goal_ctx");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let msg = build_goal_context(&dir, Some("extra instructions"), None);
+        let text = msg.text();
+        assert!(text.contains("extra instructions"));
+        // Without a goal, no "Current Goal" section
+        assert!(!text.contains("Current Goal"));
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

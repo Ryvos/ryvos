@@ -239,6 +239,36 @@ impl RunLogger {
                     "chosen": decision.chosen_option,
                 })),
             }),
+            AgentEvent::JudgeVerdict { verdict, .. } if self.level >= 2 => {
+                let (vtype, vdetail) = match verdict {
+                    ryvos_core::types::Verdict::Accept { confidence } => (
+                        "accept",
+                        serde_json::json!({ "confidence": confidence }),
+                    ),
+                    ryvos_core::types::Verdict::Retry { reason, hint } => (
+                        "retry",
+                        serde_json::json!({ "reason": reason, "hint": hint }),
+                    ),
+                    ryvos_core::types::Verdict::Escalate { reason } => (
+                        "escalate",
+                        serde_json::json!({ "reason": reason }),
+                    ),
+                    ryvos_core::types::Verdict::Continue => (
+                        "continue",
+                        serde_json::json!({}),
+                    ),
+                };
+                Some(LogEntry {
+                    timestamp: ts,
+                    session_id: session_id.to_string(),
+                    event_type: "judge_verdict".to_string(),
+                    turn: None,
+                    detail: Some(serde_json::json!({
+                        "verdict": vtype,
+                        "detail": vdetail,
+                    })),
+                })
+            }
 
             // Guardian events: always logged at L2+
             AgentEvent::GuardianStall { turn, elapsed_secs, .. } if self.level >= 2 => {

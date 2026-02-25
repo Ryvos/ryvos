@@ -172,6 +172,24 @@ impl App {
                     text: format!("[GOAL {}] score: {:.0}%", status, evaluation.overall_score * 100.0),
                 });
             }
+            AgentEvent::JudgeVerdict { verdict, .. } => {
+                let text = match &verdict {
+                    ryvos_core::types::Verdict::Accept { confidence } => {
+                        format!("[JUDGE] Accepted (confidence: {:.0}%)", confidence * 100.0)
+                    }
+                    ryvos_core::types::Verdict::Retry { reason, .. } => {
+                        format!("[JUDGE] Retry: {}", reason)
+                    }
+                    ryvos_core::types::Verdict::Escalate { reason } => {
+                        format!("[JUDGE] Escalated: {}", reason)
+                    }
+                    ryvos_core::types::Verdict::Continue => "[JUDGE] Continue".to_string(),
+                };
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text,
+                });
+            }
             AgentEvent::GuardianHint { .. }
             | AgentEvent::UsageUpdate { .. }
             | AgentEvent::DecisionMade { .. } => {}

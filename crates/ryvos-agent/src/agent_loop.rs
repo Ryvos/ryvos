@@ -14,14 +14,15 @@ use ryvos_core::traits::{LlmClient, SessionStore};
 use ryvos_core::types::*;
 use ryvos_tools::ToolRegistry;
 
+use crate::checkpoint::CheckpointStore;
 use crate::context;
-use crate::evaluator::GoalEvaluator;
 use crate::gate::SecurityGate;
 use crate::guardian::GuardianAction;
 use crate::healing::{FailureJournal, FailureRecord, reflexion_hint_with_history};
 use crate::intelligence::{
     compact_tool_output, prune_to_budget, reflexion_hint, summarize_and_prune, FailureTracker,
 };
+use crate::judge::Judge;
 use crate::output_validator::OutputCleaner;
 
 /// Accumulator for streaming tool call deltas.
@@ -43,6 +44,7 @@ pub struct AgentRuntime {
     cancel: CancellationToken,
     journal: Option<Arc<FailureJournal>>,
     guardian_hints: Option<Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<GuardianAction>>>>,
+    checkpoint_store: Option<Arc<CheckpointStore>>,
 }
 
 impl AgentRuntime {
@@ -63,6 +65,7 @@ impl AgentRuntime {
             cancel: CancellationToken::new(),
             journal: None,
             guardian_hints: None,
+            checkpoint_store: None,
         }
     }
 
@@ -85,6 +88,7 @@ impl AgentRuntime {
             cancel: CancellationToken::new(),
             journal: None,
             guardian_hints: None,
+            checkpoint_store: None,
         }
     }
 
@@ -96,6 +100,11 @@ impl AgentRuntime {
     /// Set the Guardian hint receiver for receiving corrective actions.
     pub fn set_guardian_hints(&mut self, rx: tokio::sync::mpsc::Receiver<GuardianAction>) {
         self.guardian_hints = Some(Arc::new(tokio::sync::Mutex::new(rx)));
+    }
+
+    /// Set the checkpoint store for save/resume support.
+    pub fn set_checkpoint_store(&mut self, store: Arc<CheckpointStore>) {
+        self.checkpoint_store = Some(store);
     }
 
     /// Get a cancellation token for this runtime.
@@ -151,7 +160,7 @@ impl AgentRuntime {
             session_id: session_id.clone(),
         });
 
-        // Build context
+        // Build context (using three-layer onion model)
         let workspace = self.config.workspace_dir();
         let prompt_override = self
             .config
@@ -159,8 +168,14 @@ impl AgentRuntime {
             .system_prompt
             .as_deref()
             .map(|spec| context::resolve_system_prompt(spec, &workspace));
-        let system_msg =
-            context::build_default_context(&workspace, prompt_override.as_deref());
+        let system_msg = if goal.is_some() {
+            context::build_goal_context(&workspace, prompt_override.as_deref(), goal)
+        } else {
+            context::build_default_context(&workspace, prompt_override.as_deref())
+        };
+
+        // Generate a unique run_id for checkpointing
+        let run_id = uuid::Uuid::new_v4().to_string();
 
         // Load history
         let mut messages = vec![system_msg];
@@ -322,6 +337,7 @@ impl AgentRuntime {
                 role: Role::Assistant,
                 content: content_blocks,
                 timestamp: Some(chrono::Utc::now()),
+                metadata: None,
             };
 
             self.store
@@ -340,39 +356,50 @@ impl AgentRuntime {
                         let repaired = OutputCleaner::heuristic_repair(&text_content);
                         final_text = repaired;
 
-                        // Goal evaluation (if goal provided)
+                        // Judge evaluation (if goal provided)
                         if let Some(goal) = goal {
-                            let evaluator =
-                                GoalEvaluator::new(self.llm.clone(), self.config.model.clone());
-                            match evaluator.evaluate(&final_text, goal).await {
-                                Ok(evaluation) => {
-                                    self.event_bus.publish(AgentEvent::GoalEvaluated {
+                            let judge =
+                                Judge::new(self.llm.clone(), self.config.model.clone());
+                            match judge.evaluate(&final_text, &messages, goal).await {
+                                Ok(verdict) => {
+                                    self.event_bus.publish(AgentEvent::JudgeVerdict {
                                         session_id: session_id.clone(),
-                                        evaluation: evaluation.clone(),
+                                        verdict: verdict.clone(),
                                     });
-                                    if !evaluation.passed && turn + 1 < max_turns {
-                                        // Inject retry hint and continue
-                                        let hint = format!(
-                                            "Your response did not meet the goal (score: {:.0}%, threshold: {:.0}%). \
-                                             Failed criteria: {}. Please try again.",
-                                            evaluation.overall_score * 100.0,
-                                            goal.success_threshold * 100.0,
-                                            evaluation
-                                                .criteria_results
-                                                .iter()
-                                                .filter(|r| !r.passed)
-                                                .map(|r| r.reasoning.as_str())
-                                                .collect::<Vec<_>>()
-                                                .join("; ")
-                                        );
-                                        messages.push(ChatMessage::user(&hint));
-                                        continue;
+                                    match &verdict {
+                                        Verdict::Accept { confidence } => {
+                                            // Also publish GoalEvaluated for backward compat
+                                            let results = goal.evaluate_deterministic(&final_text);
+                                            let eval = goal.compute_evaluation(results, vec![]);
+                                            self.event_bus.publish(AgentEvent::GoalEvaluated {
+                                                session_id: session_id.clone(),
+                                                evaluation: eval,
+                                            });
+                                            debug!(confidence, "Judge accepted output");
+                                        }
+                                        Verdict::Retry { reason, hint } if turn + 1 < max_turns => {
+                                            let retry_msg = format!(
+                                                "The judge determined your response needs improvement: {}. Hint: {}",
+                                                reason, hint
+                                            );
+                                            messages.push(ChatMessage::user(&retry_msg));
+                                            continue;
+                                        }
+                                        Verdict::Escalate { reason } => {
+                                            warn!(reason = %reason, "Judge escalated — returning output as-is");
+                                        }
+                                        _ => {} // Continue or Retry on last turn
                                     }
                                 }
                                 Err(e) => {
-                                    warn!(error = %e, "Goal evaluation failed, proceeding");
+                                    warn!(error = %e, "Judge evaluation failed, proceeding");
                                 }
                             }
+                        }
+
+                        // Delete checkpoint on successful completion
+                        if let Some(ref cp_store) = self.checkpoint_store {
+                            cp_store.delete_run(&session_id.0, &run_id).ok();
                         }
 
                         info!(
@@ -598,6 +625,10 @@ impl AgentRuntime {
                 role: Role::User,
                 content: tool_result_blocks,
                 timestamp: Some(chrono::Utc::now()),
+                metadata: Some(MessageMetadata {
+                    protected: true,
+                    ..Default::default()
+                }),
             };
 
             self.store
@@ -609,6 +640,24 @@ impl AgentRuntime {
             let pruned = prune_to_budget(&mut messages, budget, 6);
             if pruned > 0 {
                 debug!(pruned, "Re-pruned messages after tool execution");
+            }
+
+            // Save checkpoint after each turn
+            if let Some(ref cp_store) = self.checkpoint_store {
+                if let Ok(json) = CheckpointStore::serialize_messages(&messages) {
+                    let cp = crate::checkpoint::Checkpoint {
+                        session_id: session_id.0.clone(),
+                        run_id: run_id.clone(),
+                        turn,
+                        messages_json: json,
+                        total_input_tokens,
+                        total_output_tokens,
+                        timestamp: Utc::now(),
+                    };
+                    if let Err(e) = cp_store.save(&cp) {
+                        warn!(error = %e, "Failed to save checkpoint");
+                    }
+                }
             }
 
             #[allow(unused_assignments)]

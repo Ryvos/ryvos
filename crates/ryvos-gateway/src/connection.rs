@@ -150,7 +150,8 @@ pub async fn handle_connection(
                 | AgentEvent::GuardianHint { .. }
                 | AgentEvent::UsageUpdate { .. }
                 | AgentEvent::GoalEvaluated { .. }
-                | AgentEvent::DecisionMade { .. } => None,
+                | AgentEvent::DecisionMade { .. }
+                | AgentEvent::JudgeVerdict { .. } => None,
             };
 
             if let Some(evt) = server_event {

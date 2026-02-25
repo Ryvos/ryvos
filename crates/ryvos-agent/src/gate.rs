@@ -247,12 +247,13 @@ mod tests {
 
     #[tokio::test]
     async fn needs_approval_t2() {
-        let gate = make_gate(SecurityPolicy::default());
         let input = serde_json::json!({"command": "echo hello"});
         // bash is T2 > auto_approve T1, needs approval. No one will approve → timeout.
         // Use a very short timeout to speed up the test.
-        let mut policy = SecurityPolicy::default();
-        policy.approval_timeout_secs = 0; // immediate timeout
+        let policy = SecurityPolicy {
+            approval_timeout_secs: 0,
+            ..Default::default()
+        };
         let gate = make_gate(policy);
         let result = gate.execute("bash", input, test_ctx()).await;
         assert!(matches!(result, Err(RyvosError::ApprovalTimeout { .. })));

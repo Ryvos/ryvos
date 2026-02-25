@@ -292,6 +292,7 @@ impl SessionStore for SqliteStore {
                     role,
                     content,
                     timestamp,
+                    metadata: None,
                 });
             }
 

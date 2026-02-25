@@ -29,9 +29,10 @@ pub fn estimate_message_tokens(msg: &ChatMessage) -> usize {
     estimate_tokens(&content_str) + 4
 }
 
-/// Remove oldest non-system messages from the middle until total tokens fit
-/// within `budget`. Never removes index 0 (system) or the last `min_tail`
-/// messages. Returns the number of messages removed.
+/// Remove oldest non-system, non-protected messages from the middle until
+/// total tokens fit within `budget`. Never removes index 0 (system) or the
+/// last `min_tail` messages. Protected messages (metadata.protected == true)
+/// are never removed. Returns the number of messages removed.
 pub fn prune_to_budget(messages: &mut Vec<ChatMessage>, budget: usize, min_tail: usize) -> usize {
     let mut removed = 0;
 
@@ -41,24 +42,33 @@ pub fn prune_to_budget(messages: &mut Vec<ChatMessage>, budget: usize, min_tail:
             break;
         }
 
-        // Determine the removable range: indices 1..len-min_tail
         let len = messages.len();
         if len <= 1 + min_tail {
-            // Nothing left to remove
             break;
         }
 
-        let remove_idx = 1; // always remove the oldest non-system message
-        messages.remove(remove_idx);
-        removed += 1;
+        let tail_start = len - min_tail;
+
+        // Find the first removable message: not system (idx 0), not in tail, not protected
+        let remove_idx = (1..tail_start).find(|&idx| !messages[idx].is_protected());
+
+        match remove_idx {
+            Some(idx) => {
+                messages.remove(idx);
+                removed += 1;
+            }
+            None => break, // All remaining messages are protected
+        }
     }
 
     removed
 }
 
 /// Summarize old messages before pruning to preserve context.
-/// Takes the messages that would be pruned, sends them to the LLM for summarization,
-/// and replaces them with a single summary message.
+///
+/// Phase-aware: groups messages by their phase tag before summarizing.
+/// Protected messages are kept as-is. Messages within a phase are never
+/// split — the entire phase group is summarized together.
 pub async fn summarize_and_prune(
     messages: &mut Vec<ChatMessage>,
     budget: usize,
@@ -77,26 +87,52 @@ pub async fn summarize_and_prune(
     }
 
     let summarize_end = len - min_tail;
-    let to_summarize: Vec<ChatMessage> = messages[1..summarize_end].to_vec();
+
+    // Collect non-protected messages from the summarizable range, grouped by phase.
+    // Protected messages are kept as-is.
+    let to_summarize: Vec<&ChatMessage> = messages[1..summarize_end]
+        .iter()
+        .filter(|m| !m.is_protected())
+        .collect();
 
     if to_summarize.is_empty() {
-        return Ok(0);
+        return Ok(prune_to_budget(messages, budget, min_tail));
     }
 
-    // Build a summarization prompt
-    let conversation_text = to_summarize
-        .iter()
-        .map(|m| format!("{:?}: {}", m.role, m.text()))
-        .collect::<Vec<_>>()
-        .join("\n");
+    // Group by phase for the summarization prompt
+    let mut phase_groups: Vec<(Option<&str>, Vec<String>)> = Vec::new();
+    for msg in &to_summarize {
+        let phase = msg.phase();
+        let text = format!("{:?}: {}", msg.role, msg.text());
+
+        if let Some(last) = phase_groups.last_mut() {
+            if last.0 == phase {
+                last.1.push(text);
+                continue;
+            }
+        }
+        phase_groups.push((phase, vec![text]));
+    }
+
+    // Build phase-aware summarization prompt
+    let mut conversation_text = String::new();
+    for (phase, texts) in &phase_groups {
+        if let Some(phase_name) = phase {
+            conversation_text.push_str(&format!("\n## Phase: {}\n", phase_name));
+        }
+        for text in texts {
+            conversation_text.push_str(text);
+            conversation_text.push('\n');
+        }
+    }
 
     let summary_msgs = vec![ChatMessage::user(format!(
         "Summarize the following conversation concisely, preserving key facts, \
-         decisions, code snippets, and file paths. Output only the summary.\n\n{}",
+         decisions, code snippets, and file paths. If phases are marked, \
+         preserve the phase structure in your summary. Output only the summary.\n\n{}",
         conversation_text
     ))];
 
-    // Call LLM for summary (no tools, just text completion)
     let stream_result = llm.chat_stream(config, summary_msgs, &[]).await;
 
     match stream_result {
@@ -109,29 +145,45 @@ pub async fn summarize_and_prune(
             }
 
             if summary_text.is_empty() {
-                // Fallback to old pruning
                 return Ok(prune_to_budget(messages, budget, min_tail));
             }
 
-            // Replace summarized messages with summary
             let summary_msg = ChatMessage {
                 role: Role::User,
                 content: vec![ContentBlock::Text {
                     text: format!("[Conversation Summary]\n{}", summary_text),
                 }],
                 timestamp: Some(chrono::Utc::now()),
+                metadata: Some(ryvos_core::types::MessageMetadata {
+                    protected: true,
+                    ..Default::default()
+                }),
             };
 
-            let removed = summarize_end - 1;
-            messages.drain(1..summarize_end);
+            // Remove all non-protected messages from the summarizable range.
+            // Keep protected messages in place.
+            let mut removed = 0;
+            let mut i = 1;
+            while i < messages.len() - min_tail.min(messages.len().saturating_sub(1)) {
+                if i >= summarize_end - removed {
+                    break;
+                }
+                if !messages[i].is_protected() {
+                    messages.remove(i);
+                    removed += 1;
+                } else {
+                    i += 1;
+                }
+            }
+
+            // Insert summary after system message (index 1)
             messages.insert(1, summary_msg);
 
-            // If still over budget, fall back to old pruning
+            // If still over budget, fall back to pruning
             let remaining = prune_to_budget(messages, budget, min_tail);
             Ok(removed + remaining)
         }
         Err(_) => {
-            // Summarization failed — fall back to old pruning
             Ok(prune_to_budget(messages, budget, min_tail))
         }
     }
@@ -165,6 +217,7 @@ pub fn reflexion_hint(tool_name: &str, failure_count: usize) -> ChatMessage {
         role: Role::User,
         content: vec![ContentBlock::Text { text }],
         timestamp: Some(chrono::Utc::now()),
+        metadata: None,
     }
 }
 
@@ -244,6 +297,7 @@ mod tests {
                 text: "system".to_string(),
             }],
             timestamp: None,
+            metadata: None,
         };
         let mut messages: Vec<ChatMessage> = vec![system];
         // Add 20 user messages
@@ -260,6 +314,42 @@ mod tests {
         assert_eq!(messages[0].role, Role::System);
         // Last 3 should be preserved
         assert!(messages.len() >= 4); // system + at least min_tail
+    }
+
+    #[test]
+    fn test_prune_respects_protected() {
+        let system = ChatMessage {
+            role: Role::System,
+            content: vec![ContentBlock::Text {
+                text: "system".to_string(),
+            }],
+            timestamp: None,
+            metadata: None,
+        };
+        let mut messages: Vec<ChatMessage> = vec![system];
+
+        // Add a protected message
+        messages.push(
+            ChatMessage::user("important tool result")
+                .with_metadata(ryvos_core::types::MessageMetadata {
+                    protected: true,
+                    ..Default::default()
+                }),
+        );
+
+        // Add regular messages
+        for i in 0..10 {
+            messages.push(ChatMessage::user(format!("message {}", i)));
+        }
+
+        let original_len = messages.len();
+        let removed = prune_to_budget(&mut messages, 100, 3);
+        assert!(removed > 0);
+        assert!(messages.len() < original_len);
+        // System message still first
+        assert_eq!(messages[0].role, Role::System);
+        // Protected message still present
+        assert!(messages.iter().any(|m| m.is_protected()));
     }
 
     #[test]
