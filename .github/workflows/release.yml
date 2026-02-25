@@ -103,14 +103,13 @@ jobs:
 
       - name: Generate checksums
         run: |
-          cd artifacts
-          # Flatten: each artifact is in its own subdirectory
-          for dir in */; do
-            cp "$dir"* . 2>/dev/null || true
+          # Flatten artifacts — each is downloaded into its own named subdir
+          find artifacts -mindepth 2 -type f | while read f; do
+            mv "$f" artifacts/
           done
-          # Remove the now-empty subdirectories
-          find . -mindepth 1 -type d -exec rm -rf {} + 2>/dev/null || true
-          # Generate checksums for binaries only
+          find artifacts -mindepth 1 -type d -empty -delete
+          ls -la artifacts/
+          cd artifacts
           sha256sum ryvos-* > sha256sums.txt
           cat sha256sums.txt
 
