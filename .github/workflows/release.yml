@@ -103,13 +103,11 @@ jobs:
 
       - name: Generate checksums
         run: |
-          # Flatten artifacts — each is downloaded into its own named subdir
-          find artifacts -mindepth 2 -type f | while read f; do
-            mv "$f" artifacts/
-          done
-          find artifacts -mindepth 1 -type d -empty -delete
-          ls -la artifacts/
-          cd artifacts
+          mkdir -p dist
+          # Copy every file from artifact subdirs into dist/
+          find artifacts -type f -exec cp {} dist/ \;
+          ls -la dist/
+          cd dist
           sha256sum ryvos-* > sha256sums.txt
           cat sha256sums.txt
 
@@ -119,4 +117,4 @@ jobs:
           generate_release_notes: false
           body_path: CHANGELOG.md
           files: |
-            artifacts/*
+            dist/*
