@@ -23,9 +23,8 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             artifact: ryvos-linux-aarch64
-          # macos-13 is the last Intel runner; macos-latest is now arm64
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-latest
             artifact: ryvos-macos-x86_64
           - target: aarch64-apple-darwin
             os: macos-latest
