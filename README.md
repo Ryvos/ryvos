@@ -178,6 +178,19 @@ rm ~/.local/bin/ryvos
 rm -rf ~/.ryvos   # optional: remove config and data
 ```
 
+### Shell Completions
+
+```bash
+# bash
+ryvos completions bash > ~/.local/share/bash-completion/completions/ryvos
+
+# zsh
+ryvos completions zsh > ~/.zfunc/_ryvos
+
+# fish
+ryvos completions fish > ~/.config/fish/completions/ryvos.fish
+```
+
 ### Commands
 
 | Command | Description |
