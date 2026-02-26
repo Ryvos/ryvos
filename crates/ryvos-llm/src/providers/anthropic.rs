@@ -70,13 +70,19 @@ enum SseData {
     #[serde(rename = "message_start")]
     MessageStart { message: MessageInfo },
     #[serde(rename = "content_block_start")]
-    ContentBlockStart { index: usize, content_block: ContentBlockInfo },
+    ContentBlockStart {
+        index: usize,
+        content_block: ContentBlockInfo,
+    },
     #[serde(rename = "content_block_delta")]
     ContentBlockDelta { index: usize, delta: DeltaInfo },
     #[serde(rename = "content_block_stop")]
-    ContentBlockStop { index: usize, },
+    ContentBlockStop { index: usize },
     #[serde(rename = "message_delta")]
-    MessageDelta { delta: MessageDeltaInfo, usage: Option<UsageInfo> },
+    MessageDelta {
+        delta: MessageDeltaInfo,
+        usage: Option<UsageInfo>,
+    },
     #[serde(rename = "message_stop")]
     MessageStop {},
     #[serde(rename = "ping")]
@@ -274,9 +280,7 @@ fn parse_sse_to_delta(event: SseEvent) -> Option<Result<StreamDelta>> {
             }
             SseData::MessageStop {} => None,
             SseData::Ping {} => None,
-            SseData::Error { error } => {
-                Some(Err(RyvosError::LlmStream(error.message)))
-            }
+            SseData::Error { error } => Some(Err(RyvosError::LlmStream(error.message))),
         },
         Err(e) => {
             warn!(data = %event.data, error = %e, "Failed to parse SSE data");
@@ -301,10 +305,7 @@ impl LlmClient for AnthropicClient {
                 .as_deref()
                 .ok_or_else(|| RyvosError::Config("Anthropic API key not set".into()))?;
 
-            let base_url = config
-                .base_url
-                .as_deref()
-                .unwrap_or(ANTHROPIC_API_URL);
+            let base_url = config.base_url.as_deref().unwrap_or(ANTHROPIC_API_URL);
 
             let (system, api_messages) = convert_messages(messages);
 
@@ -362,18 +363,14 @@ impl LlmClient for AnthropicClient {
                     .text()
                     .await
                     .unwrap_or_else(|_| "unknown error".to_string());
-                return Err(RyvosError::LlmRequest(format!(
-                    "HTTP {}: {}",
-                    status, body
-                )));
+                return Err(RyvosError::LlmRequest(format!("HTTP {}: {}", status, body)));
             }
 
             let byte_stream = response.bytes_stream();
             let sse_stream = crate::streaming::SseStream::new(byte_stream);
 
-            let delta_stream = sse_stream.filter_map(|event| async move {
-                parse_sse_to_delta(event)
-            });
+            let delta_stream =
+                sse_stream.filter_map(|event| async move { parse_sse_to_delta(event) });
 
             Ok(Box::pin(delta_stream) as BoxStream<'_, Result<StreamDelta>>)
         })

@@ -59,20 +59,20 @@ impl Tool for WriteTool {
 
             // Create parent directories
             if let Some(parent) = path.parent() {
-                tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                    RyvosError::ToolExecution {
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| RyvosError::ToolExecution {
                         tool: "write".to_string(),
                         message: format!("Failed to create directories: {}", e),
-                    }
-                })?;
+                    })?;
             }
 
-            tokio::fs::write(&path, &params.content).await.map_err(|e| {
-                RyvosError::ToolExecution {
+            tokio::fs::write(&path, &params.content)
+                .await
+                .map_err(|e| RyvosError::ToolExecution {
                     tool: "write".to_string(),
                     message: format!("{}: {}", path.display(), e),
-                }
-            })?;
+                })?;
 
             Ok(ToolResult::success(format!(
                 "File written successfully: {}",

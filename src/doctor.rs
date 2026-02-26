@@ -38,9 +38,11 @@ pub fn run_doctor(config: &AppConfig) {
 }
 
 fn check_api_key(config: &AppConfig) -> CheckResult {
-    let has_key = config.model.api_key.as_ref().is_some_and(|k| {
-        !k.is_empty() && !k.starts_with("${")
-    });
+    let has_key = config
+        .model
+        .api_key
+        .as_ref()
+        .is_some_and(|k| !k.is_empty() && !k.starts_with("${"));
     let provider = &config.model.provider;
     let needs_key = provider != "ollama";
 

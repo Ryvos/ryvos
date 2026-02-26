@@ -114,7 +114,11 @@ impl ChatMessage {
         }
     }
 
-    pub fn tool_result(tool_use_id: impl Into<String>, content: impl Into<String>, is_error: bool) -> Self {
+    pub fn tool_result(
+        tool_use_id: impl Into<String>,
+        content: impl Into<String>,
+        is_error: bool,
+    ) -> Self {
         Self {
             role: Role::User,
             content: vec![ContentBlock::ToolResult {
@@ -160,7 +164,9 @@ impl ChatMessage {
         self.content
             .iter()
             .filter_map(|b| match b {
-                ContentBlock::ToolUse { id, name, input } => Some((id.as_str(), name.as_str(), input)),
+                ContentBlock::ToolUse { id, name, input } => {
+                    Some((id.as_str(), name.as_str(), input))
+                }
                 _ => None,
             })
             .collect()
@@ -247,6 +253,8 @@ pub struct ToolContext {
     pub store: Option<Arc<dyn crate::traits::SessionStore>>,
     pub agent_spawner: Option<Arc<dyn AgentSpawner>>,
     pub sandbox_config: Option<crate::config::SandboxConfig>,
+    /// Path to the ryvos config file (for cron/config tools to read/modify).
+    pub config_path: Option<std::path::PathBuf>,
 }
 
 impl std::fmt::Debug for ToolContext {
@@ -257,6 +265,7 @@ impl std::fmt::Debug for ToolContext {
             .field("store", &self.store.is_some())
             .field("agent_spawner", &self.agent_spawner.is_some())
             .field("sandbox_config", &self.sandbox_config)
+            .field("config_path", &self.config_path)
             .finish()
     }
 }
@@ -358,7 +367,10 @@ pub enum AgentEvent {
     /// Text streaming from LLM.
     TextDelta(String),
     /// Tool execution started.
-    ToolStart { name: String, input: serde_json::Value },
+    ToolStart {
+        name: String,
+        input: serde_json::Value,
+    },
     /// Tool execution completed.
     ToolEnd { name: String, result: ToolResult },
     /// Agent turn completed.
@@ -379,29 +391,65 @@ pub enum AgentEvent {
     /// Approval resolved (approved or denied).
     ApprovalResolved { request_id: String, approved: bool },
     /// Tool blocked by security policy.
-    ToolBlocked { name: String, tier: SecurityTier, reason: String },
+    ToolBlocked {
+        name: String,
+        tier: SecurityTier,
+        reason: String,
+    },
     /// Guardian detected a stall (no progress for N seconds).
-    GuardianStall { session_id: SessionId, turn: usize, elapsed_secs: u64 },
+    GuardianStall {
+        session_id: SessionId,
+        turn: usize,
+        elapsed_secs: u64,
+    },
     /// Guardian detected a doom loop (same tool called repeatedly).
-    GuardianDoomLoop { session_id: SessionId, tool_name: String, consecutive_calls: usize },
+    GuardianDoomLoop {
+        session_id: SessionId,
+        tool_name: String,
+        consecutive_calls: usize,
+    },
     /// Guardian budget alert (soft warning or hard stop).
-    GuardianBudgetAlert { session_id: SessionId, used_tokens: u64, budget_tokens: u64, is_hard_stop: bool },
+    GuardianBudgetAlert {
+        session_id: SessionId,
+        used_tokens: u64,
+        budget_tokens: u64,
+        is_hard_stop: bool,
+    },
     /// Guardian injected a corrective hint.
-    GuardianHint { session_id: SessionId, message: String },
+    GuardianHint {
+        session_id: SessionId,
+        message: String,
+    },
     /// Token usage update from the agent loop.
-    UsageUpdate { input_tokens: u64, output_tokens: u64 },
+    UsageUpdate {
+        input_tokens: u64,
+        output_tokens: u64,
+    },
     /// Goal evaluation completed.
-    GoalEvaluated { session_id: SessionId, evaluation: GoalEvaluation },
+    GoalEvaluated {
+        session_id: SessionId,
+        evaluation: GoalEvaluation,
+    },
     /// A decision was made during the agent run.
     DecisionMade { decision: Decision },
     /// Judge issued a verdict on the agent output.
-    JudgeVerdict { session_id: SessionId, verdict: Verdict },
+    JudgeVerdict {
+        session_id: SessionId,
+        verdict: Verdict,
+    },
     /// Heartbeat check fired.
     HeartbeatFired { timestamp: DateTime<Utc> },
     /// Heartbeat check returned an ack (no action needed).
-    HeartbeatOk { session_id: SessionId, response_chars: usize },
+    HeartbeatOk {
+        session_id: SessionId,
+        response_chars: usize,
+    },
     /// Heartbeat check returned an actionable alert.
-    HeartbeatAlert { session_id: SessionId, message: String, target_channel: Option<String> },
+    HeartbeatAlert {
+        session_id: SessionId,
+        message: String,
+        target_channel: Option<String>,
+    },
 }
 
 /// Thinking level for extended thinking / reasoning tokens.

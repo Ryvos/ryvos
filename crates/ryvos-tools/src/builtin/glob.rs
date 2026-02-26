@@ -75,9 +75,7 @@ impl Tool for GlobTool {
             debug!(pattern = %pattern_str, "Glob search");
 
             let paths: std::result::Result<Vec<PathBuf>, glob::PatternError> =
-                glob::glob(&pattern_str).map(|entries| {
-                    entries.filter_map(|e| e.ok()).collect()
-                });
+                glob::glob(&pattern_str).map(|entries| entries.filter_map(|e| e.ok()).collect());
 
             let mut paths = paths.map_err(|e| RyvosError::ToolExecution {
                 tool: "glob".to_string(),

@@ -57,17 +57,10 @@ pub trait ChannelAdapter: Send + Sync + 'static {
     fn name(&self) -> &str;
 
     /// Start receiving messages, sending them via the provided sender.
-    fn start(
-        &self,
-        tx: mpsc::Sender<MessageEnvelope>,
-    ) -> BoxFuture<'_, Result<()>>;
+    fn start(&self, tx: mpsc::Sender<MessageEnvelope>) -> BoxFuture<'_, Result<()>>;
 
     /// Send a message to a session.
-    fn send(
-        &self,
-        session: &SessionId,
-        content: &MessageContent,
-    ) -> BoxFuture<'_, Result<()>>;
+    fn send(&self, session: &SessionId, content: &MessageContent) -> BoxFuture<'_, Result<()>>;
 
     /// Send an approval request with platform-native interactive UI (buttons).
     /// Returns true if the adapter handled it with rich UI, false to fall back to text.
@@ -87,11 +80,7 @@ pub trait ChannelAdapter: Send + Sync + 'static {
 /// Session store — persistence backend.
 pub trait SessionStore: Send + Sync + 'static {
     /// Append messages to a session.
-    fn append_messages(
-        &self,
-        sid: &SessionId,
-        msgs: &[ChatMessage],
-    ) -> BoxFuture<'_, Result<()>>;
+    fn append_messages(&self, sid: &SessionId, msgs: &[ChatMessage]) -> BoxFuture<'_, Result<()>>;
 
     /// Load message history for a session.
     fn load_history(
@@ -101,9 +90,5 @@ pub trait SessionStore: Send + Sync + 'static {
     ) -> BoxFuture<'_, Result<Vec<ChatMessage>>>;
 
     /// Full-text search across all sessions.
-    fn search(
-        &self,
-        query: &str,
-        limit: usize,
-    ) -> BoxFuture<'_, Result<Vec<SearchResult>>>;
+    fn search(&self, query: &str, limit: usize) -> BoxFuture<'_, Result<Vec<SearchResult>>>;
 }

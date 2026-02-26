@@ -92,9 +92,7 @@ impl CronScheduler {
             }
 
             if let Some((fire_at, job)) = next_fire {
-                let delay = (fire_at - now)
-                    .to_std()
-                    .unwrap_or(Duration::from_secs(1));
+                let delay = (fire_at - now).to_std().unwrap_or(Duration::from_secs(1));
 
                 info!(
                     job = %job.name,

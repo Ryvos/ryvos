@@ -58,10 +58,7 @@ impl ChannelAdapter for TelegramAdapter {
         "telegram"
     }
 
-    fn start(
-        &self,
-        tx: mpsc::Sender<MessageEnvelope>,
-    ) -> BoxFuture<'_, Result<()>> {
+    fn start(&self, tx: mpsc::Sender<MessageEnvelope>) -> BoxFuture<'_, Result<()>> {
         let bot = Bot::new(&self.config.bot_token);
         let allowed_users = self.config.allowed_users.clone();
         let dm_policy = self.config.dm_policy.clone();
@@ -88,162 +85,148 @@ impl ChannelAdapter for TelegramAdapter {
                     let session_mgr = session_mgr.clone();
                     let chat_map = chat_map.clone();
 
-                    Update::filter_message().endpoint(
-                        move |msg: Message, _bot: Bot| {
-                            let tx = tx.clone();
-                            let allowed = allowed_users.clone();
-                            let policy = dm_policy.clone();
-                            let sm = session_mgr.clone();
-                            let cm = chat_map.clone();
+                    Update::filter_message().endpoint(move |msg: Message, _bot: Bot| {
+                        let tx = tx.clone();
+                        let allowed = allowed_users.clone();
+                        let policy = dm_policy.clone();
+                        let sm = session_mgr.clone();
+                        let cm = chat_map.clone();
 
-                            async move {
-                                let user = match msg.from {
-                                    Some(ref u) => u,
-                                    None => return respond(()),
-                                };
+                        async move {
+                            let user = match msg.from {
+                                Some(ref u) => u,
+                                None => return respond(()),
+                            };
 
-                                // Enforce DM policy
-                                match policy {
-                                    DmPolicy::Disabled => {
+                            // Enforce DM policy
+                            match policy {
+                                DmPolicy::Disabled => {
+                                    debug!(user_id = user.id.0, "Telegram DMs disabled, ignoring");
+                                    return respond(());
+                                }
+                                DmPolicy::Allowlist => {
+                                    if !allowed.is_empty() && !allowed.contains(&(user.id.0 as i64))
+                                    {
                                         debug!(
                                             user_id = user.id.0,
-                                            "Telegram DMs disabled, ignoring"
+                                            "Telegram message from non-allowed user, ignoring"
                                         );
                                         return respond(());
                                     }
-                                    DmPolicy::Allowlist => {
-                                        if !allowed.is_empty()
-                                            && !allowed.contains(&(user.id.0 as i64))
-                                        {
-                                            debug!(
-                                                user_id = user.id.0,
-                                                "Telegram message from non-allowed user, ignoring"
-                                            );
-                                            return respond(());
-                                        }
-                                    }
-                                    DmPolicy::Open => {}
                                 }
-
-                                let text = msg.text().unwrap_or("").to_string();
-                                if text.is_empty() {
-                                    return respond(());
-                                }
-
-                                let key = format!("telegram:user:{}", user.id.0);
-                                let session_id = sm.get_or_create(&key, "telegram");
-
-                                // Map session -> chat for response routing
-                                cm.lock().await.insert(session_id.0.clone(), msg.chat.id);
-
-                                let envelope = MessageEnvelope {
-                                    id: uuid::Uuid::new_v4().to_string(),
-                                    session_id,
-                                    channel: "telegram".into(),
-                                    sender: user.id.0.to_string(),
-                                    text,
-                                    timestamp: chrono::Utc::now(),
-                                };
-
-                                if let Err(e) = tx.send(envelope).await {
-                                    error!(error = %e, "Failed to forward telegram message");
-                                }
-
-                                respond(())
+                                DmPolicy::Open => {}
                             }
-                        },
-                    )
+
+                            let text = msg.text().unwrap_or("").to_string();
+                            if text.is_empty() {
+                                return respond(());
+                            }
+
+                            let key = format!("telegram:user:{}", user.id.0);
+                            let session_id = sm.get_or_create(&key, "telegram");
+
+                            // Map session -> chat for response routing
+                            cm.lock().await.insert(session_id.0.clone(), msg.chat.id);
+
+                            let envelope = MessageEnvelope {
+                                id: uuid::Uuid::new_v4().to_string(),
+                                session_id,
+                                channel: "telegram".into(),
+                                sender: user.id.0.to_string(),
+                                text,
+                                timestamp: chrono::Utc::now(),
+                            };
+
+                            if let Err(e) = tx.send(envelope).await {
+                                error!(error = %e, "Failed to forward telegram message");
+                            }
+
+                            respond(())
+                        }
+                    })
                 };
 
                 let callback_handler = {
                     let broker = broker_arc.clone();
 
-                    Update::filter_callback_query().endpoint(
-                        move |cq: CallbackQuery, bot: Bot| {
-                            let broker = broker.clone();
+                    Update::filter_callback_query().endpoint(move |cq: CallbackQuery, bot: Bot| {
+                        let broker = broker.clone();
 
-                            async move {
-                                let data = match cq.data {
-                                    Some(ref d) => d.as_str(),
-                                    None => return respond(()),
-                                };
+                        async move {
+                            let data = match cq.data {
+                                Some(ref d) => d.as_str(),
+                                None => return respond(()),
+                            };
 
-                                let (action, request_id) = match data.split_once(':') {
-                                    Some((a, id)) if a == "approve" || a == "deny" => (a, id),
-                                    _ => return respond(()),
-                                };
+                            let (action, request_id) = match data.split_once(':') {
+                                Some((a, id)) if a == "approve" || a == "deny" => (a, id),
+                                _ => return respond(()),
+                            };
 
-                                let broker_guard = broker.lock().await;
-                                let broker = match broker_guard.as_ref() {
-                                    Some(b) => b.clone(),
-                                    None => {
-                                        warn!("Telegram callback but no broker configured");
-                                        return respond(());
-                                    }
-                                };
-                                drop(broker_guard);
-
-                                let decision = if action == "approve" {
-                                    ApprovalDecision::Approved
-                                } else {
-                                    ApprovalDecision::Denied {
-                                        reason: "denied via Telegram".to_string(),
-                                    }
-                                };
-
-                                let label = if action == "approve" {
-                                    "Approved"
-                                } else {
-                                    "Denied"
-                                };
-
-                                let resolved = broker.respond(request_id, decision).await;
-
-                                // Answer callback to remove loading spinner
-                                let answer_text = if resolved {
-                                    label.to_string()
-                                } else {
-                                    "Request expired or not found".to_string()
-                                };
-                                if let Err(e) = bot
-                                    .answer_callback_query(&cq.id)
-                                    .text(&answer_text)
-                                    .await
-                                {
-                                    warn!(error = %e, "Failed to answer callback query");
+                            let broker_guard = broker.lock().await;
+                            let broker = match broker_guard.as_ref() {
+                                Some(b) => b.clone(),
+                                None => {
+                                    warn!("Telegram callback but no broker configured");
+                                    return respond(());
                                 }
+                            };
+                            drop(broker_guard);
 
-                                // Edit the original message to reflect the decision
-                                if let Some(msg) = cq.message {
-                                    let chat_id = msg.chat().id;
-                                    let msg_id = msg.id();
-                                    let original = msg
-                                        .regular_message()
-                                        .and_then(|m| m.text())
-                                        .unwrap_or("");
-                                    let updated = format!(
-                                        "{}\n\n{} {}",
-                                        original,
-                                        if resolved { "✓" } else { "⚠" },
-                                        answer_text
-                                    );
-                                    let _ = bot
-                                        .edit_message_text(chat_id, msg_id, &updated)
-                                        .await;
+                            let decision = if action == "approve" {
+                                ApprovalDecision::Approved
+                            } else {
+                                ApprovalDecision::Denied {
+                                    reason: "denied via Telegram".to_string(),
                                 }
+                            };
 
-                                respond(())
+                            let label = if action == "approve" {
+                                "Approved"
+                            } else {
+                                "Denied"
+                            };
+
+                            let resolved = broker.respond(request_id, decision).await;
+
+                            // Answer callback to remove loading spinner
+                            let answer_text = if resolved {
+                                label.to_string()
+                            } else {
+                                "Request expired or not found".to_string()
+                            };
+                            if let Err(e) =
+                                bot.answer_callback_query(&cq.id).text(&answer_text).await
+                            {
+                                warn!(error = %e, "Failed to answer callback query");
                             }
-                        },
-                    )
+
+                            // Edit the original message to reflect the decision
+                            if let Some(msg) = cq.message {
+                                let chat_id = msg.chat().id;
+                                let msg_id = msg.id();
+                                let original =
+                                    msg.regular_message().and_then(|m| m.text()).unwrap_or("");
+                                let updated = format!(
+                                    "{}\n\n{} {}",
+                                    original,
+                                    if resolved { "✓" } else { "⚠" },
+                                    answer_text
+                                );
+                                let _ = bot.edit_message_text(chat_id, msg_id, &updated).await;
+                            }
+
+                            respond(())
+                        }
+                    })
                 };
 
                 let handler = dptree::entry()
                     .branch(message_handler)
                     .branch(callback_handler);
 
-                let mut dispatcher = teloxide::dispatching::Dispatcher::builder(bot, handler)
-                    .build();
+                let mut dispatcher =
+                    teloxide::dispatching::Dispatcher::builder(bot, handler).build();
 
                 // Run until shutdown signal
                 tokio::select! {
@@ -312,15 +295,20 @@ impl ChannelAdapter for TelegramAdapter {
                 Ok(_) => Ok(true),
                 Err(e) => {
                     // Fall back — try without markdown in case of parse errors
-                    let plain = format!(
-                        "[APPROVAL] {} ({}): \"{}\"",
-                        tool_name, tier, input_summary
-                    );
+                    let plain =
+                        format!("[APPROVAL] {} ({}): \"{}\"", tool_name, tier, input_summary);
                     let keyboard2 = InlineKeyboardMarkup::new(vec![vec![
-                        InlineKeyboardButton::callback("Approve", format!("approve:{}", request_id)),
+                        InlineKeyboardButton::callback(
+                            "Approve",
+                            format!("approve:{}", request_id),
+                        ),
                         InlineKeyboardButton::callback("Deny", format!("deny:{}", request_id)),
                     ]]);
-                    match bot.send_message(chat_id, &plain).reply_markup(keyboard2).await {
+                    match bot
+                        .send_message(chat_id, &plain)
+                        .reply_markup(keyboard2)
+                        .await
+                    {
                         Ok(_) => Ok(true),
                         Err(e2) => {
                             warn!(error = %e, fallback_error = %e2, "Failed to send approval to Telegram");
@@ -332,11 +320,7 @@ impl ChannelAdapter for TelegramAdapter {
         })
     }
 
-    fn send(
-        &self,
-        session: &SessionId,
-        content: &MessageContent,
-    ) -> BoxFuture<'_, Result<()>> {
+    fn send(&self, session: &SessionId, content: &MessageContent) -> BoxFuture<'_, Result<()>> {
         let session_key = session.0.clone();
         let content = content.clone();
         let chat_map = self.chat_map.clone();
@@ -370,12 +354,12 @@ impl ChannelAdapter for TelegramAdapter {
 
             let chunks = split_message(&text, TELEGRAM_MAX_LEN);
             for chunk in chunks {
-                bot.send_message(chat_id, &chunk).await.map_err(|e| {
-                    RyvosError::Channel {
+                bot.send_message(chat_id, &chunk)
+                    .await
+                    .map_err(|e| RyvosError::Channel {
                         channel: "telegram".into(),
                         message: e.to_string(),
-                    }
-                })?;
+                    })?;
             }
 
             Ok(())

@@ -48,6 +48,65 @@ impl HooksConfig {
     }
 }
 
+/// Daily log configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DailyLogsConfig {
+    #[serde(default = "default_daily_logs_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_daily_logs_retention")]
+    pub retention_days: u32,
+    #[serde(default)]
+    pub log_dir: Option<String>,
+}
+
+fn default_daily_logs_enabled() -> bool {
+    true
+}
+fn default_daily_logs_retention() -> u32 {
+    30
+}
+
+impl Default for DailyLogsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            retention_days: 30,
+            log_dir: None,
+        }
+    }
+}
+
+/// Skill registry configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryConfig {
+    #[serde(default = "default_registry_url")]
+    pub url: String,
+    #[serde(default)]
+    pub cache_dir: Option<String>,
+}
+
+fn default_registry_url() -> String {
+    "https://raw.githubusercontent.com/Ryvos/registry/main/index.json".to_string()
+}
+
+impl Default for RegistryConfig {
+    fn default() -> Self {
+        Self {
+            url: default_registry_url(),
+            cache_dir: None,
+        }
+    }
+}
+
+/// Webhook configuration for the gateway.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WebhookConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub token: Option<String>,
+}
+
 /// Top-level Ryvos configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -76,6 +135,10 @@ pub struct AppConfig {
     pub security: SecurityConfig,
     #[serde(default)]
     pub embedding: Option<EmbeddingConfig>,
+    #[serde(default)]
+    pub daily_logs: Option<DailyLogsConfig>,
+    #[serde(default)]
+    pub registry: Option<RegistryConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,6 +175,12 @@ pub struct AgentConfig {
     /// Checkpoint / resume configuration.
     #[serde(default)]
     pub checkpoint: Option<CheckpointConfig>,
+    /// Per-agent model routing overrides (agent_id → model config).
+    #[serde(default)]
+    pub model_overrides: HashMap<String, ModelConfig>,
+    /// Opt-out of memory flush before context compaction.
+    #[serde(default)]
+    pub disable_memory_flush: Option<bool>,
 }
 
 impl Default for AgentConfig {
@@ -131,11 +200,15 @@ impl Default for AgentConfig {
             guardian: GuardianConfig::default(),
             log: None,
             checkpoint: None,
+            model_overrides: HashMap::new(),
+            disable_memory_flush: None,
         }
     }
 }
 
-fn default_enable_summarization() -> bool { true }
+fn default_enable_summarization() -> bool {
+    true
+}
 
 /// Checkpoint / resume configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,7 +230,9 @@ impl Default for CheckpointConfig {
     }
 }
 
-fn default_checkpoint_enabled() -> bool { true }
+fn default_checkpoint_enabled() -> bool {
+    true
+}
 
 /// Guardian watchdog configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -215,22 +290,50 @@ impl Default for LogConfig {
     }
 }
 
-fn default_log_enabled() -> bool { true }
-fn default_log_level() -> u8 { 2 }
+fn default_log_enabled() -> bool {
+    true
+}
+fn default_log_level() -> u8 {
+    2
+}
 
-fn default_guardian_enabled() -> bool { true }
-fn default_doom_loop_threshold() -> usize { 3 }
-fn default_stall_timeout_secs() -> u64 { 120 }
-fn default_token_budget() -> u64 { 0 }
-fn default_token_warn_pct() -> u8 { 80 }
+fn default_guardian_enabled() -> bool {
+    true
+}
+fn default_doom_loop_threshold() -> usize {
+    3
+}
+fn default_stall_timeout_secs() -> u64 {
+    120
+}
+fn default_token_budget() -> u64 {
+    0
+}
+fn default_token_warn_pct() -> u8 {
+    80
+}
 
-fn default_max_turns() -> usize { 25 }
-fn default_max_duration() -> u64 { 600 }
-fn default_workspace() -> String { "~/.ryvos".to_string() }
-fn default_max_context_tokens() -> usize { 80_000 }
-fn default_max_tool_output_tokens() -> usize { 4_000 }
-fn default_reflexion_failure_threshold() -> usize { 3 }
-fn default_parallel_tools() -> bool { true }
+fn default_max_turns() -> usize {
+    25
+}
+fn default_max_duration() -> u64 {
+    600
+}
+fn default_workspace() -> String {
+    "~/.ryvos".to_string()
+}
+fn default_max_context_tokens() -> usize {
+    80_000
+}
+fn default_max_tool_output_tokens() -> usize {
+    4_000
+}
+fn default_reflexion_failure_threshold() -> usize {
+    3
+}
+fn default_parallel_tools() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelConfig {
@@ -249,11 +352,32 @@ pub struct ModelConfig {
     pub thinking: ThinkingLevel,
     #[serde(default)]
     pub retry: Option<RetryConfig>,
+    /// Azure OpenAI resource name (e.g., "my-resource").
+    #[serde(default)]
+    pub azure_resource: Option<String>,
+    /// Azure OpenAI deployment name.
+    #[serde(default)]
+    pub azure_deployment: Option<String>,
+    /// Azure OpenAI API version (e.g., "2024-02-15-preview").
+    #[serde(default)]
+    pub azure_api_version: Option<String>,
+    /// AWS region for Bedrock (e.g., "us-east-1").
+    #[serde(default)]
+    pub aws_region: Option<String>,
+    /// Extra headers to send with every LLM request.
+    #[serde(default)]
+    pub extra_headers: HashMap<String, String>,
 }
 
-fn default_provider() -> String { "anthropic".to_string() }
-fn default_max_tokens() -> u32 { 8192 }
-fn default_temperature() -> f32 { 0.0 }
+fn default_provider() -> String {
+    "anthropic".to_string()
+}
+fn default_max_tokens() -> u32 {
+    8192
+}
+fn default_temperature() -> f32 {
+    0.0
+}
 
 /// Retry configuration for LLM requests.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -276,9 +400,15 @@ impl Default for RetryConfig {
     }
 }
 
-fn default_max_retries() -> u32 { 3 }
-fn default_initial_backoff() -> u64 { 1000 }
-fn default_max_backoff() -> u64 { 30000 }
+fn default_max_retries() -> u32 {
+    3
+}
+fn default_initial_backoff() -> u64 {
+    1000
+}
+fn default_max_backoff() -> u64 {
+    30000
+}
 
 /// Active hours window for heartbeat.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -304,8 +434,12 @@ impl Default for ActiveHoursConfig {
     }
 }
 
-fn default_active_start_hour() -> u8 { 9 }
-fn default_active_end_hour() -> u8 { 22 }
+fn default_active_start_hour() -> u8 {
+    9
+}
+fn default_active_end_hour() -> u8 {
+    22
+}
 
 /// Heartbeat configuration — periodic proactive agent checks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -347,9 +481,15 @@ impl Default for HeartbeatConfig {
     }
 }
 
-fn default_heartbeat_interval() -> u64 { 1800 }
-fn default_ack_max_chars() -> usize { 300 }
-fn default_heartbeat_file() -> String { "HEARTBEAT.md".to_string() }
+fn default_heartbeat_interval() -> u64 {
+    1800
+}
+fn default_ack_max_chars() -> usize {
+    300
+}
+fn default_heartbeat_file() -> String {
+    "HEARTBEAT.md".to_string()
+}
 
 /// Cron scheduler configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -385,11 +525,21 @@ pub struct SandboxConfig {
     pub mount_workspace: bool,
 }
 
-fn default_sandbox_mode() -> String { "docker".to_string() }
-fn default_sandbox_image() -> String { "ubuntu:24.04".to_string() }
-fn default_sandbox_memory() -> u64 { 512 }
-fn default_sandbox_timeout() -> u64 { 120 }
-fn default_mount_workspace() -> bool { true }
+fn default_sandbox_mode() -> String {
+    "docker".to_string()
+}
+fn default_sandbox_image() -> String {
+    "ubuntu:24.04".to_string()
+}
+fn default_sandbox_memory() -> u64 {
+    512
+}
+fn default_sandbox_timeout() -> u64 {
+    120
+}
+fn default_mount_workspace() -> bool {
+    true
+}
 
 impl Default for SandboxConfig {
     fn default() -> Self {
@@ -412,7 +562,9 @@ pub struct WebSearchConfig {
     pub api_key: String,
 }
 
-fn default_search_provider() -> String { "tavily".to_string() }
+fn default_search_provider() -> String {
+    "tavily".to_string()
+}
 
 /// Embedding model configuration for semantic memory search.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -432,7 +584,9 @@ pub struct EmbeddingConfig {
     pub dimensions: usize,
 }
 
-fn default_embedding_dims() -> usize { 1536 }
+fn default_embedding_dims() -> usize {
+    1536
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewayConfig {
@@ -444,6 +598,8 @@ pub struct GatewayConfig {
     pub password: Option<String>,
     #[serde(default)]
     pub api_keys: Vec<ApiKeyConfig>,
+    #[serde(default)]
+    pub webhooks: Option<WebhookConfig>,
 }
 
 impl Default for GatewayConfig {
@@ -453,6 +609,7 @@ impl Default for GatewayConfig {
             token: None,
             password: None,
             api_keys: vec![],
+            webhooks: None,
         }
     }
 }
@@ -477,7 +634,9 @@ pub enum ApiKeyRole {
     Admin,
 }
 
-fn default_bind() -> String { "127.0.0.1:18789".to_string() }
+fn default_bind() -> String {
+    "127.0.0.1:18789".to_string()
+}
 
 /// MCP (Model Context Protocol) configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -506,8 +665,12 @@ pub struct McpServerConfig {
     pub headers: HashMap<String, String>,
 }
 
-fn default_auto_connect() -> bool { true }
-fn default_mcp_timeout() -> u64 { 120 }
+fn default_auto_connect() -> bool {
+    true
+}
+fn default_mcp_timeout() -> u64 {
+    120
+}
 
 /// MCP transport configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -712,8 +875,7 @@ impl AppConfig {
         // Expand ${ENV_VAR} references
         let expanded = expand_env_vars(&content);
 
-        toml::from_str(&expanded)
-            .map_err(|e| RyvosError::Config(e.to_string()))
+        toml::from_str(&expanded).map_err(|e| RyvosError::Config(e.to_string()))
     }
 
     /// Resolve the workspace directory (expand ~).

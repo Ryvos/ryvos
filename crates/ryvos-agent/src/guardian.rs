@@ -267,13 +267,10 @@ mod tests {
         }
 
         // Should receive an InjectHint
-        let action = tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            hint_rx.recv(),
-        )
-        .await
-        .expect("timeout waiting for hint")
-        .expect("channel closed");
+        let action = tokio::time::timeout(std::time::Duration::from_secs(2), hint_rx.recv())
+            .await
+            .expect("timeout waiting for hint")
+            .expect("channel closed");
 
         match action {
             GuardianAction::InjectHint(msg) => {
@@ -321,13 +318,13 @@ mod tests {
         });
 
         // Should NOT receive any hint
-        let result = tokio::time::timeout(
-            std::time::Duration::from_millis(200),
-            hint_rx.recv(),
-        )
-        .await;
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(200), hint_rx.recv()).await;
 
-        assert!(result.is_err(), "should not receive hint for different tools");
+        assert!(
+            result.is_err(),
+            "should not receive hint for different tools"
+        );
 
         cancel.cancel();
         handle.await.ok();
@@ -350,13 +347,10 @@ mod tests {
         let handle = tokio::spawn(guardian.run(session_id));
 
         // Wait for stall to trigger
-        let action = tokio::time::timeout(
-            std::time::Duration::from_secs(3),
-            hint_rx.recv(),
-        )
-        .await
-        .expect("timeout waiting for stall hint")
-        .expect("channel closed");
+        let action = tokio::time::timeout(std::time::Duration::from_secs(3), hint_rx.recv())
+            .await
+            .expect("timeout waiting for stall hint")
+            .expect("channel closed");
 
         match action {
             GuardianAction::InjectHint(msg) => {

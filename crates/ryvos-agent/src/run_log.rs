@@ -241,22 +241,17 @@ impl RunLogger {
             }),
             AgentEvent::JudgeVerdict { verdict, .. } if self.level >= 2 => {
                 let (vtype, vdetail) = match verdict {
-                    ryvos_core::types::Verdict::Accept { confidence } => (
-                        "accept",
-                        serde_json::json!({ "confidence": confidence }),
-                    ),
+                    ryvos_core::types::Verdict::Accept { confidence } => {
+                        ("accept", serde_json::json!({ "confidence": confidence }))
+                    }
                     ryvos_core::types::Verdict::Retry { reason, hint } => (
                         "retry",
                         serde_json::json!({ "reason": reason, "hint": hint }),
                     ),
-                    ryvos_core::types::Verdict::Escalate { reason } => (
-                        "escalate",
-                        serde_json::json!({ "reason": reason }),
-                    ),
-                    ryvos_core::types::Verdict::Continue => (
-                        "continue",
-                        serde_json::json!({}),
-                    ),
+                    ryvos_core::types::Verdict::Escalate { reason } => {
+                        ("escalate", serde_json::json!({ "reason": reason }))
+                    }
+                    ryvos_core::types::Verdict::Continue => ("continue", serde_json::json!({})),
                 };
                 Some(LogEntry {
                     timestamp: ts,
@@ -271,15 +266,15 @@ impl RunLogger {
             }
 
             // Guardian events: always logged at L2+
-            AgentEvent::GuardianStall { turn, elapsed_secs, .. } if self.level >= 2 => {
-                Some(LogEntry {
-                    timestamp: ts,
-                    session_id: session_id.to_string(),
-                    event_type: "guardian_stall".to_string(),
-                    turn: Some(*turn),
-                    detail: Some(serde_json::json!({ "elapsed_secs": elapsed_secs })),
-                })
-            }
+            AgentEvent::GuardianStall {
+                turn, elapsed_secs, ..
+            } if self.level >= 2 => Some(LogEntry {
+                timestamp: ts,
+                session_id: session_id.to_string(),
+                event_type: "guardian_stall".to_string(),
+                turn: Some(*turn),
+                detail: Some(serde_json::json!({ "elapsed_secs": elapsed_secs })),
+            }),
             AgentEvent::GuardianDoomLoop {
                 tool_name,
                 consecutive_calls,

@@ -62,9 +62,7 @@ impl Tool for McpReadResourceTool {
                 .unwrap_or_default();
 
             if server.is_empty() || uri.is_empty() {
-                return Ok(ToolResult::error(
-                    "Both 'server' and 'uri' are required",
-                ));
+                return Ok(ToolResult::error("Both 'server' and 'uri' are required"));
             }
 
             match self.manager.read_resource(server, uri).await {

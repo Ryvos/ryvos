@@ -75,6 +75,8 @@ impl ToolRegistry {
     /// Create a registry with all built-in tools registered.
     pub fn with_builtins() -> Self {
         let mut registry = Self::new();
+
+        // ── Original 12 tools ───────────────────────────────────
         registry.register(crate::builtin::bash::BashTool);
         registry.register(crate::builtin::read::ReadTool);
         registry.register(crate::builtin::write::WriteTool);
@@ -86,6 +88,79 @@ impl ToolRegistry {
         registry.register(crate::builtin::grep::GrepTool);
         registry.register(crate::builtin::web_fetch::WebFetchTool);
         registry.register(crate::builtin::apply_patch::ApplyPatchTool);
+
+        // ── Sessions (5) ────────────────────────────────────────
+        registry.register(crate::builtin::sessions::SessionListTool);
+        registry.register(crate::builtin::sessions::SessionHistoryTool);
+        registry.register(crate::builtin::sessions::SessionSendTool);
+        registry.register(crate::builtin::sessions::SessionSpawnTool);
+        registry.register(crate::builtin::sessions::SessionStatusTool);
+
+        // ── Memory (3) ──────────────────────────────────────────
+        registry.register(crate::builtin::memory::MemoryGetTool);
+        registry.register(crate::builtin::memory::DailyLogWriteTool);
+        registry.register(crate::builtin::memory::MemoryDeleteTool);
+
+        // ── File System (9) ─────────────────────────────────────
+        registry.register(crate::builtin::filesystem::FileInfoTool);
+        registry.register(crate::builtin::filesystem::FileCopyTool);
+        registry.register(crate::builtin::filesystem::FileMoveTool);
+        registry.register(crate::builtin::filesystem::FileDeleteTool);
+        registry.register(crate::builtin::filesystem::DirListTool);
+        registry.register(crate::builtin::filesystem::DirCreateTool);
+        registry.register(crate::builtin::filesystem::FileWatchTool);
+        registry.register(crate::builtin::filesystem::ArchiveCreateTool);
+        registry.register(crate::builtin::filesystem::ArchiveExtractTool);
+
+        // ── Git (6) ─────────────────────────────────────────────
+        registry.register(crate::builtin::git::GitStatusTool);
+        registry.register(crate::builtin::git::GitDiffTool);
+        registry.register(crate::builtin::git::GitLogTool);
+        registry.register(crate::builtin::git::GitCommitTool);
+        registry.register(crate::builtin::git::GitBranchTool);
+        registry.register(crate::builtin::git::GitCloneTool);
+
+        // ── Code/Dev (4) ────────────────────────────────────────
+        registry.register(crate::builtin::code::CodeFormatTool);
+        registry.register(crate::builtin::code::CodeLintTool);
+        registry.register(crate::builtin::code::TestRunTool);
+        registry.register(crate::builtin::code::CodeOutlineTool);
+
+        // ── Network/HTTP (4) ────────────────────────────────────
+        registry.register(crate::builtin::network::HttpRequestTool);
+        registry.register(crate::builtin::network::HttpDownloadTool);
+        registry.register(crate::builtin::network::DnsLookupTool);
+        registry.register(crate::builtin::network::NetworkCheckTool);
+
+        // ── System (5) ──────────────────────────────────────────
+        registry.register(crate::builtin::system::ProcessListTool);
+        registry.register(crate::builtin::system::ProcessKillTool);
+        registry.register(crate::builtin::system::EnvGetTool);
+        registry.register(crate::builtin::system::SystemInfoTool);
+        registry.register(crate::builtin::system::DiskUsageTool);
+
+        // ── Data/Transform (8) ──────────────────────────────────
+        registry.register(crate::builtin::data::JsonQueryTool);
+        registry.register(crate::builtin::data::CsvParseTool);
+        registry.register(crate::builtin::data::YamlConvertTool);
+        registry.register(crate::builtin::data::TomlConvertTool);
+        registry.register(crate::builtin::data::Base64CodecTool);
+        registry.register(crate::builtin::data::HashComputeTool);
+        registry.register(crate::builtin::data::RegexReplaceTool);
+        registry.register(crate::builtin::data::TextDiffTool);
+
+        // ── Scheduling (3) ──────────────────────────────────────
+        registry.register(crate::builtin::scheduling::CronListTool);
+        registry.register(crate::builtin::scheduling::CronAddTool);
+        registry.register(crate::builtin::scheduling::CronRemoveTool);
+
+        // ── Database (2) ────────────────────────────────────────
+        registry.register(crate::builtin::database::SqliteQueryTool);
+        registry.register(crate::builtin::database::SqliteSchemaTool);
+
+        // ── Communication (1) ───────────────────────────────────
+        registry.register(crate::builtin::notification::NotificationSendTool);
+
         registry
     }
 }

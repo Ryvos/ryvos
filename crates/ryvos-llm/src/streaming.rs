@@ -130,9 +130,7 @@ mod tests {
     #[test]
     fn test_sse_parser_multiple_events() {
         let mut parser = SseParser::new();
-        let events = parser.feed(
-            "event: a\ndata: {\"x\":1}\n\nevent: b\ndata: {\"x\":2}\n\n"
-        );
+        let events = parser.feed("event: a\ndata: {\"x\":1}\n\nevent: b\ndata: {\"x\":2}\n\n");
         assert_eq!(events.len(), 2);
     }
 

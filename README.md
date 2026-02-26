@@ -17,7 +17,7 @@
 
 ## What is Ryvos?
 
-Ryvos is an open-source, autonomous personal AI assistant you run on your own hardware. It connects to any LLM (Anthropic, OpenAI, Ollama, or any OpenAI-compatible API), executes tasks through sandboxed tools, and reaches you on the channels you already use — Telegram, Discord, Slack — plus a built-in Web UI and terminal interface.
+Ryvos is an open-source, autonomous personal AI assistant you run on your own hardware. It connects to 14 LLM providers (Anthropic, OpenAI, Gemini, Azure, Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek), executes tasks through 62 sandboxed tools, and reaches you on the channels you already use — Telegram, Discord, Slack, Webhooks — plus a built-in Web UI and terminal interface.
 
 Written in Rust. Ships as a single binary. Uses 15–30 MB of RAM.
 
@@ -67,7 +67,7 @@ Ryvos is built from scratch in Rust with a different set of priorities:
 ### Autonomous Agent
 - **ReAct agent loop** with tool use, reflexion, and streaming responses
 - **Parallel tool execution** — multiple tools run concurrently when independent
-- **Multi-provider LLM** — Anthropic, OpenAI, Ollama, or any OpenAI-compatible endpoint
+- **Multi-provider LLM** — 14 providers: Anthropic, OpenAI, Gemini, Azure, Cohere, Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek
 - **Session persistence** — SQLite-backed conversation history and memory across restarts
 - **Sub-agent spawning** — delegate tasks to child agents with stricter security
 - **Lifecycle hooks** — trigger shell commands on start, message, tool call, response, turn complete, tool error, session start/end
@@ -109,7 +109,7 @@ Ryvos is built from scratch in Rust with a different set of priorities:
 - **Token usage tracking** — per-turn and per-run input/output token counts
 
 ### Tools & Extensibility
-- **11 built-in tools** — `bash`, `read`, `write`, `edit`, `glob`, `grep`, `web_fetch`, `web_search`, `memory_search`, `memory_write`, `spawn_agent`, `apply_patch`
+- **62 built-in tools** — shell, file I/O, git, code analysis, network/HTTP, system, data transform, scheduling, database, sessions, memory, notifications
 - **MCP-native** — connect to Model Context Protocol servers (stdio + SSE/Streamable HTTP transports)
 - **Drop-in skills** — Lua/Rhai scripts in `~/.ryvos/skills/` with manifest-declared schemas and sandbox requirements
 - **Tool registry** — built-in tools + custom tools via MCP or skills
@@ -228,7 +228,7 @@ Ryvos is a Cargo workspace with 10 crates. Together they form a complete autonom
 |-------|---------|
 | `ryvos-core` | Config, error types, scoped event bus, security policy, goal system, traits |
 | `ryvos-llm` | LLM client abstraction with streaming support (Anthropic, OpenAI, any compatible) |
-| `ryvos-tools` | Tool registry, 11 built-in tools (bash, read, write, edit, glob, grep, web_fetch, web_search, memory, spawn_agent, apply_patch) |
+| `ryvos-tools` | Tool registry, 62 built-in tools across 11 categories |
 | `ryvos-agent` | ReAct loop, SecurityGate, ApprovalBroker, Guardian watchdog, Judge, GoalEvaluator, OutputValidator, CheckpointStore, RunLogger, CronScheduler, GraphExecutor, MultiAgentOrchestrator |
 | `ryvos-memory` | SQLite-backed session and history storage |
 | `ryvos-gateway` | Axum HTTP/WS server, Web UI, role-based auth middleware |

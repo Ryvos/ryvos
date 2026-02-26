@@ -108,6 +108,68 @@ pub async fn send_message(
     }
 }
 
+// ── Webhook endpoint ────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct WebhookPayload {
+    pub prompt: String,
+    #[serde(default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub channel: Option<String>,
+}
+
+/// POST /api/hooks/wake — webhook endpoint for external triggers.
+/// Authenticated via Bearer token from gateway.webhooks.token config.
+pub async fn webhook_wake(
+    State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<WebhookPayload>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Validate webhook token
+    let webhook_config = state
+        .config
+        .webhooks
+        .as_ref()
+        .filter(|w| w.enabled)
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let Some(ref expected_token) = webhook_config.token {
+        let auth_header = headers
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+
+        if auth_header != expected_token {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    }
+
+    if body.prompt.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let session_id = body
+        .session_id
+        .map(|s| SessionId::from_string(&s))
+        .unwrap_or_else(SessionId::new);
+
+    info!(session_id = %session_id, "Webhook wake triggered");
+
+    match state.runtime.run(&session_id, &body.prompt).await {
+        Ok(response) => Ok(Json(serde_json::json!({
+            "session_id": session_id.to_string(),
+            "response": response,
+            "channel": body.channel,
+        }))),
+        Err(e) => Ok(Json(serde_json::json!({
+            "session_id": session_id.to_string(),
+            "error": e.to_string(),
+        }))),
+    }
+}
+
 // GET /ws — WebSocket upgrade, requires auth
 pub async fn ws_handler(
     ws: WebSocketUpgrade,

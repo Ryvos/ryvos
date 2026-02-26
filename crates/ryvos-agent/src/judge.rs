@@ -30,9 +30,10 @@ impl Judge {
     /// (i.e., the goal has no LlmJudge criteria). Returns `None` if LLM
     /// evaluation is needed.
     pub fn fast_check(output: &str, goal: &Goal) -> Option<Verdict> {
-        let has_llm_criteria = goal.success_criteria.iter().any(|c| {
-            matches!(c.criterion_type, CriterionType::LlmJudge { .. })
-        });
+        let has_llm_criteria = goal
+            .success_criteria
+            .iter()
+            .any(|c| matches!(c.criterion_type, CriterionType::LlmJudge { .. }));
 
         if has_llm_criteria {
             return None; // Need LLM evaluation
@@ -223,7 +224,7 @@ fn extract_json(text: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ryvos_core::goal::{SuccessCriterion, CriterionType};
+    use ryvos_core::goal::{CriterionType, SuccessCriterion};
 
     fn make_goal(criteria: Vec<SuccessCriterion>, threshold: f64) -> Goal {
         Goal {
@@ -303,8 +304,7 @@ mod tests {
 
     #[test]
     fn test_parse_verdict_retry() {
-        let response =
-            r#"{"verdict": "retry", "confidence": 0.3, "reason": "incomplete", "hint": "add more detail"}"#;
+        let response = r#"{"verdict": "retry", "confidence": 0.3, "reason": "incomplete", "hint": "add more detail"}"#;
         let verdict = parse_verdict(response).unwrap();
         match verdict {
             Verdict::Retry { reason, hint } => {

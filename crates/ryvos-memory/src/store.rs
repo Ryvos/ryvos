@@ -26,8 +26,7 @@ impl SqliteStore {
             })?;
         }
 
-        let conn = Connection::open(path)
-            .map_err(|e| RyvosError::Database(e.to_string()))?;
+        let conn = Connection::open(path).map_err(|e| RyvosError::Database(e.to_string()))?;
 
         // Enable WAL mode for better concurrent performance
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
@@ -78,8 +77,7 @@ impl SqliteStore {
 
     /// Open an in-memory database (for testing).
     pub fn in_memory() -> Result<Self> {
-        let conn = Connection::open_in_memory()
-            .map_err(|e| RyvosError::Database(e.to_string()))?;
+        let conn = Connection::open_in_memory().map_err(|e| RyvosError::Database(e.to_string()))?;
 
         conn.execute_batch(
             "CREATE TABLE messages (
@@ -125,7 +123,10 @@ impl SqliteStore {
 impl SqliteStore {
     /// Store an embedding vector for a message.
     pub fn store_embedding(&self, message_id: i64, embedding: &[f32]) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| RyvosError::Database(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         let blob: Vec<u8> = embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
         conn.execute(
             "INSERT INTO embeddings (message_id, embedding) VALUES (?1, ?2)",
@@ -138,7 +139,10 @@ impl SqliteStore {
     /// Search for messages similar to a query vector using cosine similarity.
     /// Returns (session_id, role, content, timestamp, similarity) sorted by similarity descending.
     pub fn search_similar(&self, query_vec: &[f32], limit: usize) -> Result<Vec<SearchResult>> {
-        let conn = self.conn.lock().map_err(|e| RyvosError::Database(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
 
         let mut stmt = conn
             .prepare(
@@ -197,11 +201,7 @@ impl SqliteStore {
 }
 
 impl SessionStore for SqliteStore {
-    fn append_messages(
-        &self,
-        sid: &SessionId,
-        msgs: &[ChatMessage],
-    ) -> BoxFuture<'_, Result<()>> {
+    fn append_messages(&self, sid: &SessionId, msgs: &[ChatMessage]) -> BoxFuture<'_, Result<()>> {
         let sid = sid.0.clone();
         let msgs: Vec<_> = msgs
             .iter()
@@ -213,10 +213,7 @@ impl SessionStore for SqliteStore {
                     ryvos_core::types::Role::Tool => "tool",
                 };
                 let content = serde_json::to_string(&m.content).unwrap_or_default();
-                let timestamp = m
-                    .timestamp
-                    .unwrap_or_else(Utc::now)
-                    .to_rfc3339();
+                let timestamp = m.timestamp.unwrap_or_else(Utc::now).to_rfc3339();
                 (role.to_string(), content, timestamp)
             })
             .collect();
@@ -272,8 +269,8 @@ impl SessionStore for SqliteStore {
 
             let mut messages = Vec::new();
             for row in rows {
-                let (role, content_str, ts_str) = row
-                    .map_err(|e| RyvosError::Database(e.to_string()))?;
+                let (role, content_str, ts_str) =
+                    row.map_err(|e| RyvosError::Database(e.to_string()))?;
 
                 let role = match role.as_str() {
                     "system" => ryvos_core::types::Role::System,
@@ -300,11 +297,7 @@ impl SessionStore for SqliteStore {
         })
     }
 
-    fn search(
-        &self,
-        query: &str,
-        limit: usize,
-    ) -> BoxFuture<'_, Result<Vec<SearchResult>>> {
+    fn search(&self, query: &str, limit: usize) -> BoxFuture<'_, Result<Vec<SearchResult>>> {
         let query = query.to_string();
 
         Box::pin(async move {
@@ -342,9 +335,7 @@ impl SessionStore for SqliteStore {
 
             let mut results = Vec::new();
             for row in rows {
-                results.push(
-                    row.map_err(|e| RyvosError::Database(e.to_string()))?,
-                );
+                results.push(row.map_err(|e| RyvosError::Database(e.to_string()))?);
             }
 
             Ok(results)

@@ -104,11 +104,7 @@ impl Tool for SkillTool {
                             stdout
                         }))
                     } else {
-                        let msg = if stderr.is_empty() {
-                            stdout
-                        } else {
-                            stderr
-                        };
+                        let msg = if stderr.is_empty() { stdout } else { stderr };
                         Ok(ToolResult::error(format!(
                             "Exit code {}\n{}",
                             output.status.code().unwrap_or(-1),
@@ -150,6 +146,7 @@ mod tests {
             store: None,
             agent_spawner: None,
             sandbox_config: None,
+            config_path: None,
         }
     }
 

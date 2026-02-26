@@ -19,12 +19,7 @@ pub struct HttpEmbeddingProvider {
 }
 
 impl HttpEmbeddingProvider {
-    pub fn new(
-        base_url: &str,
-        api_key: Option<&str>,
-        model: &str,
-        dims: usize,
-    ) -> Self {
+    pub fn new(base_url: &str, api_key: Option<&str>, model: &str, dims: usize) -> Self {
         Self {
             client: reqwest::Client::new(),
             base_url: base_url.trim_end_matches('/').to_string(),
@@ -66,7 +61,10 @@ impl EmbeddingProvider for HttpEmbeddingProvider {
                 req = req.bearer_auth(key);
             }
 
-            let resp = req.send().await.map_err(|e| format!("Embedding request failed: {}", e))?;
+            let resp = req
+                .send()
+                .await
+                .map_err(|e| format!("Embedding request failed: {}", e))?;
 
             if !resp.status().is_success() {
                 let status = resp.status();

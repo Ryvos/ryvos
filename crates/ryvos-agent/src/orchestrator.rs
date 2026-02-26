@@ -32,6 +32,8 @@ pub struct AgentCapability {
     pub policy: Option<SecurityPolicy>,
     /// Optional goal for this agent.
     pub goal: Option<Goal>,
+    /// Optional model override for this agent (per-agent model routing).
+    pub model: Option<ryvos_core::config::ModelConfig>,
 }
 
 impl AgentCapability {
@@ -44,7 +46,14 @@ impl AgentCapability {
             specializations: vec![],
             policy: None,
             goal: None,
+            model: None,
         }
+    }
+
+    /// Set a model override for this agent.
+    pub fn with_model(mut self, model: ryvos_core::config::ModelConfig) -> Self {
+        self.model = Some(model);
+        self
     }
 
     /// Set the tools this agent can use.
@@ -157,8 +166,7 @@ impl MultiAgentOrchestrator {
 
     /// Register an agent with its capabilities.
     pub fn register(&mut self, capability: AgentCapability) {
-        self.agents
-            .insert(capability.agent_id.clone(), capability);
+        self.agents.insert(capability.agent_id.clone(), capability);
     }
 
     /// Unregister an agent.
@@ -192,11 +200,7 @@ impl MultiAgentOrchestrator {
     }
 
     /// Dispatch a task to a specific agent by id.
-    pub async fn dispatch_to(
-        &self,
-        agent_id: &str,
-        task: &str,
-    ) -> Result<AgentDispatchResult> {
+    pub async fn dispatch_to(&self, agent_id: &str, task: &str) -> Result<AgentDispatchResult> {
         let agent = self
             .agents
             .get(agent_id)
@@ -330,9 +334,21 @@ impl MultiAgentOrchestrator {
             self.builder.event_bus.clone(),
         ));
 
+        // Use per-agent model override if configured
+        let llm: Arc<dyn LlmClient> = if let Some(ref model_config) = capability.model {
+            Arc::from(ryvos_llm::create_client(model_config))
+        } else {
+            self.builder.llm.clone()
+        };
+
+        let mut config = self.builder.config.clone();
+        if let Some(ref model_config) = capability.model {
+            config.model = model_config.clone();
+        }
+
         let runtime = AgentRuntime::new_with_gate(
-            self.builder.config.clone(),
-            self.builder.llm.clone(),
+            config,
+            llm,
             gate,
             self.builder.store.clone(),
             self.builder.event_bus.clone(),
@@ -445,8 +461,7 @@ mod tests {
         // We can't build a full MultiAgentOrchestrator in a unit test without
         // all the runtime deps, but we can test the routing logic directly.
         let agents = [
-            AgentCapability::new("writer", "Writer")
-                .with_specializations(vec!["writing".into()]),
+            AgentCapability::new("writer", "Writer").with_specializations(vec!["writing".into()]),
             AgentCapability::new("coder", "Coder")
                 .with_specializations(vec!["code".into(), "debug".into()])
                 .with_tools(vec!["bash".into()]),

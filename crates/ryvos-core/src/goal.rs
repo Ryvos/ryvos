@@ -131,43 +131,41 @@ impl Goal {
     pub fn evaluate_deterministic(&self, output: &str) -> Vec<CriterionResult> {
         self.success_criteria
             .iter()
-            .filter_map(|c| {
-                match &c.criterion_type {
-                    CriterionType::OutputContains {
-                        pattern,
-                        case_sensitive,
-                    } => {
-                        let found = if *case_sensitive {
-                            output.contains(pattern)
+            .filter_map(|c| match &c.criterion_type {
+                CriterionType::OutputContains {
+                    pattern,
+                    case_sensitive,
+                } => {
+                    let found = if *case_sensitive {
+                        output.contains(pattern)
+                    } else {
+                        output.to_lowercase().contains(&pattern.to_lowercase())
+                    };
+                    Some(CriterionResult {
+                        criterion_id: c.id.clone(),
+                        score: if found { 1.0 } else { 0.0 },
+                        passed: found,
+                        reasoning: if found {
+                            format!("Output contains '{}'", pattern)
                         } else {
-                            output.to_lowercase().contains(&pattern.to_lowercase())
-                        };
-                        Some(CriterionResult {
-                            criterion_id: c.id.clone(),
-                            score: if found { 1.0 } else { 0.0 },
-                            passed: found,
-                            reasoning: if found {
-                                format!("Output contains '{}'", pattern)
-                            } else {
-                                format!("Output does not contain '{}'", pattern)
-                            },
-                        })
-                    }
-                    CriterionType::OutputEquals { expected } => {
-                        let matches = output.trim() == expected.trim();
-                        Some(CriterionResult {
-                            criterion_id: c.id.clone(),
-                            score: if matches { 1.0 } else { 0.0 },
-                            passed: matches,
-                            reasoning: if matches {
-                                "Output matches expected value".to_string()
-                            } else {
-                                "Output does not match expected value".to_string()
-                            },
-                        })
-                    }
-                    CriterionType::LlmJudge { .. } | CriterionType::Custom { .. } => None,
+                            format!("Output does not contain '{}'", pattern)
+                        },
+                    })
                 }
+                CriterionType::OutputEquals { expected } => {
+                    let matches = output.trim() == expected.trim();
+                    Some(CriterionResult {
+                        criterion_id: c.id.clone(),
+                        score: if matches { 1.0 } else { 0.0 },
+                        passed: matches,
+                        reasoning: if matches {
+                            "Output matches expected value".to_string()
+                        } else {
+                            "Output does not match expected value".to_string()
+                        },
+                    })
+                }
+                CriterionType::LlmJudge { .. } | CriterionType::Custom { .. } => None,
             })
             .collect()
     }
@@ -294,10 +292,7 @@ mod tests {
 
     #[test]
     fn test_constraint_violation() {
-        let goal = make_goal(
-            vec![contains_criterion("c1", "ok", 1.0)],
-            0.5,
-        );
+        let goal = make_goal(vec![contains_criterion("c1", "ok", 1.0)], 0.5);
 
         let results = vec![CriterionResult {
             criterion_id: "c1".to_string(),
@@ -319,10 +314,7 @@ mod tests {
 
     #[test]
     fn test_case_insensitive_contains() {
-        let goal = make_goal(
-            vec![contains_criterion("c1", "SUCCESS", 1.0)],
-            0.9,
-        );
+        let goal = make_goal(vec![contains_criterion("c1", "SUCCESS", 1.0)], 0.9);
 
         let output = "The task was a success!";
         let results = goal.evaluate_deterministic(output);

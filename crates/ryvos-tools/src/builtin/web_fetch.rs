@@ -71,14 +71,15 @@ impl Tool for WebFetchTool {
                     message: format!("Failed to create HTTP client: {}", e),
                 })?;
 
-            let resp = client
-                .get(&params.url)
-                .send()
-                .await
-                .map_err(|e| RyvosError::ToolExecution {
-                    tool: "web_fetch".to_string(),
-                    message: format!("Request failed: {}", e),
-                })?;
+            let resp =
+                client
+                    .get(&params.url)
+                    .send()
+                    .await
+                    .map_err(|e| RyvosError::ToolExecution {
+                        tool: "web_fetch".to_string(),
+                        message: format!("Request failed: {}", e),
+                    })?;
 
             let status = resp.status();
             if !status.is_success() {
@@ -110,7 +111,11 @@ impl Tool for WebFetchTool {
 
             // Truncate
             let output = if text.len() > max_length {
-                format!("{}\n\n[truncated at {} chars]", &text[..max_length], max_length)
+                format!(
+                    "{}\n\n[truncated at {} chars]",
+                    &text[..max_length],
+                    max_length
+                )
             } else {
                 text
             };

@@ -220,18 +220,9 @@ pub fn select_model(provider: &ProviderChoice) -> Result<ModelChoice> {
             vec!["gemini-2.0-flash", "gemini-1.5-pro", "Enter manually"],
             0,
         ),
-        "moonshot" => (
-            vec!["kimi-k2-0905-preview", "Enter manually"],
-            0,
-        ),
-        "zai" => (
-            vec!["glm-4.7", "Enter manually"],
-            0,
-        ),
-        "xiaomi" => (
-            vec!["mimo-v2-flash", "Enter manually"],
-            0,
-        ),
+        "moonshot" => (vec!["kimi-k2-0905-preview", "Enter manually"], 0),
+        "zai" => (vec!["glm-4.7", "Enter manually"], 0),
+        "xiaomi" => (vec!["mimo-v2-flash", "Enter manually"], 0),
         "minimax" => (
             vec!["MiniMax-M2.1", "MiniMax-M2.1-Lightning", "Enter manually"],
             0,
@@ -252,9 +243,7 @@ pub fn select_model(provider: &ProviderChoice) -> Result<ModelChoice> {
 
     if models.len() == 1 {
         // Only "Enter manually"
-        let model_id: String = Input::new()
-            .with_prompt("Model ID")
-            .interact_text()?;
+        let model_id: String = Input::new().with_prompt("Model ID").interact_text()?;
         return Ok(ModelChoice { model_id });
     }
 
@@ -265,9 +254,7 @@ pub fn select_model(provider: &ProviderChoice) -> Result<ModelChoice> {
         .interact()?;
 
     let model_id = if models[selection] == "Enter manually" {
-        Input::new()
-            .with_prompt("Model ID")
-            .interact_text()?
+        Input::new().with_prompt("Model ID").interact_text()?
     } else {
         models[selection].to_string()
     };
@@ -276,9 +263,7 @@ pub fn select_model(provider: &ProviderChoice) -> Result<ModelChoice> {
 }
 
 fn prompt_api_key() -> Result<String> {
-    let key = Password::new()
-        .with_prompt("API key")
-        .interact()?;
+    let key = Password::new().with_prompt("API key").interact()?;
     Ok(key)
 }
 

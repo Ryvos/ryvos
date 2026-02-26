@@ -165,7 +165,10 @@ mod tests {
     #[test]
     fn test_condition_contains() {
         let mut ctx = HashMap::new();
-        ctx.insert("output".into(), serde_json::json!("The file was created successfully."));
+        ctx.insert(
+            "output".into(),
+            serde_json::json!("The file was created successfully."),
+        );
 
         assert!(evaluate_condition(r#"output contains "created""#, &ctx));
         assert!(!evaluate_condition(r#"output contains "deleted""#, &ctx));
@@ -196,6 +199,9 @@ mod tests {
         let parsed: Edge = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.from, "a");
         assert_eq!(parsed.to, "b");
-        assert!(matches!(parsed.condition, EdgeCondition::Conditional { .. }));
+        assert!(matches!(
+            parsed.condition,
+            EdgeCondition::Conditional { .. }
+        ));
     }
 }

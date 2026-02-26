@@ -171,10 +171,10 @@ impl GraphExecutor {
                     EdgeCondition::Always => true,
                     EdgeCondition::OnSuccess => succeeded,
                     EdgeCondition::OnFailure => !succeeded,
-                    EdgeCondition::Conditional { expr } => {
-                        evaluate_condition(expr, context.data())
-                    }
-                    EdgeCondition::LlmDecide { prompt: decide_prompt } => {
+                    EdgeCondition::Conditional { expr } => evaluate_condition(expr, context.data()),
+                    EdgeCondition::LlmDecide {
+                        prompt: decide_prompt,
+                    } => {
                         // Use LLM to decide
                         if let Some((llm_client, config)) = llm {
                             evaluate_llm_edge(llm_client, config, decide_prompt, context.data())

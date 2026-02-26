@@ -153,14 +153,12 @@ impl CheckpointStore {
 
     /// Serialize messages to JSON for storage.
     pub fn serialize_messages(messages: &[ChatMessage]) -> Result<String, String> {
-        serde_json::to_string(messages)
-            .map_err(|e| format!("Failed to serialize messages: {}", e))
+        serde_json::to_string(messages).map_err(|e| format!("Failed to serialize messages: {}", e))
     }
 
     /// Deserialize messages from stored JSON.
     pub fn deserialize_messages(json: &str) -> Result<Vec<ChatMessage>, String> {
-        serde_json::from_str(json)
-            .map_err(|e| format!("Failed to deserialize messages: {}", e))
+        serde_json::from_str(json).map_err(|e| format!("Failed to deserialize messages: {}", e))
     }
 }
 
