@@ -1,0 +1,87 @@
+name: Bug Report
+description: Report a bug in Ryvos
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the sections below.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: How do we reproduce this?
+      placeholder: |
+        1. Run `ryvos init -y --provider ollama`
+        2. Send message "..."
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened? Include error messages or logs if available.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Ryvos version
+      description: Output of `ryvos --version`
+      placeholder: "ryvos 0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows (WSL)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: provider
+    attributes:
+      label: LLM Provider
+      description: Which provider are you using?
+      placeholder: "Ollama / Anthropic / OpenAI / Groq / etc."
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config
+      description: Paste relevant sections from your `config.toml` (redact API keys).
+      render: toml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste any relevant log output.
+      render: text
