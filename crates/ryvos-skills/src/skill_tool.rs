@@ -72,9 +72,16 @@ impl Tool for SkillTool {
 
             let timeout = std::time::Duration::from_secs(timeout_secs);
             let result = tokio::time::timeout(timeout, async {
-                let mut child = tokio::process::Command::new("bash")
-                    .arg("-c")
-                    .arg(&command)
+                let mut cmd = if cfg!(windows) {
+                    let mut c = tokio::process::Command::new("cmd");
+                    c.arg("/C").arg(&command);
+                    c
+                } else {
+                    let mut c = tokio::process::Command::new("bash");
+                    c.arg("-c").arg(&command);
+                    c
+                };
+                let mut child = cmd
                     .current_dir(&working_dir)
                     .stdin(std::process::Stdio::piped())
                     .stdout(std::process::Stdio::piped())
@@ -134,6 +141,7 @@ impl Tool for SkillTool {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
     use crate::manifest::SkillManifest;
