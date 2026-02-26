@@ -85,18 +85,23 @@ impl Tool for ApplyPatchTool {
                     })?;
             }
 
-            let output = child.wait_with_output().await.map_err(|e| {
-                RyvosError::ToolExecution {
+            let output = child
+                .wait_with_output()
+                .await
+                .map_err(|e| RyvosError::ToolExecution {
                     tool: "apply_patch".to_string(),
                     message: format!("Failed to wait for patch: {}", e),
-                }
-            })?;
+                })?;
 
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
 
             if output.status.success() {
-                let prefix = if dry_run { "Dry run OK" } else { "Patch applied" };
+                let prefix = if dry_run {
+                    "Dry run OK"
+                } else {
+                    "Patch applied"
+                };
                 let msg = if stdout.is_empty() {
                     prefix.to_string()
                 } else {

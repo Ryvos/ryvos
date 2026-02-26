@@ -2,6 +2,64 @@
 
 All notable changes to Ryvos will be documented in this file.
 
+## [0.2.0] — 2026-02-26
+
+### 50 New Built-in Tools (62 total)
+- **Sessions (5)**: session_list, session_history, session_send, session_spawn, session_status
+- **Memory (3)**: memory_get, daily_log_write, memory_delete
+- **File System (9)**: file_info, file_copy, file_move, file_delete, dir_list, dir_create, file_watch, archive_create, archive_extract
+- **Git (6)**: git_status, git_diff, git_log, git_commit, git_branch, git_clone
+- **Code/Dev (4)**: code_format, code_lint, test_run, code_outline
+- **Network/HTTP (4)**: http_request, http_download, dns_lookup, network_check
+- **System (5)**: process_list, process_kill, env_get, system_info, disk_usage
+- **Data/Transform (8)**: json_query, csv_parse, yaml_convert, toml_convert, base64_codec, hash_compute, regex_replace, text_diff
+- **Scheduling (3)**: cron_list, cron_add, cron_remove
+- **Database (2)**: sqlite_query, sqlite_schema
+- **Communication (1)**: notification_send
+
+### 12 New LLM Providers (14 total)
+- **4 dedicated implementations**: Google Gemini (native API), Azure OpenAI, Cohere v2, AWS Bedrock (stub)
+- **10 OpenAI-compatible presets**: Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek
+- Automatic preset defaults for base_url and extra headers
+- Per-agent model routing with `model_overrides` config
+
+### Memory Flush Before Compaction
+- Agent automatically persists durable information via memory_write and daily_log_write before context window compaction
+- Prevents loss of important context during long-running sessions
+- Configurable via `disable_memory_flush` in agent config
+
+### Daily Append-Only Logs
+- Timestamped daily log files at `~/.ryvos/memory/YYYY-MM-DD.md`
+- Last 2 days' logs injected into agent context via ContextBuilder
+- `daily_log_write` tool for structured journaling
+- Configurable retention (default 30 days)
+
+### Webhooks
+- `POST /api/hooks/wake` endpoint for external integrations
+- Bearer token authentication from gateway config
+- Creates/resumes sessions from webhook payloads
+
+### Skill Registry
+- `ryvos skill install/list/search/remove` CLI commands
+- Remote registry index (GitHub-hosted JSON)
+- SHA-256 verification for downloaded skill packages
+- Integration with existing drop-in skill system
+
+### Non-Interactive Onboarding
+- New flags: `--base-url`, `--security-level`, `--channels`, `--from-env`
+- `--from-env` reads RYVOS_PROVIDER, RYVOS_MODEL_ID, RYVOS_API_KEY, etc. from environment
+- Default model IDs for all 14 providers
+- Connection test support
+
+### Config Extensions
+- `daily_logs` section (enabled, retention_days, log_dir)
+- `registry` section (url, cache_dir) for skill registry
+- `webhooks` section under gateway (enabled, token)
+- Azure fields on ModelConfig (azure_resource, azure_deployment, azure_api_version)
+- AWS region field on ModelConfig
+- Extra headers map on ModelConfig
+- `config_path` on ToolContext for cron tools
+
 ## [0.1.1] — 2026-02-26
 
 ### Heartbeat System

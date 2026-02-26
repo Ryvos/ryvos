@@ -42,7 +42,11 @@ pub fn configure(mode: &OnboardingMode) -> Result<ChannelsConfig> {
         },
     }
 
-    Ok(ChannelsConfig { telegram, discord, slack })
+    Ok(ChannelsConfig {
+        telegram,
+        discord,
+        slack,
+    })
 }
 
 fn prompt_dm_policy() -> Result<DmPolicy> {
@@ -77,9 +81,7 @@ fn prompt_token_or_env(label: &str, env_var: &str) -> Result<String> {
         }
     }
 
-    Ok(Input::new()
-        .with_prompt(label)
-        .interact_text()?)
+    Ok(Input::new().with_prompt(label).interact_text()?)
 }
 
 fn configure_telegram() -> Result<TelegramConfig> {

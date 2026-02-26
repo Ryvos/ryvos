@@ -12,9 +12,8 @@ use ryvos_core::types::{ChatMessage, ContentBlock, Role, StreamDelta};
 /// Get or initialize the tokenizer for cl100k_base (works for Claude and GPT-4).
 fn tokenizer() -> &'static CoreBPE {
     static TOKENIZER: OnceLock<CoreBPE> = OnceLock::new();
-    TOKENIZER.get_or_init(|| {
-        tiktoken_rs::cl100k_base().expect("Failed to load cl100k_base tokenizer")
-    })
+    TOKENIZER
+        .get_or_init(|| tiktoken_rs::cl100k_base().expect("Failed to load cl100k_base tokenizer"))
 }
 
 /// Accurate token count using BPE tokenization (cl100k_base).
@@ -183,9 +182,7 @@ pub async fn summarize_and_prune(
             let remaining = prune_to_budget(messages, budget, min_tail);
             Ok(removed + remaining)
         }
-        Err(_) => {
-            Ok(prune_to_budget(messages, budget, min_tail))
-        }
+        Err(_) => Ok(prune_to_budget(messages, budget, min_tail)),
     }
 }
 
@@ -219,6 +216,33 @@ pub fn reflexion_hint(tool_name: &str, failure_count: usize) -> ChatMessage {
         timestamp: Some(chrono::Utc::now()),
         metadata: None,
     }
+}
+
+/// Generate a memory flush prompt asking the agent to persist important info
+/// before context compaction occurs.
+pub fn memory_flush_prompt() -> ChatMessage {
+    ChatMessage {
+        role: Role::User,
+        content: vec![ContentBlock::Text {
+            text: "[System] Context window is nearing capacity. Before compaction, please \
+                   persist any important durable information using the `memory_write` and \
+                   `daily_log_write` tools. Save key decisions, file paths, code snippets, \
+                   and any context you'll need after compaction. When done, respond with \
+                   exactly: FLUSH_COMPLETE"
+                .to_string(),
+        }],
+        timestamp: Some(chrono::Utc::now()),
+        metadata: Some(ryvos_core::types::MessageMetadata {
+            phase: Some("memory_flush".to_string()),
+            protected: true,
+            ..Default::default()
+        }),
+    }
+}
+
+/// Check if a response text indicates the flush is complete.
+pub fn is_flush_complete(text: &str) -> bool {
+    text.contains("FLUSH_COMPLETE")
 }
 
 /// Tracks consecutive failures per tool name.
@@ -329,13 +353,12 @@ mod tests {
         let mut messages: Vec<ChatMessage> = vec![system];
 
         // Add a protected message
-        messages.push(
-            ChatMessage::user("important tool result")
-                .with_metadata(ryvos_core::types::MessageMetadata {
-                    protected: true,
-                    ..Default::default()
-                }),
-        );
+        messages.push(ChatMessage::user("important tool result").with_metadata(
+            ryvos_core::types::MessageMetadata {
+                protected: true,
+                ..Default::default()
+            },
+        ));
 
         // Add regular messages
         for i in 0..10 {

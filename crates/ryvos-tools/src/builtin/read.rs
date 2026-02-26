@@ -64,12 +64,13 @@ impl Tool for ReadTool {
             let path = resolve_path(&params.file_path, &ctx.working_dir);
             debug!(path = %path.display(), "Reading file");
 
-            let content = tokio::fs::read_to_string(&path).await.map_err(|e| {
-                RyvosError::ToolExecution {
-                    tool: "read".to_string(),
-                    message: format!("{}: {}", path.display(), e),
-                }
-            })?;
+            let content =
+                tokio::fs::read_to_string(&path)
+                    .await
+                    .map_err(|e| RyvosError::ToolExecution {
+                        tool: "read".to_string(),
+                        message: format!("{}: {}", path.display(), e),
+                    })?;
 
             let lines: Vec<&str> = content.lines().collect();
             let total_lines = lines.len();

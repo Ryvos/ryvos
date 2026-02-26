@@ -48,7 +48,7 @@ struct ChatRequest {
 }
 
 #[derive(Serialize)]
-struct OaiMessage {
+pub(crate) struct OaiMessage {
     role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     content: Option<serde_json::Value>,
@@ -59,7 +59,7 @@ struct OaiMessage {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct OaiToolCall {
+pub(crate) struct OaiToolCall {
     #[serde(default)]
     index: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -71,7 +71,7 @@ struct OaiToolCall {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct OaiFunction {
+pub(crate) struct OaiFunction {
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -79,13 +79,13 @@ struct OaiFunction {
 }
 
 #[derive(Serialize)]
-struct OaiTool {
+pub(crate) struct OaiTool {
     r#type: String,
     function: OaiToolDef,
 }
 
 #[derive(Serialize)]
-struct OaiToolDef {
+pub(crate) struct OaiToolDef {
     name: String,
     description: String,
     parameters: serde_json::Value,
@@ -123,7 +123,21 @@ struct StreamUsage {
     completion_tokens: u64,
 }
 
-fn convert_messages(messages: Vec<ChatMessage>) -> Vec<OaiMessage> {
+pub(crate) fn convert_tools(tools: &[ToolDefinition]) -> Vec<OaiTool> {
+    tools
+        .iter()
+        .map(|t| OaiTool {
+            r#type: "function".to_string(),
+            function: OaiToolDef {
+                name: t.name.clone(),
+                description: t.description.clone(),
+                parameters: t.input_schema.clone(),
+            },
+        })
+        .collect()
+}
+
+pub(crate) fn convert_messages(messages: Vec<ChatMessage>) -> Vec<OaiMessage> {
     let mut oai_msgs = Vec::new();
 
     for msg in messages {
@@ -215,7 +229,7 @@ fn convert_messages(messages: Vec<ChatMessage>) -> Vec<OaiMessage> {
     oai_msgs
 }
 
-fn parse_chunk(event: SseEvent) -> Option<Result<StreamDelta>> {
+pub(crate) fn parse_chunk(event: SseEvent) -> Option<Result<StreamDelta>> {
     if event.data.trim() == "[DONE]" {
         return None;
     }
@@ -291,10 +305,7 @@ impl LlmClient for OpenAiClient {
         let tools = tools.to_vec();
 
         Box::pin(async move {
-            let base_url = config
-                .base_url
-                .as_deref()
-                .unwrap_or(OPENAI_API_URL);
+            let base_url = config.base_url.as_deref().unwrap_or(OPENAI_API_URL);
 
             let oai_messages = convert_messages(messages);
             let oai_tools: Vec<OaiTool> = tools
@@ -343,6 +354,11 @@ impl LlmClient for OpenAiClient {
                 req = req.header("Authorization", format!("Bearer {}", api_key));
             }
 
+            // Apply extra headers from config (set by presets or user)
+            for (k, v) in &config.extra_headers {
+                req = req.header(k.as_str(), v.as_str());
+            }
+
             let response = req
                 .send()
                 .await
@@ -354,18 +370,13 @@ impl LlmClient for OpenAiClient {
                     .text()
                     .await
                     .unwrap_or_else(|_| "unknown".to_string());
-                return Err(RyvosError::LlmRequest(format!(
-                    "HTTP {}: {}",
-                    status, body
-                )));
+                return Err(RyvosError::LlmRequest(format!("HTTP {}: {}", status, body)));
             }
 
             let byte_stream = response.bytes_stream();
             let sse_stream = SseStream::new(byte_stream);
 
-            let delta_stream = sse_stream.filter_map(|event| async move {
-                parse_chunk(event)
-            });
+            let delta_stream = sse_stream.filter_map(|event| async move { parse_chunk(event) });
 
             Ok(Box::pin(delta_stream) as BoxStream<'_, Result<StreamDelta>>)
         })

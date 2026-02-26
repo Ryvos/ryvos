@@ -116,14 +116,13 @@ pub async fn handle_connection(
                     }
                     let sid = subs.last().unwrap().clone();
                     Some(
-                        ServerEvent::new(sid, "approval_requested")
-                            .with_data(serde_json::json!({
-                                "id": request.id,
-                                "tool_name": request.tool_name,
-                                "tier": request.tier.to_string(),
-                                "input_summary": request.input_summary,
-                                "session_id": request.session_id,
-                            })),
+                        ServerEvent::new(sid, "approval_requested").with_data(serde_json::json!({
+                            "id": request.id,
+                            "tool_name": request.tool_name,
+                            "tier": request.tier.to_string(),
+                            "input_summary": request.input_summary,
+                            "session_id": request.session_id,
+                        })),
                     )
                 }
                 AgentEvent::ToolBlocked { name, tier, reason } => {
@@ -229,8 +228,7 @@ pub async fn handle_connection(
                         let _ = tx.send(Message::Text(json.into())).await;
                     }
                     None => {
-                        let resp =
-                            ServerResponse::err(id, -32603, "Internal error".to_string());
+                        let resp = ServerResponse::err(id, -32603, "Internal error".to_string());
                         let json = serde_json::to_string(&resp).unwrap();
                         let mut tx = ws_tx.lock().await;
                         let _ = tx.send(Message::Text(json.into())).await;
@@ -336,10 +334,7 @@ async fn process_request(
                 return serde_json::json!({"error": "request_id is required"});
             }
             let approved = params["approved"].as_bool().unwrap_or(false);
-            let reason = params["reason"]
-                .as_str()
-                .unwrap_or("denied")
-                .to_string();
+            let reason = params["reason"].as_str().unwrap_or("denied").to_string();
             let decision = if approved {
                 ApprovalDecision::Approved
             } else {

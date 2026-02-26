@@ -67,20 +67,19 @@ impl Tool for EditTool {
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
 
             if params.old_string == params.new_string {
-                return Ok(ToolResult::error(
-                    "old_string and new_string are identical",
-                ));
+                return Ok(ToolResult::error("old_string and new_string are identical"));
             }
 
             let path = resolve_path(&params.file_path, &ctx.working_dir);
             debug!(path = %path.display(), "Editing file");
 
-            let content = tokio::fs::read_to_string(&path).await.map_err(|e| {
-                RyvosError::ToolExecution {
-                    tool: "edit".to_string(),
-                    message: format!("{}: {}", path.display(), e),
-                }
-            })?;
+            let content =
+                tokio::fs::read_to_string(&path)
+                    .await
+                    .map_err(|e| RyvosError::ToolExecution {
+                        tool: "edit".to_string(),
+                        message: format!("{}: {}", path.display(), e),
+                    })?;
 
             let count = content.matches(&params.old_string).count();
 
@@ -105,12 +104,12 @@ impl Tool for EditTool {
                 content.replacen(&params.old_string, &params.new_string, 1)
             };
 
-            tokio::fs::write(&path, &new_content).await.map_err(|e| {
-                RyvosError::ToolExecution {
+            tokio::fs::write(&path, &new_content)
+                .await
+                .map_err(|e| RyvosError::ToolExecution {
                     tool: "edit".to_string(),
                     message: format!("{}: {}", path.display(), e),
-                }
-            })?;
+                })?;
 
             let msg = if params.replace_all {
                 format!("Replaced {} occurrences in {}", count, path.display())

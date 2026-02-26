@@ -31,8 +31,8 @@ impl FailureJournal {
                 .map_err(|e| format!("Failed to create journal directory: {}", e))?;
         }
 
-        let conn = Connection::open(path)
-            .map_err(|e| format!("Failed to open failure journal: {}", e))?;
+        let conn =
+            Connection::open(path).map_err(|e| format!("Failed to open failure journal: {}", e))?;
 
         conn.execute_batch(
             "PRAGMA journal_mode=WAL;
@@ -191,11 +191,7 @@ impl FailureJournal {
     }
 
     /// Load decisions for a session.
-    pub fn load_decisions(
-        &self,
-        session_id: &str,
-        limit: usize,
-    ) -> Result<Vec<Decision>, String> {
+    pub fn load_decisions(&self, session_id: &str, limit: usize) -> Result<Vec<Decision>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare(
@@ -314,7 +310,9 @@ pub fn reflexion_hint_with_history(
                 truncate_str(&rec.error, 150),
             ));
         }
-        text.push_str("\n\nBased on these patterns, try a different approach or use a different tool.");
+        text.push_str(
+            "\n\nBased on these patterns, try a different approach or use a different tool.",
+        );
     } else {
         text.push_str(" Try a different approach or use a different tool to accomplish the task.");
     }
@@ -370,12 +368,8 @@ mod tests {
         let journal = temp_journal();
         let since = Utc::now() - chrono::Duration::hours(1);
 
-        journal
-            .record_success("sess1", "read")
-            .unwrap();
-        journal
-            .record_success("sess1", "read")
-            .unwrap();
+        journal.record_success("sess1", "read").unwrap();
+        journal.record_success("sess1", "read").unwrap();
         journal
             .record(FailureRecord {
                 timestamp: Utc::now(),
@@ -404,12 +398,10 @@ mod tests {
             turn: 3,
             description: "Which tool to use for file read".to_string(),
             chosen_option: "read".to_string(),
-            alternatives: vec![
-                ryvos_core::types::DecisionOption {
-                    name: "bash cat".to_string(),
-                    confidence: Some(0.3),
-                },
-            ],
+            alternatives: vec![ryvos_core::types::DecisionOption {
+                name: "bash cat".to_string(),
+                confidence: Some(0.3),
+            }],
             outcome: None,
         };
 

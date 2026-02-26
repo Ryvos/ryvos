@@ -176,7 +176,10 @@ async fn handle_approval_command(
                 } else {
                     "Usage: /deny <id-prefix> [reason]"
                 };
-                adapter.send(&envelope.session_id, &MessageContent::Text(usage.into())).await.ok();
+                adapter
+                    .send(&envelope.session_id, &MessageContent::Text(usage.into()))
+                    .await
+                    .ok();
             }
             return;
         }
@@ -187,7 +190,10 @@ async fn handle_approval_command(
         None => {
             if let Some(adapter) = adapter {
                 let msg = format!("No pending request matching '{}'.", prefix);
-                adapter.send(&envelope.session_id, &MessageContent::Text(msg)).await.ok();
+                adapter
+                    .send(&envelope.session_id, &MessageContent::Text(msg))
+                    .await
+                    .ok();
             }
             return;
         }
@@ -210,11 +216,17 @@ async fn handle_approval_command(
     if broker.respond(&full_id, decision).await {
         if let Some(adapter) = adapter {
             let msg = format!("{}: {}", label, short_id);
-            adapter.send(&envelope.session_id, &MessageContent::Text(msg)).await.ok();
+            adapter
+                .send(&envelope.session_id, &MessageContent::Text(msg))
+                .await
+                .ok();
         }
     } else if let Some(adapter) = adapter {
         let msg = "Request not found (may have timed out).".to_string();
-        adapter.send(&envelope.session_id, &MessageContent::Text(msg)).await.ok();
+        adapter
+            .send(&envelope.session_id, &MessageContent::Text(msg))
+            .await
+            .ok();
     }
 }
 
@@ -239,17 +251,20 @@ async fn run_channel_message(
 
     // Fire on_session_start hook
     if let Some(ref hooks) = hooks {
-        ryvos_core::hooks::run_hooks(&hooks.on_session_start, &[
-            ("RYVOS_SESSION", &session_id.0),
-        ]).await;
+        ryvos_core::hooks::run_hooks(&hooks.on_session_start, &[("RYVOS_SESSION", &session_id.0)])
+            .await;
     }
 
     // Fire on_message hook
     if let Some(ref hooks) = hooks {
-        ryvos_core::hooks::run_hooks(&hooks.on_message, &[
-            ("RYVOS_SESSION", &session_id.0),
-            ("RYVOS_TEXT", &envelope.text),
-        ]).await;
+        ryvos_core::hooks::run_hooks(
+            &hooks.on_message,
+            &[
+                ("RYVOS_SESSION", &session_id.0),
+                ("RYVOS_TEXT", &envelope.text),
+            ],
+        )
+        .await;
     }
 
     // Subscribe to events BEFORE running so we capture all deltas
@@ -289,10 +304,11 @@ async fn run_channel_message(
                     let sid = session_id_str.clone();
                     let tool = name.clone();
                     tokio::spawn(async move {
-                        ryvos_core::hooks::run_hooks(&cmds, &[
-                            ("RYVOS_SESSION", &sid),
-                            ("RYVOS_TOOL", &tool),
-                        ]).await;
+                        ryvos_core::hooks::run_hooks(
+                            &cmds,
+                            &[("RYVOS_SESSION", &sid), ("RYVOS_TOOL", &tool)],
+                        )
+                        .await;
                     });
                 }
             }
@@ -302,31 +318,40 @@ async fn run_channel_message(
                     let sid = session_id_str.clone();
                     let turn_str = turn.to_string();
                     tokio::spawn(async move {
-                        ryvos_core::hooks::run_hooks(&cmds, &[
-                            ("RYVOS_SESSION", &sid),
-                            ("RYVOS_TURN", &turn_str),
-                        ]).await;
+                        ryvos_core::hooks::run_hooks(
+                            &cmds,
+                            &[("RYVOS_SESSION", &sid), ("RYVOS_TURN", &turn_str)],
+                        )
+                        .await;
                     });
                 }
             }
-            Ok(AgentEvent::ToolEnd { ref name, ref result }) if result.is_error => {
+            Ok(AgentEvent::ToolEnd {
+                ref name,
+                ref result,
+            }) if result.is_error => {
                 if !on_tool_error_cmds.is_empty() {
                     let cmds = on_tool_error_cmds.clone();
                     let sid = session_id_str.clone();
                     let tool = name.clone();
                     let error = result.content.clone();
                     tokio::spawn(async move {
-                        ryvos_core::hooks::run_hooks(&cmds, &[
-                            ("RYVOS_SESSION", &sid),
-                            ("RYVOS_TOOL", &tool),
-                            ("RYVOS_ERROR", &error),
-                        ]).await;
+                        ryvos_core::hooks::run_hooks(
+                            &cmds,
+                            &[
+                                ("RYVOS_SESSION", &sid),
+                                ("RYVOS_TOOL", &tool),
+                                ("RYVOS_ERROR", &error),
+                            ],
+                        )
+                        .await;
                     });
                 }
             }
-            Ok(AgentEvent::RunComplete { session_id: ref completed_sid, .. })
-                if completed_sid.0 == session_id.0 =>
-            {
+            Ok(AgentEvent::RunComplete {
+                session_id: ref completed_sid,
+                ..
+            }) if completed_sid.0 == session_id.0 => {
                 break;
             }
             Ok(AgentEvent::RunError { ref error }) => {
@@ -336,20 +361,32 @@ async fn run_channel_message(
             Ok(AgentEvent::ApprovalRequested { ref request })
                 if request.session_id == session_id.0 =>
             {
-                let sent = adapter.send_approval(&session_id, request).await.unwrap_or(false);
+                let sent = adapter
+                    .send_approval(&session_id, request)
+                    .await
+                    .unwrap_or(false);
                 if !sent {
                     let short_id = &request.id[..8.min(request.id.len())];
                     let text = format!(
                         "[APPROVAL] {} ({}): \"{}\"\nReply /approve {} or /deny {}",
-                        request.tool_name, request.tier, request.input_summary,
-                        short_id, short_id,
+                        request.tool_name, request.tier, request.input_summary, short_id, short_id,
                     );
-                    adapter.send(&session_id, &MessageContent::Text(text)).await.ok();
+                    adapter
+                        .send(&session_id, &MessageContent::Text(text))
+                        .await
+                        .ok();
                 }
             }
-            Ok(AgentEvent::ToolBlocked { ref name, ref tier, ref reason }) => {
+            Ok(AgentEvent::ToolBlocked {
+                ref name,
+                ref tier,
+                ref reason,
+            }) => {
                 let text = format!("[BLOCKED] {} ({}): {}", name, tier, reason);
-                adapter.send(&session_id, &MessageContent::Text(text)).await.ok();
+                adapter
+                    .send(&session_id, &MessageContent::Text(text))
+                    .await
+                    .ok();
             }
             Err(_) => break,
             _ => {}
@@ -363,9 +400,7 @@ async fn run_channel_message(
 
     // Fire on_response hook
     if let Some(ref hooks) = hooks {
-        ryvos_core::hooks::run_hooks(&hooks.on_response, &[
-            ("RYVOS_SESSION", &session_id.0),
-        ]).await;
+        ryvos_core::hooks::run_hooks(&hooks.on_response, &[("RYVOS_SESSION", &session_id.0)]).await;
     }
 
     // Send the collected response back through the adapter
@@ -378,8 +413,7 @@ async fn run_channel_message(
 
     // Fire on_session_end hook
     if let Some(ref hooks) = hooks {
-        ryvos_core::hooks::run_hooks(&hooks.on_session_end, &[
-            ("RYVOS_SESSION", &session_id.0),
-        ]).await;
+        ryvos_core::hooks::run_hooks(&hooks.on_session_end, &[("RYVOS_SESSION", &session_id.0)])
+            .await;
     }
 }

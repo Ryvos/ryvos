@@ -99,7 +99,11 @@ impl App {
                     text: format!("[{}: {}] {}", name, status, content),
                 });
             }
-            AgentEvent::RunComplete { input_tokens, output_tokens, .. } => {
+            AgentEvent::RunComplete {
+                input_tokens,
+                output_tokens,
+                ..
+            } => {
                 self.is_running = false;
                 self.active_tool = None;
                 self.total_input_tokens += input_tokens;
@@ -146,30 +150,55 @@ impl App {
             }
             AgentEvent::TurnComplete { .. } => {}
             AgentEvent::CronFired { .. } => {}
-            AgentEvent::GuardianStall { elapsed_secs, turn, .. } => {
+            AgentEvent::GuardianStall {
+                elapsed_secs, turn, ..
+            } => {
                 self.messages.push(DisplayMessage {
                     role: MessageRole::System,
-                    text: format!("[GUARDIAN] Stall detected: {}s at turn {}", elapsed_secs, turn),
+                    text: format!(
+                        "[GUARDIAN] Stall detected: {}s at turn {}",
+                        elapsed_secs, turn
+                    ),
                 });
             }
-            AgentEvent::GuardianDoomLoop { tool_name, consecutive_calls, .. } => {
+            AgentEvent::GuardianDoomLoop {
+                tool_name,
+                consecutive_calls,
+                ..
+            } => {
                 self.messages.push(DisplayMessage {
                     role: MessageRole::System,
                     text: format!("[GUARDIAN] Doom loop: {} x{}", tool_name, consecutive_calls),
                 });
             }
-            AgentEvent::GuardianBudgetAlert { used_tokens, budget_tokens, is_hard_stop, .. } => {
+            AgentEvent::GuardianBudgetAlert {
+                used_tokens,
+                budget_tokens,
+                is_hard_stop,
+                ..
+            } => {
                 let kind = if is_hard_stop { "HARD STOP" } else { "warning" };
                 self.messages.push(DisplayMessage {
                     role: MessageRole::System,
-                    text: format!("[GUARDIAN] Budget {}: {}/{} tokens", kind, used_tokens, budget_tokens),
+                    text: format!(
+                        "[GUARDIAN] Budget {}: {}/{} tokens",
+                        kind, used_tokens, budget_tokens
+                    ),
                 });
             }
             AgentEvent::GoalEvaluated { evaluation, .. } => {
-                let status = if evaluation.passed { "PASSED" } else { "FAILED" };
+                let status = if evaluation.passed {
+                    "PASSED"
+                } else {
+                    "FAILED"
+                };
                 self.messages.push(DisplayMessage {
                     role: MessageRole::System,
-                    text: format!("[GOAL {}] score: {:.0}%", status, evaluation.overall_score * 100.0),
+                    text: format!(
+                        "[GOAL {}] score: {:.0}%",
+                        status,
+                        evaluation.overall_score * 100.0
+                    ),
                 });
             }
             AgentEvent::JudgeVerdict { verdict, .. } => {

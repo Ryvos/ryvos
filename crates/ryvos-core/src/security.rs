@@ -140,11 +140,7 @@ impl SecurityPolicy {
     /// Decide what to do for a given effective tier and tool name.
     pub fn decide(&self, tier: SecurityTier, tool_name: &str) -> GateDecision {
         // Check per-tool overrides first (they override the base tier for policy decision)
-        let effective_tier = self
-            .tool_overrides
-            .get(tool_name)
-            .copied()
-            .unwrap_or(tier);
+        let effective_tier = self.tool_overrides.get(tool_name).copied().unwrap_or(tier);
 
         // Deny if above deny threshold
         if let Some(deny_above) = self.deny_above {
@@ -198,17 +194,15 @@ impl DangerousPatternMatcher {
     pub fn new(patterns: &[DangerousPattern]) -> Self {
         let compiled = patterns
             .iter()
-            .filter_map(|p| {
-                match regex::Regex::new(&p.pattern) {
-                    Ok(re) => Some((re, p.label.clone())),
-                    Err(e) => {
-                        tracing::warn!(
-                            pattern = %p.pattern,
-                            error = %e,
-                            "Invalid dangerous pattern regex, skipping"
-                        );
-                        None
-                    }
+            .filter_map(|p| match regex::Regex::new(&p.pattern) {
+                Ok(re) => Some((re, p.label.clone())),
+                Err(e) => {
+                    tracing::warn!(
+                        pattern = %p.pattern,
+                        error = %e,
+                        "Invalid dangerous pattern regex, skipping"
+                    );
+                    None
                 }
             })
             .collect();
@@ -255,7 +249,10 @@ mod tests {
     fn policy_decide_auto_approve() {
         let policy = SecurityPolicy::default(); // auto_approve_up_to: T1
         assert_eq!(policy.decide(SecurityTier::T0, "read"), GateDecision::Allow);
-        assert_eq!(policy.decide(SecurityTier::T1, "write"), GateDecision::Allow);
+        assert_eq!(
+            policy.decide(SecurityTier::T1, "write"),
+            GateDecision::Allow
+        );
     }
 
     #[test]
@@ -277,10 +274,7 @@ mod tests {
             deny_above: Some(SecurityTier::T3),
             ..Default::default()
         };
-        assert_eq!(
-            policy.decide(SecurityTier::T4, "bash"),
-            GateDecision::Deny
-        );
+        assert_eq!(policy.decide(SecurityTier::T4, "bash"), GateDecision::Deny);
         assert_eq!(
             policy.decide(SecurityTier::T3, "web_search"),
             GateDecision::NeedsApproval
@@ -328,10 +322,7 @@ mod tests {
             matcher.is_dangerous("git reset --hard HEAD~3"),
             Some("hard reset")
         );
-        assert_eq!(
-            matcher.is_dangerous("DROP TABLE users;"),
-            Some("SQL drop")
-        );
+        assert_eq!(matcher.is_dangerous("DROP TABLE users;"), Some("SQL drop"));
         assert_eq!(
             matcher.is_dangerous("chmod 777 /var/www"),
             Some("wide-open permissions")

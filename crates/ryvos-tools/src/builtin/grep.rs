@@ -74,9 +74,8 @@ impl Tool for GrepTool {
             let params: GrepInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
 
-            let re = regex::Regex::new(&params.pattern).map_err(|e| {
-                RyvosError::ToolValidation(format!("Invalid regex: {}", e))
-            })?;
+            let re = regex::Regex::new(&params.pattern)
+                .map_err(|e| RyvosError::ToolValidation(format!("Invalid regex: {}", e)))?;
 
             let base = match &params.path {
                 Some(p) => {
@@ -108,7 +107,14 @@ impl Tool for GrepTool {
 
             // Walk directory tree
             if base.is_file() {
-                search_file(&base, &re, context_lines, max_results, &mut results, &mut total_matches);
+                search_file(
+                    &base,
+                    &re,
+                    context_lines,
+                    max_results,
+                    &mut results,
+                    &mut total_matches,
+                );
             } else {
                 for entry in walkdir::WalkDir::new(&base)
                     .follow_links(true)
@@ -138,7 +144,14 @@ impl Tool for GrepTool {
                         break;
                     }
 
-                    search_file(path, &re, context_lines, max_results, &mut results, &mut total_matches);
+                    search_file(
+                        path,
+                        &re,
+                        context_lines,
+                        max_results,
+                        &mut results,
+                        &mut total_matches,
+                    );
                 }
             }
 
@@ -187,13 +200,7 @@ fn search_file(
                     let end = (i + context_lines + 1).min(lines.len());
                     for (j, line) in lines.iter().enumerate().take(end).skip(start) {
                         let marker = if j == i { ">" } else { " " };
-                        results.push(format!(
-                            "{}{}:{}:{}",
-                            marker,
-                            path.display(),
-                            j + 1,
-                            line
-                        ));
+                        results.push(format!("{}{}:{}:{}", marker, path.display(), j + 1, line));
                     }
                     results.push("--".to_string());
                 } else {

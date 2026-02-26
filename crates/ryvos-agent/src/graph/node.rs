@@ -134,8 +134,7 @@ mod tests {
 
     #[test]
     fn test_build_prompt_with_context() {
-        let node = Node::new("n1", "Writer")
-            .with_inputs(vec!["topic".into(), "style".into()]);
+        let node = Node::new("n1", "Writer").with_inputs(vec!["topic".into(), "style".into()]);
 
         let mut ctx = HashMap::new();
         ctx.insert("topic".into(), serde_json::json!("Rust async patterns"));

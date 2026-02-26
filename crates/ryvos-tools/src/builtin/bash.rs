@@ -17,7 +17,9 @@ struct BashInput {
     timeout: u64,
 }
 
-fn default_timeout() -> u64 { 120 }
+fn default_timeout() -> u64 {
+    120
+}
 
 impl BashTool {
     async fn execute_sandboxed(
@@ -119,10 +121,7 @@ impl BashTool {
                 if code == 0 {
                     Ok(ToolResult::success(output))
                 } else {
-                    Ok(ToolResult::error(format!(
-                        "Exit code {}\n{}",
-                        code, output
-                    )))
+                    Ok(ToolResult::error(format!("Exit code {}\n{}", code, output)))
                 }
             }
             Ok(Some(Err(e))) => Err(RyvosError::ToolExecution {

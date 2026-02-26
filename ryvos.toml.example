@@ -14,7 +14,9 @@ workspace = "~/.ryvos"
 # token_warn_pct = 80           # soft warning at this %
 
 [model]
-# Provider: "anthropic", "openai", "ollama", or any OpenAI-compatible API
+# Provider: "anthropic", "openai", "gemini", "azure", "cohere", "ollama",
+#   "groq", "openrouter", "together", "fireworks", "cerebras", "xai",
+#   "mistral", "perplexity", "deepseek", or any OpenAI-compatible API
 provider = "anthropic"
 model_id = "claude-sonnet-4-20250514"
 api_key = "${ANTHROPIC_API_KEY}"
@@ -26,10 +28,38 @@ max_tokens = 8192
 # model_id = "gpt-4o"
 # api_key = "${OPENAI_API_KEY}"
 
-# Uncomment for Ollama (local):
+# Uncomment for Ollama (local, no key needed):
 # provider = "ollama"
 # model_id = "llama3.2"
-# base_url = "http://localhost:11434/v1/chat/completions"
+
+# Uncomment for Google Gemini (native API):
+# provider = "gemini"
+# model_id = "gemini-2.0-flash"
+# api_key = "${GEMINI_API_KEY}"
+
+# Uncomment for Azure OpenAI:
+# provider = "azure"
+# model_id = "gpt-4o"
+# api_key = "${AZURE_OPENAI_API_KEY}"
+# azure_resource = "my-resource"
+# azure_deployment = "my-deployment"
+# azure_api_version = "2024-06-01"
+
+# Uncomment for Groq:
+# provider = "groq"
+# model_id = "llama-3.3-70b-versatile"
+# api_key = "${GROQ_API_KEY}"
+
+# Uncomment for DeepSeek:
+# provider = "deepseek"
+# model_id = "deepseek-chat"
+# api_key = "${DEEPSEEK_API_KEY}"
+
+# Per-agent model routing overrides
+# [agent.model_overrides.sub-researcher]
+# provider = "groq"
+# model_id = "llama-3.3-70b-versatile"
+# api_key = "${GROQ_API_KEY}"
 
 # [gateway]
 # bind = "127.0.0.1:18789"
@@ -91,3 +121,30 @@ max_tokens = 8192
 # [mcp.servers.remote]
 # transport = { type = "sse", url = "http://localhost:3001/sse" }
 # auto_connect = false
+
+# Daily append-only logs
+# [daily_logs]
+# enabled = true
+# retention_days = 30            # Auto-prune logs older than this
+# log_dir = "~/.ryvos/memory"   # Default location
+
+# Skill registry
+# [registry]
+# url = "https://raw.githubusercontent.com/Ryvos/registry/main/index.json"
+# cache_dir = "~/.ryvos/cache/registry"
+
+# Webhooks — receive prompts from external services
+# [gateway.webhooks]
+# enabled = true
+# token = "${RYVOS_WEBHOOK_TOKEN}"   # Bearer token for authentication
+
+# Cron — scheduled recurring tasks
+# [[cron.jobs]]
+# name = "daily-review"
+# schedule = "0 9 * * *"
+# prompt = "Review today's calendar and summarize upcoming deadlines."
+# channel = "telegram"
+
+# Memory flush — persist important info before context compaction
+# [agent]
+# disable_memory_flush = false    # Set to true to opt out

@@ -60,7 +60,7 @@ enum Commands {
         /// Accept all defaults without prompting
         #[arg(long, short = 'y')]
         yes: bool,
-        /// Provider name (anthropic, openai, ollama, etc.)
+        /// Provider name (anthropic, openai, ollama, groq, together, etc.)
         #[arg(long)]
         provider: Option<String>,
         /// Model ID
@@ -69,6 +69,18 @@ enum Commands {
         /// API key (raw value or ${ENV_VAR} reference)
         #[arg(long)]
         api_key: Option<String>,
+        /// Base URL for the LLM API
+        #[arg(long)]
+        base_url: Option<String>,
+        /// Security level: strict (T0), standard (T1), permissive (T2)
+        #[arg(long)]
+        security_level: Option<String>,
+        /// Comma-separated channels to enable (telegram,discord)
+        #[arg(long)]
+        channels: Option<String>,
+        /// Read all config from environment variables (RYVOS_PROVIDER, etc.)
+        #[arg(long)]
+        from_env: bool,
         /// Telegram bot token
         #[arg(long)]
         telegram_token: Option<String>,
@@ -101,6 +113,11 @@ enum Commands {
         #[command(subcommand)]
         action: McpAction,
     },
+    /// Manage skill registry
+    Skill {
+        #[command(subcommand)]
+        action: SkillAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -131,13 +148,37 @@ enum McpAction {
     },
 }
 
+#[derive(Subcommand)]
+enum SkillAction {
+    /// List installed skills
+    List {
+        /// Also show available skills from the remote registry
+        #[arg(long)]
+        remote: bool,
+    },
+    /// Search for skills in the registry
+    Search {
+        /// Search query
+        query: String,
+    },
+    /// Install a skill from the registry
+    Install {
+        /// Skill name
+        name: String,
+    },
+    /// Remove an installed skill
+    Remove {
+        /// Skill name
+        name: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("ryvos=info,warn")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("ryvos=info,warn")),
         )
         .with_target(false)
         .init();
@@ -152,7 +193,21 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Handle init before config loading
-    if let Some(Commands::Init { yes, provider, model_id, api_key, telegram_token, discord_token, gateway, no_channels }) = cli.command {
+    if let Some(Commands::Init {
+        yes,
+        provider,
+        model_id,
+        api_key,
+        base_url,
+        security_level,
+        channels,
+        from_env,
+        telegram_token,
+        discord_token,
+        gateway,
+        no_channels,
+    }) = cli.command
+    {
         let dest = if cli.config == *"ryvos.toml" {
             dirs_home()
                 .map(|h| h.join(".ryvos").join("config.toml"))
@@ -161,10 +216,14 @@ async fn main() -> anyhow::Result<()> {
             cli.config.clone()
         };
         let options = onboard::InitOptions {
-            non_interactive: yes,
+            non_interactive: yes || from_env,
             provider,
             model_id,
             api_key,
+            base_url,
+            security_level,
+            channels,
+            from_env,
             telegram_token,
             discord_token,
             enable_gateway: gateway,
@@ -178,20 +237,26 @@ async fn main() -> anyhow::Result<()> {
         return handle_mcp_cli(action, &cli.config);
     }
 
+    // Handle Skill CLI subcommands before config loading
+    if let Some(Commands::Skill { action }) = &cli.command {
+        return handle_skill_cli(action).await;
+    }
+
     // Load config
     let config = if cli.config.exists() {
         AppConfig::load(&cli.config)?
     } else {
         // Check for config in common locations
-        let home_config = dirs_home()
-            .map(|h| h.join(".ryvos").join("config.toml"));
+        let home_config = dirs_home().map(|h| h.join(".ryvos").join("config.toml"));
 
         if let Some(ref path) = home_config {
             if path.exists() {
                 info!(path = %path.display(), "Loading config from home directory");
                 AppConfig::load(path)?
             } else {
-                eprintln!("Warning: No config file found. Set ANTHROPIC_API_KEY or create ryvos.toml");
+                eprintln!(
+                    "Warning: No config file found. Set ANTHROPIC_API_KEY or create ryvos.toml"
+                );
                 eprintln!("See ryvos.toml.example for reference.");
 
                 // Create minimal config from env
@@ -213,37 +278,38 @@ async fn main() -> anyhow::Result<()> {
 
     // Build LLM client with retry and fallback chain
     let primary_llm = ryvos_llm::create_client(&config.model);
-    let llm: Arc<dyn ryvos_core::traits::LlmClient> = if !config.fallback_models.is_empty()
-        || config.model.retry.is_some()
-    {
-        let retry_config = config
-            .model
-            .retry
-            .clone()
-            .unwrap_or_else(RetryConfig::default);
-        let fallbacks: Vec<_> = config
-            .fallback_models
-            .iter()
-            .map(|mc| {
-                let client = ryvos_llm::create_client(mc);
-                (mc.clone(), client)
-            })
-            .collect();
-        Arc::new(ryvos_llm::RetryingClient::new(
-            primary_llm,
-            fallbacks,
-            retry_config,
-        ))
-    } else {
-        Arc::from(primary_llm)
-    };
+    let llm: Arc<dyn ryvos_core::traits::LlmClient> =
+        if !config.fallback_models.is_empty() || config.model.retry.is_some() {
+            let retry_config = config
+                .model
+                .retry
+                .clone()
+                .unwrap_or_else(RetryConfig::default);
+            let fallbacks: Vec<_> = config
+                .fallback_models
+                .iter()
+                .map(|mc| {
+                    let client = ryvos_llm::create_client(mc);
+                    (mc.clone(), client)
+                })
+                .collect();
+            Arc::new(ryvos_llm::RetryingClient::new(
+                primary_llm,
+                fallbacks,
+                retry_config,
+            ))
+        } else {
+            Arc::from(primary_llm)
+        };
 
     // Merge .mcp.json project config if present
     let mut mcp_config = config.mcp.clone().unwrap_or_default();
     if let Some(project_mcp) = load_mcp_json() {
         for (name, entry) in project_mcp.mcp_servers {
             if let Some(server_config) = entry.to_server_config() {
-                if let std::collections::hash_map::Entry::Vacant(e) = mcp_config.servers.entry(name.clone()) {
+                if let std::collections::hash_map::Entry::Vacant(e) =
+                    mcp_config.servers.entry(name.clone())
+                {
                     info!(server = %name, "Loaded MCP server from .mcp.json");
                     e.insert(server_config);
                 }
@@ -256,7 +322,9 @@ async fn main() -> anyhow::Result<()> {
         let manager = Arc::new(ryvos_mcp::McpClientManager::new());
         for (name, server_config) in &mcp_config.servers {
             if server_config.auto_connect {
-                match ryvos_mcp::connect_and_register(&manager, name, server_config, &mut tools).await {
+                match ryvos_mcp::connect_and_register(&manager, name, server_config, &mut tools)
+                    .await
+                {
                     Ok(count) => info!(server = %name, tools = count, "MCP server connected"),
                     Err(e) => error!(server = %name, error = %e, "Failed to connect MCP server"),
                 }
@@ -278,7 +346,10 @@ async fn main() -> anyhow::Result<()> {
         tools.register(ryvos_tools::builtin::web_search::WebSearchTool::new(
             &ws_config.api_key,
         ));
-        info!("Web search tool registered (provider: {})", ws_config.provider);
+        info!(
+            "Web search tool registered (provider: {})",
+            ws_config.provider
+        );
     }
 
     // Load drop-in skills
@@ -316,12 +387,8 @@ async fn main() -> anyhow::Result<()> {
                     ryvos_mcp::McpEvent::ToolsChanged { server } => {
                         info!(server = %server, "MCP tools changed, refreshing");
                         let mut registry = tools_for_events.write().await;
-                        match ryvos_mcp::refresh_tools(
-                            &manager_for_events,
-                            &server,
-                            &mut registry,
-                        )
-                        .await
+                        match ryvos_mcp::refresh_tools(&manager_for_events, &server, &mut registry)
+                            .await
                         {
                             Ok(count) => {
                                 info!(server = %server, tools = count, "MCP tools refreshed");
@@ -340,7 +407,11 @@ async fn main() -> anyhow::Result<()> {
                     ryvos_mcp::McpEvent::ResourceUpdated { server, uri } => {
                         info!(server = %server, uri = %uri, "MCP resource updated");
                     }
-                    ryvos_mcp::McpEvent::LogMessage { server, level, message } => {
+                    ryvos_mcp::McpEvent::LogMessage {
+                        server,
+                        level,
+                        message,
+                    } => {
                         info!(server = %server, level = %level, "MCP: {}", message);
                     }
                 }
@@ -362,13 +433,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let session_mgr = Arc::new(ryvos_agent::SessionManager::new());
-    let mut runtime_inner = AgentRuntime::new_with_gate(
-        config.clone(),
-        llm,
-        gate,
-        store.clone(),
-        event_bus.clone(),
-    );
+    let mut runtime_inner =
+        AgentRuntime::new_with_gate(config.clone(), llm, gate, store.clone(), event_bus.clone());
     if let Some(ref j) = journal {
         runtime_inner.set_journal(j.clone());
     }
@@ -440,7 +506,11 @@ async fn main() -> anyhow::Result<()> {
                                     let status = if pct < 90 { " [degraded]" } else { "" };
                                     println!(
                                         "  {:<18} {}% success ({}/{}){}",
-                                        format!("{}:", tool), pct, successes, total, status
+                                        format!("{}:", tool),
+                                        pct,
+                                        successes,
+                                        total,
+                                        status
                                     );
                                 }
                             }
@@ -460,7 +530,9 @@ async fn main() -> anyhow::Result<()> {
             if text.is_empty() {
                 // Read from stdin
                 let stdin = io::stdin();
-                let input: String = stdin.lock().lines()
+                let input: String = stdin
+                    .lock()
+                    .lines()
                     .map_while(|l| l.ok())
                     .collect::<Vec<_>>()
                     .join("\n");
@@ -559,11 +631,7 @@ async fn main() -> anyhow::Result<()> {
                 });
             }
 
-            let mut dispatcher = ryvos_channels::ChannelDispatcher::new(
-                runtime,
-                event_bus,
-                cancel,
-            );
+            let mut dispatcher = ryvos_channels::ChannelDispatcher::new(runtime, event_bus, cancel);
 
             dispatcher.set_broker(broker.clone());
 
@@ -572,28 +640,22 @@ async fn main() -> anyhow::Result<()> {
             }
 
             if let Some(ref tg_config) = config.channels.telegram {
-                let mut adapter = ryvos_channels::TelegramAdapter::new(
-                    tg_config.clone(),
-                    session_mgr.clone(),
-                );
+                let mut adapter =
+                    ryvos_channels::TelegramAdapter::new(tg_config.clone(), session_mgr.clone());
                 adapter.set_broker(broker.clone());
                 dispatcher.add_adapter(std::sync::Arc::new(adapter));
             }
 
             if let Some(ref dc_config) = config.channels.discord {
-                let mut adapter = ryvos_channels::DiscordAdapter::new(
-                    dc_config.clone(),
-                    session_mgr.clone(),
-                );
+                let mut adapter =
+                    ryvos_channels::DiscordAdapter::new(dc_config.clone(), session_mgr.clone());
                 adapter.set_broker(broker.clone());
                 dispatcher.add_adapter(std::sync::Arc::new(adapter));
             }
 
             if let Some(ref slack_config) = config.channels.slack {
-                let mut adapter = ryvos_channels::SlackAdapter::new(
-                    slack_config.clone(),
-                    session_mgr.clone(),
-                );
+                let mut adapter =
+                    ryvos_channels::SlackAdapter::new(slack_config.clone(), session_mgr.clone());
                 adapter.set_broker(broker.clone());
                 dispatcher.add_adapter(std::sync::Arc::new(adapter));
             }
@@ -603,8 +665,18 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Init { .. }) => unreachable!("handled before config load"),
         Some(Commands::Completions { .. }) => unreachable!("handled before config load"),
         Some(Commands::Mcp { .. }) => unreachable!("handled before config load"),
+        Some(Commands::Skill { .. }) => unreachable!("handled before config load"),
         Some(Commands::Repl) | None => {
-            run_repl(&runtime, &event_bus, &session_id, &config, &tools, &broker, &mcp_manager).await?;
+            run_repl(
+                &runtime,
+                &event_bus,
+                &session_id,
+                &config,
+                &tools,
+                &broker,
+                &mcp_manager,
+            )
+            .await?;
         }
     }
 
@@ -625,10 +697,11 @@ async fn run_once(
 ) -> anyhow::Result<()> {
     // Fire on_message hook
     if let Some(hooks) = hooks {
-        ryvos_core::hooks::run_hooks(&hooks.on_message, &[
-            ("RYVOS_SESSION", &session_id.0),
-            ("RYVOS_TEXT", input),
-        ]).await;
+        ryvos_core::hooks::run_hooks(
+            &hooks.on_message,
+            &[("RYVOS_SESSION", &session_id.0), ("RYVOS_TEXT", input)],
+        )
+        .await;
     }
 
     // Subscribe to events for output
@@ -656,10 +729,11 @@ async fn run_once(
                         let sid = session_id_str.clone();
                         let tool = name.clone();
                         tokio::spawn(async move {
-                            ryvos_core::hooks::run_hooks(&cmds, &[
-                                ("RYVOS_SESSION", &sid),
-                                ("RYVOS_TOOL", &tool),
-                            ]).await;
+                            ryvos_core::hooks::run_hooks(
+                                &cmds,
+                                &[("RYVOS_SESSION", &sid), ("RYVOS_TOOL", &tool)],
+                            )
+                            .await;
                         });
                     }
                 }
@@ -700,18 +774,42 @@ async fn run_once(
                     eprintln!("\n[error: {}]", error);
                     break;
                 }
-                AgentEvent::GuardianStall { elapsed_secs, turn, .. } => {
-                    eprintln!("\n[GUARDIAN] Stall detected: {}s at turn {}", elapsed_secs, turn);
+                AgentEvent::GuardianStall {
+                    elapsed_secs, turn, ..
+                } => {
+                    eprintln!(
+                        "\n[GUARDIAN] Stall detected: {}s at turn {}",
+                        elapsed_secs, turn
+                    );
                 }
-                AgentEvent::GuardianDoomLoop { tool_name, consecutive_calls, .. } => {
-                    eprintln!("\n[GUARDIAN] Doom loop: {} x{}", tool_name, consecutive_calls);
+                AgentEvent::GuardianDoomLoop {
+                    tool_name,
+                    consecutive_calls,
+                    ..
+                } => {
+                    eprintln!(
+                        "\n[GUARDIAN] Doom loop: {} x{}",
+                        tool_name, consecutive_calls
+                    );
                 }
-                AgentEvent::GuardianBudgetAlert { used_tokens, budget_tokens, is_hard_stop, .. } => {
+                AgentEvent::GuardianBudgetAlert {
+                    used_tokens,
+                    budget_tokens,
+                    is_hard_stop,
+                    ..
+                } => {
                     let kind = if is_hard_stop { "HARD STOP" } else { "warning" };
-                    eprintln!("\n[GUARDIAN] Budget {}: {}/{} tokens", kind, used_tokens, budget_tokens);
+                    eprintln!(
+                        "\n[GUARDIAN] Budget {}: {}/{} tokens",
+                        kind, used_tokens, budget_tokens
+                    );
                 }
                 AgentEvent::GoalEvaluated { evaluation, .. } => {
-                    let status = if evaluation.passed { "PASSED" } else { "FAILED" };
+                    let status = if evaluation.passed {
+                        "PASSED"
+                    } else {
+                        "FAILED"
+                    };
                     eprintln!(
                         "\n[GOAL {}] score: {:.0}%",
                         status,
@@ -753,9 +851,7 @@ async fn run_once(
 
     // Fire on_response hook
     if let Some(hooks) = hooks {
-        ryvos_core::hooks::run_hooks(&hooks.on_response, &[
-            ("RYVOS_SESSION", &session_id.0),
-        ]).await;
+        ryvos_core::hooks::run_hooks(&hooks.on_response, &[("RYVOS_SESSION", &session_id.0)]).await;
     }
 
     println!();
@@ -774,14 +870,15 @@ pub(crate) async fn run_repl(
 ) -> anyhow::Result<()> {
     println!("Ryvos v{}", env!("CARGO_PKG_VERSION"));
     println!("Session: {}", session_id);
-    println!("Security: auto-approve up to {}", config.security.auto_approve_up_to);
+    println!(
+        "Security: auto-approve up to {}",
+        config.security.auto_approve_up_to
+    );
     println!("Type /help for commands, /quit to exit.\n");
 
     // Fire on_start hook
     if let Some(ref hooks) = config.hooks {
-        ryvos_core::hooks::run_hooks(&hooks.on_start, &[
-            ("RYVOS_SESSION", &session_id.0),
-        ]).await;
+        ryvos_core::hooks::run_hooks(&hooks.on_start, &[("RYVOS_SESSION", &session_id.0)]).await;
     }
 
     let stdin = io::stdin();
@@ -821,9 +918,18 @@ pub(crate) async fn run_repl(
                 continue;
             }
             "/status" => {
-                let tool_list = tools.read().await.list().into_iter().map(|s| s.to_string()).collect::<Vec<_>>();
+                let tool_list = tools
+                    .read()
+                    .await
+                    .list()
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>();
                 println!("Session: {}", session_id);
-                println!("Model: {} ({})", config.model.model_id, config.model.provider);
+                println!(
+                    "Model: {} ({})",
+                    config.model.model_id, config.model.provider
+                );
                 println!("Thinking: {:?}", session_thinking);
                 println!("Tools: {}", tool_list.join(", "));
                 if let Some(ref mgr) = mcp_manager {
@@ -831,7 +937,11 @@ pub(crate) async fn run_repl(
                     if servers.is_empty() {
                         println!("MCP: no servers connected");
                     } else {
-                        println!("MCP: {} server(s) connected ({})", servers.len(), servers.join(", "));
+                        println!(
+                            "MCP: {} server(s) connected ({})",
+                            servers.len(),
+                            servers.join(", ")
+                        );
                     }
                 } else {
                     println!("MCP: none configured");
@@ -839,11 +949,20 @@ pub(crate) async fn run_repl(
                 continue;
             }
             "/usage" => {
-                println!("Session tokens -- Input: {}, Output: {}", total_input, total_output);
+                println!(
+                    "Session tokens -- Input: {}, Output: {}",
+                    total_input, total_output
+                );
                 continue;
             }
             "/tools" => {
-                let tool_list = tools.read().await.list().into_iter().map(|s| s.to_string()).collect::<Vec<_>>();
+                let tool_list = tools
+                    .read()
+                    .await
+                    .list()
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>();
                 for name in &tool_list {
                     println!("  - {}", name);
                 }
@@ -856,7 +975,10 @@ pub(crate) async fn run_repl(
                     Some("medium") | Some("hard") => ThinkingLevel::Medium,
                     Some("high") => ThinkingLevel::High,
                     Some(other) => {
-                        println!("Unknown thinking level: {}. Use off/low/medium/high.", other);
+                        println!(
+                            "Unknown thinking level: {}. Use off/low/medium/high.",
+                            other
+                        );
                         continue;
                     }
                 };
@@ -870,13 +992,19 @@ pub(crate) async fn run_repl(
             }
             "/security" => {
                 println!("Security Policy:");
-                println!("  Auto-approve up to: {}", config.security.auto_approve_up_to);
+                println!(
+                    "  Auto-approve up to: {}",
+                    config.security.auto_approve_up_to
+                );
                 if let Some(deny) = config.security.deny_above {
                     println!("  Deny above: {}", deny);
                 } else {
                     println!("  Deny above: (none)");
                 }
-                println!("  Approval timeout: {}s", config.security.approval_timeout_secs);
+                println!(
+                    "  Approval timeout: {}s",
+                    config.security.approval_timeout_secs
+                );
                 if !config.security.tool_overrides.is_empty() {
                     println!("  Tool overrides:");
                     for (tool, tier) in &config.security.tool_overrides {
@@ -924,7 +1052,10 @@ pub(crate) async fn run_repl(
                         "denied by user".to_string()
                     };
                     if let Some(full_id) = broker.find_by_prefix(prefix).await {
-                        if broker.respond(&full_id, ApprovalDecision::Denied { reason }).await {
+                        if broker
+                            .respond(&full_id, ApprovalDecision::Denied { reason })
+                            .await
+                        {
                             println!("Denied: {}", &full_id[..8]);
                         } else {
                             println!("Request not found (may have timed out).");
@@ -1001,7 +1132,9 @@ pub(crate) async fn run_repl(
                                         ryvos_mcp::PromptMessageRole::Assistant => "assistant",
                                     };
                                     let text = match &msg.content {
-                                        ryvos_mcp::PromptMessageContent::Text { text } => text.clone(),
+                                        ryvos_mcp::PromptMessageContent::Text { text } => {
+                                            text.clone()
+                                        }
                                         _ => "[non-text content]".to_string(),
                                     };
                                     println!("[{}] {}", role, text);
@@ -1009,16 +1142,27 @@ pub(crate) async fn run_repl(
                                 // Inject the first user message as a prompt
                                 let user_text: Vec<String> = messages
                                     .iter()
-                                    .filter(|m| matches!(m.role, ryvos_mcp::PromptMessageRole::User))
+                                    .filter(|m| {
+                                        matches!(m.role, ryvos_mcp::PromptMessageRole::User)
+                                    })
                                     .filter_map(|m| match &m.content {
-                                        ryvos_mcp::PromptMessageContent::Text { text } => Some(text.clone()),
+                                        ryvos_mcp::PromptMessageContent::Text { text } => {
+                                            Some(text.clone())
+                                        }
                                         _ => None,
                                     })
                                     .collect();
                                 if !user_text.is_empty() {
                                     let combined = user_text.join("\n");
                                     println!("\nSending prompt to agent...\n");
-                                    run_once(runtime, event_bus, session_id, &combined, &config.hooks).await?;
+                                    run_once(
+                                        runtime,
+                                        event_bus,
+                                        session_id,
+                                        &combined,
+                                        &config.hooks,
+                                    )
+                                    .await?;
                                 }
                             }
                             Err(e) => println!("Failed to get prompt: {}", e),
@@ -1032,7 +1176,10 @@ pub(crate) async fn run_repl(
                 continue;
             }
             _ if input.starts_with('/') => {
-                println!("Unknown command: {}. Type /help for available commands.", parts[0]);
+                println!(
+                    "Unknown command: {}. Type /help for available commands.",
+                    parts[0]
+                );
                 continue;
             }
             _ => {}
@@ -1045,7 +1192,11 @@ pub(crate) async fn run_repl(
             let mut out = 0u64;
             while let Ok(event) = rx.recv().await {
                 match event {
-                    AgentEvent::RunComplete { input_tokens, output_tokens, .. } => {
+                    AgentEvent::RunComplete {
+                        input_tokens,
+                        output_tokens,
+                        ..
+                    } => {
                         inp = input_tokens;
                         out = output_tokens;
                         break;
@@ -1152,7 +1303,11 @@ async fn handle_mcp_repl(
                 for t in &to_remove {
                     registry.unregister(t);
                 }
-                println!("Disconnected from {} ({} tools removed)", name, to_remove.len());
+                println!(
+                    "Disconnected from {} ({} tools removed)",
+                    name,
+                    to_remove.len()
+                );
             } else {
                 println!("Usage: /mcp disconnect <server-name>");
             }
@@ -1258,14 +1413,20 @@ fn handle_mcp_cli(action: &McpAction, config_path: &PathBuf) -> anyhow::Result<(
                         println!("MCP Servers:");
                         for (name, server) in &mcp.servers {
                             let transport = match &server.transport {
-                                ryvos_core::config::McpTransport::Stdio { command, args, .. } => {
+                                ryvos_core::config::McpTransport::Stdio {
+                                    command, args, ..
+                                } => {
                                     format!("stdio: {} {}", command, args.join(" "))
                                 }
                                 ryvos_core::config::McpTransport::Sse { url } => {
                                     format!("sse: {}", url)
                                 }
                             };
-                            let auto = if server.auto_connect { "auto" } else { "manual" };
+                            let auto = if server.auto_connect {
+                                "auto"
+                            } else {
+                                "manual"
+                            };
                             println!("  {} [{}] ({})", name, auto, transport);
                         }
                     }
@@ -1276,7 +1437,13 @@ fn handle_mcp_cli(action: &McpAction, config_path: &PathBuf) -> anyhow::Result<(
                 println!("Config file not found: {}", config_path.display());
             }
         }
-        McpAction::Add { name, command, args, url, env } => {
+        McpAction::Add {
+            name,
+            command,
+            args,
+            url,
+            env,
+        } => {
             let transport_section = if let Some(cmd) = command {
                 let args_str = if args.is_empty() {
                     String::new()
@@ -1302,7 +1469,11 @@ fn handle_mcp_cli(action: &McpAction, config_path: &PathBuf) -> anyhow::Result<(
                     if pairs.is_empty() {
                         String::new()
                     } else {
-                        format!("\n\n[mcp.servers.{}.transport.env]\n{}", name, pairs.join("\n"))
+                        format!(
+                            "\n\n[mcp.servers.{}.transport.env]\n{}",
+                            name,
+                            pairs.join("\n")
+                        )
                     }
                 };
                 format!(
@@ -1357,9 +1528,98 @@ fn handle_mcp_cli(action: &McpAction, config_path: &PathBuf) -> anyhow::Result<(
                     }
                 }
                 std::fs::write(&config_path, result.join("\n"))?;
-                println!("Removed MCP server '{}' from {}", name, config_path.display());
+                println!(
+                    "Removed MCP server '{}' from {}",
+                    name,
+                    config_path.display()
+                );
             } else {
                 println!("Config file not found: {}", config_path.display());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Handle `ryvos skill` CLI subcommands.
+async fn handle_skill_cli(action: &SkillAction) -> anyhow::Result<()> {
+    let home = dirs_home().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
+    let skills_dir = home.join(".ryvos").join("skills");
+
+    match action {
+        SkillAction::List { remote } => {
+            // List local skills
+            let installed = ryvos_skills::registry::list_installed(&skills_dir);
+            if installed.is_empty() {
+                println!("No skills installed.");
+            } else {
+                println!("Installed skills:");
+                for name in &installed {
+                    println!("  - {}", name);
+                }
+            }
+
+            if *remote {
+                let registry_url = ryvos_core::config::RegistryConfig::default().url;
+                match ryvos_skills::registry::fetch_index(&registry_url).await {
+                    Ok(index) => {
+                        println!("\nAvailable in registry ({} skills):", index.skills.len());
+                        for entry in &index.skills {
+                            let installed_marker = if installed.contains(&entry.name) {
+                                " [installed]"
+                            } else {
+                                ""
+                            };
+                            println!(
+                                "  - {} v{}: {}{}",
+                                entry.name, entry.version, entry.description, installed_marker
+                            );
+                        }
+                    }
+                    Err(e) => eprintln!("Failed to fetch registry: {}", e),
+                }
+            }
+        }
+        SkillAction::Search { query } => {
+            let registry_url = ryvos_core::config::RegistryConfig::default().url;
+            match ryvos_skills::registry::fetch_index(&registry_url).await {
+                Ok(index) => {
+                    let results = ryvos_skills::registry::search_skills(&index, query);
+                    if results.is_empty() {
+                        println!("No skills found matching '{}'", query);
+                    } else {
+                        println!("Skills matching '{}':", query);
+                        for entry in results {
+                            println!(
+                                "  - {} v{}: {}",
+                                entry.name, entry.version, entry.description
+                            );
+                        }
+                    }
+                }
+                Err(e) => eprintln!("Failed to fetch registry: {}", e),
+            }
+        }
+        SkillAction::Install { name } => {
+            let registry_url = ryvos_core::config::RegistryConfig::default().url;
+            match ryvos_skills::registry::fetch_index(&registry_url).await {
+                Ok(index) => {
+                    if let Some(entry) = index.skills.iter().find(|e| e.name == *name) {
+                        match ryvos_skills::registry::install_skill(entry, &skills_dir).await {
+                            Ok(_path) => println!("Installed skill '{}'", name),
+                            Err(e) => eprintln!("Failed to install skill '{}': {}", name, e),
+                        }
+                    } else {
+                        eprintln!("Skill '{}' not found in registry", name);
+                    }
+                }
+                Err(e) => eprintln!("Failed to fetch registry: {}", e),
+            }
+        }
+        SkillAction::Remove { name } => {
+            match ryvos_skills::registry::remove_skill(name, &skills_dir) {
+                Ok(()) => println!("Removed skill '{}'", name),
+                Err(e) => eprintln!("Failed to remove skill '{}': {}", name, e),
             }
         }
     }
@@ -1390,7 +1650,11 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
     let openai_key = std::env::var("OPENAI_API_KEY").ok();
 
     let (provider, model_id, key) = if let Some(key) = api_key {
-        ("anthropic".to_string(), "claude-sonnet-4-20250514".to_string(), Some(key))
+        (
+            "anthropic".to_string(),
+            "claude-sonnet-4-20250514".to_string(),
+            Some(key),
+        )
     } else if let Some(key) = openai_key {
         ("openai".to_string(), "gpt-4o".to_string(), Some(key))
     } else {
@@ -1398,24 +1662,32 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
         ("ollama".to_string(), "llama3.2".to_string(), None)
     };
 
+    let mut model = ryvos_core::config::ModelConfig {
+        provider,
+        model_id,
+        api_key: key,
+        base_url: if std::env::var("ANTHROPIC_API_KEY").is_err()
+            && std::env::var("OPENAI_API_KEY").is_err()
+        {
+            Some("http://localhost:11434/v1/chat/completions".to_string())
+        } else {
+            None
+        },
+        max_tokens: 8192,
+        temperature: 0.0,
+        thinking: ThinkingLevel::Off,
+        retry: None,
+        azure_resource: None,
+        azure_deployment: None,
+        azure_api_version: None,
+        aws_region: None,
+        extra_headers: Default::default(),
+    };
+    ryvos_llm::apply_preset_defaults(&mut model);
+
     Ok(AppConfig {
         agent: Default::default(),
-        model: ryvos_core::config::ModelConfig {
-            provider,
-            model_id,
-            api_key: key,
-            base_url: if std::env::var("ANTHROPIC_API_KEY").is_err()
-                && std::env::var("OPENAI_API_KEY").is_err()
-            {
-                Some("http://localhost:11434/v1/chat/completions".to_string())
-            } else {
-                None
-            },
-            max_tokens: 8192,
-            temperature: 0.0,
-            thinking: ThinkingLevel::Off,
-            retry: None,
-        },
+        model,
         fallback_models: vec![],
         gateway: None,
         channels: Default::default(),
@@ -1427,6 +1699,8 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
         web_search: None,
         security: Default::default(),
         embedding: None,
+        daily_logs: None,
+        registry: None,
     })
 }
 

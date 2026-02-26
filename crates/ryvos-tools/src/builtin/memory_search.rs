@@ -52,10 +52,13 @@ impl Tool for MemorySearchTool {
         ctx: ToolContext,
     ) -> BoxFuture<'_, Result<ToolResult>> {
         Box::pin(async move {
-            let store = ctx.store.as_ref().ok_or_else(|| RyvosError::ToolExecution {
-                tool: "memory_search".into(),
-                message: "No store available".into(),
-            })?;
+            let store = ctx
+                .store
+                .as_ref()
+                .ok_or_else(|| RyvosError::ToolExecution {
+                    tool: "memory_search".into(),
+                    message: "No store available".into(),
+                })?;
 
             let query = input["query"].as_str().unwrap_or("");
             let limit = input["limit"].as_u64().unwrap_or(10) as usize;

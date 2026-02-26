@@ -4,7 +4,11 @@ use anyhow::Result;
 
 use super::OnboardingMode;
 
-pub async fn install(config_path: &Path, mode: &OnboardingMode, non_interactive: bool) -> Result<()> {
+pub async fn install(
+    config_path: &Path,
+    mode: &OnboardingMode,
+    non_interactive: bool,
+) -> Result<()> {
     if cfg!(target_os = "linux") {
         install_systemd(config_path, mode, non_interactive).await
     } else if cfg!(target_os = "macos") {
@@ -17,7 +21,11 @@ pub async fn install(config_path: &Path, mode: &OnboardingMode, non_interactive:
     }
 }
 
-async fn install_systemd(config_path: &Path, mode: &OnboardingMode, non_interactive: bool) -> Result<()> {
+async fn install_systemd(
+    config_path: &Path,
+    mode: &OnboardingMode,
+    non_interactive: bool,
+) -> Result<()> {
     // Check systemd user session
     let status = tokio::process::Command::new("systemctl")
         .args(["--user", "status"])
@@ -59,7 +67,9 @@ async fn install_systemd(config_path: &Path, mode: &OnboardingMode, non_interact
                     .await;
                 match result {
                     Ok(s) if s.success() => println!("  Lingering enabled."),
-                    _ => println!("  Warning: Could not enable lingering. Run: loginctl enable-linger {user}"),
+                    _ => println!(
+                        "  Warning: Could not enable lingering. Run: loginctl enable-linger {user}"
+                    ),
                 }
             }
         }
@@ -70,12 +80,10 @@ async fn install_systemd(config_path: &Path, mode: &OnboardingMode, non_interact
     } else {
         match mode {
             OnboardingMode::QuickStart => true,
-            OnboardingMode::Manual => {
-                dialoguer::Confirm::new()
-                    .with_prompt("Install systemd service?")
-                    .default(true)
-                    .interact()?
-            }
+            OnboardingMode::Manual => dialoguer::Confirm::new()
+                .with_prompt("Install systemd service?")
+                .default(true)
+                .interact()?,
         }
     };
 
@@ -160,18 +168,20 @@ WantedBy=default.target
     Ok(())
 }
 
-async fn install_launchd(config_path: &Path, mode: &OnboardingMode, non_interactive: bool) -> Result<()> {
+async fn install_launchd(
+    config_path: &Path,
+    mode: &OnboardingMode,
+    non_interactive: bool,
+) -> Result<()> {
     let should_install = if non_interactive {
         true
     } else {
         match mode {
             OnboardingMode::QuickStart => true,
-            OnboardingMode::Manual => {
-                dialoguer::Confirm::new()
-                    .with_prompt("Install launchd service?")
-                    .default(true)
-                    .interact()?
-            }
+            OnboardingMode::Manual => dialoguer::Confirm::new()
+                .with_prompt("Install launchd service?")
+                .default(true)
+                .interact()?,
         }
     };
 
@@ -179,8 +189,7 @@ async fn install_launchd(config_path: &Path, mode: &OnboardingMode, non_interact
         return Ok(());
     }
 
-    let home = dirs_home()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let home = dirs_home().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
 
     let binary_path = std::env::current_exe()
         .map(|p| p.display().to_string())
@@ -258,7 +267,9 @@ async fn install_launchd(config_path: &Path, mode: &OnboardingMode, non_interact
         if stdout.contains("com.ryvos.agent") {
             println!("  LaunchAgent is running.");
         } else {
-            println!("  Warning: LaunchAgent may not be running. Check: launchctl list | grep ryvos");
+            println!(
+                "  Warning: LaunchAgent may not be running. Check: launchctl list | grep ryvos"
+            );
         }
     }
 

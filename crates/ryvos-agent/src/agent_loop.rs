@@ -18,9 +18,10 @@ use crate::checkpoint::CheckpointStore;
 use crate::context;
 use crate::gate::SecurityGate;
 use crate::guardian::GuardianAction;
-use crate::healing::{FailureJournal, FailureRecord, reflexion_hint_with_history};
+use crate::healing::{reflexion_hint_with_history, FailureJournal, FailureRecord};
 use crate::intelligence::{
-    compact_tool_output, prune_to_budget, reflexion_hint, summarize_and_prune, FailureTracker,
+    compact_tool_output, is_flush_complete, memory_flush_prompt, prune_to_budget, reflexion_hint,
+    summarize_and_prune, FailureTracker,
 };
 use crate::judge::Judge;
 use crate::output_validator::OutputCleaner;
@@ -136,11 +137,7 @@ impl AgentRuntime {
     }
 
     /// Run the agent loop for a given session and user message.
-    pub async fn run(
-        &self,
-        session_id: &SessionId,
-        user_message: &str,
-    ) -> Result<String> {
+    pub async fn run(&self, session_id: &SessionId, user_message: &str) -> Result<String> {
         self.run_with_goal(session_id, user_message, None).await
     }
 
@@ -191,12 +188,87 @@ impl AgentRuntime {
 
         // Prune context to fit token budget (with summarization if enabled)
         let budget = self.config.agent.max_context_tokens;
+
+        // Memory flush before compaction: if tokens > 85% budget, run a mini-turn
+        // to let the agent persist durable info before we prune.
+        let flush_disabled = self.config.agent.disable_memory_flush.unwrap_or(false);
+        if !flush_disabled {
+            let total_tokens: usize = messages
+                .iter()
+                .map(crate::intelligence::estimate_message_tokens)
+                .sum();
+            let flush_threshold = (budget as f64 * 0.85) as usize;
+            if total_tokens > flush_threshold {
+                info!(
+                    total_tokens,
+                    flush_threshold, "Running memory flush before compaction"
+                );
+                messages.push(memory_flush_prompt());
+
+                // Run one mini-turn to let agent call memory tools
+                let flush_tool_defs = self.tool_definitions().await;
+                let flush_ctx = ToolContext {
+                    session_id: session_id.clone(),
+                    working_dir: std::env::current_dir().unwrap_or_else(|_| workspace.clone()),
+                    store: Some(self.store.clone()),
+                    agent_spawner: None,
+                    sandbox_config: self.config.agent.sandbox.clone(),
+                    config_path: None,
+                };
+                if let Ok(mut stream) = self
+                    .llm
+                    .chat_stream(&self.config.model, messages.clone(), &flush_tool_defs)
+                    .await
+                {
+                    let mut flush_text = String::new();
+                    let mut flush_tool_calls: Vec<ToolCallAccumulator> = Vec::new();
+                    while let Some(delta) = stream.next().await {
+                        match delta {
+                            Ok(StreamDelta::TextDelta(t)) => flush_text.push_str(&t),
+                            Ok(StreamDelta::ToolUseStart { index, id, name }) => {
+                                while flush_tool_calls.len() <= index {
+                                    flush_tool_calls.push(ToolCallAccumulator::default());
+                                }
+                                flush_tool_calls[index].id = id;
+                                flush_tool_calls[index].name = name;
+                            }
+                            Ok(StreamDelta::ToolInputDelta { index, delta }) => {
+                                if let Some(tc) = flush_tool_calls.get_mut(index) {
+                                    tc.input_json.push_str(&delta);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    // Execute any memory tool calls from the flush
+                    for tc in &flush_tool_calls {
+                        if tc.name.starts_with("memory") || tc.name.starts_with("daily_log") {
+                            let input: serde_json::Value =
+                                serde_json::from_str(&tc.input_json).unwrap_or_default();
+                            let _ = self.execute_tool(&tc.name, input, flush_ctx.clone()).await;
+                        }
+                    }
+
+                    if is_flush_complete(&flush_text) {
+                        debug!("Memory flush completed successfully");
+                    }
+                }
+
+                // Remove the flush prompt from messages before proceeding
+                messages.retain(|m| m.phase() != Some("memory_flush"));
+            }
+        }
+
         if self.config.agent.enable_summarization {
             let pruned =
                 summarize_and_prune(&mut messages, budget, 6, &*self.llm, &self.config.model)
                     .await?;
             if pruned > 0 {
-                info!(pruned, "Summarized and pruned messages to fit context budget");
+                info!(
+                    pruned,
+                    "Summarized and pruned messages to fit context budget"
+                );
             }
         } else {
             let pruned = prune_to_budget(&mut messages, budget, 6);
@@ -213,6 +285,7 @@ impl AgentRuntime {
             store: Some(self.store.clone()),
             agent_spawner: None, // Set externally when AgentRuntime is wrapped in Arc
             sandbox_config: self.config.agent.sandbox.clone(),
+            config_path: None,
         };
 
         let mut total_input_tokens = 0u64;
@@ -273,8 +346,7 @@ impl AgentRuntime {
 
                 match delta? {
                     StreamDelta::TextDelta(text) => {
-                        self.event_bus
-                            .publish(AgentEvent::TextDelta(text.clone()));
+                        self.event_bus.publish(AgentEvent::TextDelta(text.clone()));
                         text_content.push_str(&text);
                     }
                     StreamDelta::ThinkingDelta(text) => {
@@ -358,8 +430,7 @@ impl AgentRuntime {
 
                         // Judge evaluation (if goal provided)
                         if let Some(goal) = goal {
-                            let judge =
-                                Judge::new(self.llm.clone(), self.config.model.clone());
+                            let judge = Judge::new(self.llm.clone(), self.config.model.clone());
                             match judge.evaluate(&final_text, &messages, goal).await {
                                 Ok(verdict) => {
                                     self.event_bus.publish(AgentEvent::JudgeVerdict {
@@ -476,9 +547,7 @@ impl AgentRuntime {
             // Publish all ToolStart events first (preserves ordering for TUI/gateway)
             let parsed_inputs: Vec<serde_json::Value> = tool_calls
                 .iter()
-                .map(|tc| {
-                    serde_json::from_str(&tc.input_json).unwrap_or(serde_json::Value::Null)
-                })
+                .map(|tc| serde_json::from_str(&tc.input_json).unwrap_or(serde_json::Value::Null))
                 .collect();
 
             for (tc, input) in tool_calls.iter().zip(parsed_inputs.iter()) {
@@ -526,9 +595,7 @@ impl AgentRuntime {
                     // Serial execution
                     let mut results = Vec::with_capacity(tool_calls.len());
                     for (tc, input) in tool_calls.iter().zip(parsed_inputs.into_iter()) {
-                        let result = self
-                            .execute_tool(&tc.name, input, tool_ctx.clone())
-                            .await;
+                        let result = self.execute_tool(&tc.name, input, tool_ctx.clone()).await;
                         let tool_result = match result {
                             Ok(r) => r,
                             Err(e) => {
@@ -548,9 +615,7 @@ impl AgentRuntime {
             let tool_exec_elapsed_ms = tool_exec_start.elapsed().as_millis() as u64;
             for (idx, (_name, _id, tool_result)) in tool_results.iter().enumerate() {
                 // Backfill decision outcome
-                if let (Some(ref journal), Some(dec_id)) =
-                    (&self.journal, decision_ids.get(idx))
-                {
+                if let (Some(ref journal), Some(dec_id)) = (&self.journal, decision_ids.get(idx)) {
                     let outcome = DecisionOutcome {
                         tokens_used: 0, // not tracked per-tool
                         latency_ms: tool_exec_elapsed_ms,
@@ -580,22 +645,29 @@ impl AgentRuntime {
                     // Persist to journal
                     if let Some(ref journal) = self.journal {
                         let input_summary = serde_json::to_string(
-                            &tool_calls.iter().find(|tc| tc.name == name)
+                            &tool_calls
+                                .iter()
+                                .find(|tc| tc.name == name)
                                 .map(|tc| &tc.input_json)
                                 .unwrap_or(&String::new()),
-                        ).unwrap_or_default();
-                        journal.record(FailureRecord {
-                            timestamp: chrono::Utc::now(),
-                            session_id: session_id.0.clone(),
-                            tool_name: name.clone(),
-                            error: tool_result.content.clone(),
-                            input_summary: input_summary.chars().take(200).collect(),
-                            turn,
-                        }).ok();
+                        )
+                        .unwrap_or_default();
+                        journal
+                            .record(FailureRecord {
+                                timestamp: chrono::Utc::now(),
+                                session_id: session_id.0.clone(),
+                                tool_name: name.clone(),
+                                error: tool_result.content.clone(),
+                                input_summary: input_summary.chars().take(200).collect(),
+                                turn,
+                            })
+                            .ok();
                     }
                     if count >= threshold {
                         // Query past patterns for smarter hint
-                        let past = self.journal.as_ref()
+                        let past = self
+                            .journal
+                            .as_ref()
                             .and_then(|j| j.find_patterns(&name, 5).ok())
                             .unwrap_or_default();
                         let hint = if past.is_empty() {

@@ -44,13 +44,13 @@ impl Tool for SpawnAgentTool {
         ctx: ToolContext,
     ) -> BoxFuture<'_, Result<ToolResult>> {
         Box::pin(async move {
-            let spawner =
-                ctx.agent_spawner
-                    .as_ref()
-                    .ok_or_else(|| RyvosError::ToolExecution {
-                        tool: "spawn_agent".into(),
-                        message: "Agent spawning not available".into(),
-                    })?;
+            let spawner = ctx
+                .agent_spawner
+                .as_ref()
+                .ok_or_else(|| RyvosError::ToolExecution {
+                    tool: "spawn_agent".into(),
+                    message: "Agent spawning not available".into(),
+                })?;
 
             let prompt = input["prompt"]
                 .as_str()

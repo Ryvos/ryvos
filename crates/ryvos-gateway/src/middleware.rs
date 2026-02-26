@@ -28,10 +28,7 @@ impl FromRequestParts<Arc<AppState>> for Authenticated {
             .map(|s| s.to_string());
 
         // Extract query params
-        let query = parts
-            .uri
-            .query()
-            .unwrap_or("");
+        let query = parts.uri.query().unwrap_or("");
         let query_token = auth::extract_token_from_query(query).map(|s| s.to_string());
         let query_password = auth::extract_password_from_query(query).map(|s| s.to_string());
 

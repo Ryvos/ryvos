@@ -223,6 +223,7 @@ mod tests {
             store: None,
             agent_spawner: None,
             sandbox_config: None,
+            config_path: None,
         }
     }
 

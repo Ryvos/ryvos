@@ -175,9 +175,7 @@ impl FilteredReceiver {
     }
 
     /// Non-blocking try_recv — returns the next matching event or an error.
-    pub fn try_recv(
-        &mut self,
-    ) -> Result<AgentEvent, tokio::sync::broadcast::error::TryRecvError> {
+    pub fn try_recv(&mut self) -> Result<AgentEvent, tokio::sync::broadcast::error::TryRecvError> {
         loop {
             let event = self.rx.try_recv()?;
             if self.filter.matches(&event) {
@@ -225,9 +223,8 @@ mod tests {
     #[test]
     fn test_filter_by_event_type() {
         let bus = EventBus::new(16);
-        let mut rx = bus.subscribe_filtered(EventFilter::for_types(vec![
-            "TurnComplete".to_string(),
-        ]));
+        let mut rx =
+            bus.subscribe_filtered(EventFilter::for_types(vec!["TurnComplete".to_string()]));
 
         bus.publish(AgentEvent::RunStarted {
             session_id: SessionId::from_string("s1"),
@@ -246,8 +243,7 @@ mod tests {
     #[test]
     fn test_filter_combined() {
         let bus = EventBus::new(16);
-        let filter = EventFilter::for_session("s1")
-            .with_node("n1"); // node_id is a no-op for now
+        let filter = EventFilter::for_session("s1").with_node("n1"); // node_id is a no-op for now
 
         let mut rx = bus.subscribe_filtered(filter);
 

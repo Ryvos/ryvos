@@ -34,7 +34,8 @@ impl ContextBuilder {
             match std::fs::read_to_string(path) {
                 Ok(content) => {
                     debug!(path = %path.display(), label, "Loaded context file");
-                    self.parts.push(format!("# {}\n\n{}", label, content.trim()));
+                    self.parts
+                        .push(format!("# {}\n\n{}", label, content.trim()));
                 }
                 Err(e) => {
                     debug!(path = %path.display(), error = %e, "Failed to read context file");
@@ -83,6 +84,47 @@ impl ContextBuilder {
             .with_file(&workspace.join("HEARTBEAT.md"), "Periodic Status")
     }
 
+    /// Layer 2b (Narrative): Inject recent daily log entries.
+    ///
+    /// Reads `~/.ryvos/memory/YYYY-MM-DD.md` for the last `days` days
+    /// and injects them into the context narrative.
+    pub fn with_daily_logs(mut self, workspace: &Path, days: usize) -> Self {
+        let memory_dir = workspace.join("memory");
+        if !memory_dir.exists() {
+            return self;
+        }
+
+        let today = chrono::Utc::now().date_naive();
+        let mut log_entries = Vec::new();
+
+        for i in 0..days {
+            let date = today - chrono::Duration::days(i as i64);
+            let filename = format!("{}.md", date.format("%Y-%m-%d"));
+            let path = memory_dir.join(&filename);
+            if path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if !content.trim().is_empty() {
+                        log_entries.push(format!(
+                            "## {}\n{}",
+                            date.format("%Y-%m-%d"),
+                            content.trim()
+                        ));
+                    }
+                }
+            }
+        }
+
+        if !log_entries.is_empty() {
+            log_entries.reverse(); // Oldest first
+            self.parts.push(format!(
+                "# Recent Daily Logs\n\n{}",
+                log_entries.join("\n\n")
+            ));
+        }
+
+        self
+    }
+
     /// Layer 2b (Narrative): Inject a conversation summary from a prior compaction.
     pub fn with_summary(mut self, summary: &str) -> Self {
         if !summary.is_empty() {
@@ -111,10 +153,7 @@ impl ContextBuilder {
             if !goal.success_criteria.is_empty() {
                 section.push_str("\n## Success Criteria\n");
                 for c in &goal.success_criteria {
-                    section.push_str(&format!(
-                        "- {} (weight: {:.1})\n",
-                        c.description, c.weight
-                    ));
+                    section.push_str(&format!("- {} (weight: {:.1})\n", c.description, c.weight));
                 }
             }
             self.parts.push(section);
@@ -186,13 +225,18 @@ pub fn resolve_system_prompt(spec: &str, workspace: &Path) -> String {
 ///
 /// When `system_prompt_override` is `Some`, appends it via `with_instructions()`
 /// in Layer 3 (Focus).
-pub fn build_default_context(workspace: &Path, system_prompt_override: Option<&str>) -> ChatMessage {
+pub fn build_default_context(
+    workspace: &Path,
+    system_prompt_override: Option<&str>,
+) -> ChatMessage {
     let mut builder = ContextBuilder::new()
         .with_base_prompt(DEFAULT_SYSTEM_PROMPT)
         // Layer 1: Identity
         .with_identity_layer(workspace)
         // Layer 2: Narrative
-        .with_narrative_layer(workspace);
+        .with_narrative_layer(workspace)
+        // Layer 2b: Daily logs (last 2 days)
+        .with_daily_logs(workspace, 2);
 
     // Layer 3: Focus (instructions only — no goal in default context)
     if let Some(instructions) = system_prompt_override {
@@ -216,7 +260,9 @@ pub fn build_goal_context(
         // Layer 1: Identity
         .with_identity_layer(workspace)
         // Layer 2: Narrative
-        .with_narrative_layer(workspace);
+        .with_narrative_layer(workspace)
+        // Layer 2b: Daily logs (last 2 days)
+        .with_daily_logs(workspace, 2);
 
     // Layer 3: Focus
     builder = builder.with_focus_layer(goal);
@@ -244,10 +290,8 @@ mod tests {
         let file_path = dir.join("prompt.txt");
         std::fs::write(&file_path, "Be helpful.").unwrap();
 
-        let result = resolve_system_prompt(
-            &format!("file:{}", file_path.display()),
-            Path::new("/tmp"),
-        );
+        let result =
+            resolve_system_prompt(&format!("file:{}", file_path.display()), Path::new("/tmp"));
         assert_eq!(result, "Be helpful.");
 
         std::fs::remove_dir_all(&dir).ok();

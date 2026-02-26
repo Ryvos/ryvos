@@ -90,7 +90,10 @@ pub fn extract_password_from_query(query: &str) -> Option<&str> {
 
 /// Check if a role has at least viewer-level access.
 pub fn has_viewer_access(role: &ApiKeyRole) -> bool {
-    matches!(role, ApiKeyRole::Viewer | ApiKeyRole::Operator | ApiKeyRole::Admin)
+    matches!(
+        role,
+        ApiKeyRole::Viewer | ApiKeyRole::Operator | ApiKeyRole::Admin
+    )
 }
 
 /// Check if a role has at least operator-level access.
@@ -113,6 +116,7 @@ mod tests {
             token: token.map(|s| s.to_string()),
             password: password.map(|s| s.to_string()),
             api_keys,
+            webhooks: None,
         }
     }
 
@@ -121,7 +125,8 @@ mod tests {
         let config = gateway(None, None, vec![]);
         assert!(validate_auth(&config, None, None, None).is_some());
         assert!(validate_auth(&config, Some("anything"), None, None).is_none()); // Bearer with no match
-        assert!(validate_auth(&config, None, Some("anything"), None).is_some()); // No token configured
+        assert!(validate_auth(&config, None, Some("anything"), None).is_some());
+        // No token configured
     }
 
     #[test]

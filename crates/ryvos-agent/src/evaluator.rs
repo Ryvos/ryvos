@@ -5,9 +5,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use ryvos_core::config::ModelConfig;
-use ryvos_core::goal::{
-    CriterionResult, CriterionType, Goal, GoalEvaluation, ConstraintViolation,
-};
+use ryvos_core::goal::{ConstraintViolation, CriterionResult, CriterionType, Goal, GoalEvaluation};
 use ryvos_core::traits::LlmClient;
 use ryvos_core::types::{ChatMessage, StreamDelta};
 
@@ -120,11 +118,7 @@ impl GoalEvaluator {
 
     /// Evaluate agent output against a goal.
     /// First evaluates deterministic criteria, then uses LLM for LlmJudge criteria.
-    pub async fn evaluate(
-        &self,
-        output: &str,
-        goal: &Goal,
-    ) -> Result<GoalEvaluation, String> {
+    pub async fn evaluate(&self, output: &str, goal: &Goal) -> Result<GoalEvaluation, String> {
         let mut results = goal.evaluate_deterministic(output);
 
         // Evaluate LlmJudge criteria
@@ -258,7 +252,8 @@ mod tests {
 
     #[test]
     fn test_extract_json_plain() {
-        let input = r#"{"success": true, "confidence": 0.9, "reasoning": "done", "suggestions": []}"#;
+        let input =
+            r#"{"success": true, "confidence": 0.9, "reasoning": "done", "suggestions": []}"#;
         let result = extract_json(input);
         let outcome: RunOutcome = serde_json::from_str(result).unwrap();
         assert!(outcome.success);

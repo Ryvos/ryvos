@@ -1,4 +1,5 @@
 pub mod manifest;
+pub mod registry;
 pub mod skill_tool;
 
 use std::path::Path;
@@ -200,7 +201,10 @@ required_binaries = ["_ryvos_nonexistent_binary_xyz"]
         .unwrap();
 
         let skills = load_skills(&tmp);
-        assert!(skills.is_empty(), "Skill with missing binary should be skipped");
+        assert!(
+            skills.is_empty(),
+            "Skill with missing binary should be skipped"
+        );
     }
 
     #[test]

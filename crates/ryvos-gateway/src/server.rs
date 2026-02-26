@@ -64,6 +64,8 @@ impl GatewayServer {
             .route("/api/sessions", get(routes::list_sessions))
             .route("/api/sessions/{id}/history", get(routes::session_history))
             .route("/api/sessions/{id}/messages", post(routes::send_message))
+            // Webhooks
+            .route("/api/hooks/wake", post(routes::webhook_wake))
             // Embedded Web UI
             .route("/", get(static_files::index))
             .route("/assets/{*path}", get(static_files::static_file))

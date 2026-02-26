@@ -103,8 +103,7 @@ input_schema_json = '{"type":"object","properties":{"city":{"type":"string"}},"r
         assert_eq!(manifest.timeout_secs, 15);
         assert!(!manifest.requires_sandbox);
 
-        let schema: serde_json::Value =
-            serde_json::from_str(&manifest.input_schema_json).unwrap();
+        let schema: serde_json::Value = serde_json::from_str(&manifest.input_schema_json).unwrap();
         assert_eq!(schema["properties"]["city"]["type"], "string");
     }
 

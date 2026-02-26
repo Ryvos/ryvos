@@ -42,7 +42,11 @@ pub fn configure() -> Result<Option<GatewayConfig>> {
         .interact()?;
 
     let custom_idx = bind_options.len() - 1;
-    let tailscale_idx = if tailscale_ip.is_some() { Some(2) } else { None };
+    let tailscale_idx = if tailscale_ip.is_some() {
+        Some(2)
+    } else {
+        None
+    };
 
     let ip = if bind_choice == 0 {
         "127.0.0.1".to_string()
@@ -119,7 +123,11 @@ pub fn configure() -> Result<Option<GatewayConfig>> {
             _ => ApiKeyRole::Operator,
         };
 
-        let key = format!("rk_{:x}{:x}", uuid::Uuid::new_v4().as_u128(), uuid::Uuid::new_v4().as_u128() >> 64);
+        let key = format!(
+            "rk_{:x}{:x}",
+            uuid::Uuid::new_v4().as_u128(),
+            uuid::Uuid::new_v4().as_u128() >> 64
+        );
         println!("  Generated key: {key}");
 
         api_keys.push(ApiKeyConfig {
@@ -134,6 +142,7 @@ pub fn configure() -> Result<Option<GatewayConfig>> {
         token,
         password,
         api_keys,
+        webhooks: None,
     }))
 }
 
@@ -144,7 +153,11 @@ fn detect_tailscale() -> Option<String> {
         .ok()?;
     if output.status.success() {
         let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !ip.is_empty() { Some(ip) } else { None }
+        if !ip.is_empty() {
+            Some(ip)
+        } else {
+            None
+        }
     } else {
         None
     }

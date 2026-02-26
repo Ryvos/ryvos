@@ -25,9 +25,17 @@ fn cached_banner() -> &'static BannerCache {
             .map(|b| b.style(tui_banner::Style::NeonCyber).render())
             .unwrap_or_else(|_| String::from("RYVOS"));
         let lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
-        let width = lines.iter().map(|l| l.chars().count() as u16).max().unwrap_or(5);
+        let width = lines
+            .iter()
+            .map(|l| l.chars().count() as u16)
+            .max()
+            .unwrap_or(5);
         let height = lines.len() as u16;
-        BannerCache { lines, width, height }
+        BannerCache {
+            lines,
+            width,
+            height,
+        }
     })
 }
 
@@ -127,24 +135,17 @@ fn draw_messages(f: &mut Frame, app: &App, area: Rect) {
         let (prefix, style) = match msg.role {
             MessageRole::User => (
                 "> ",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ),
-            MessageRole::Assistant => (
-                "",
-                Style::default().fg(Color::White),
-            ),
-            MessageRole::Tool => (
-                "[tool] ",
-                Style::default().fg(Color::Yellow),
-            ),
+            MessageRole::Assistant => ("", Style::default().fg(Color::White)),
+            MessageRole::Tool => ("[tool] ", Style::default().fg(Color::Yellow)),
             MessageRole::Error => (
                 "[error] ",
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             ),
-            MessageRole::System => (
-                "[system] ",
-                Style::default().fg(Color::DarkGray),
-            ),
+            MessageRole::System => ("[system] ", Style::default().fg(Color::DarkGray)),
         };
 
         for text_line in msg.text.lines() {
@@ -170,7 +171,9 @@ fn draw_messages(f: &mut Frame, app: &App, area: Rect) {
     let visible_height = area.height as usize;
     let total_lines = lines.len();
     let scroll = if app.scroll_offset > 0 {
-        total_lines.saturating_sub(visible_height).saturating_sub(app.scroll_offset)
+        total_lines
+            .saturating_sub(visible_height)
+            .saturating_sub(app.scroll_offset)
     } else {
         total_lines.saturating_sub(visible_height)
     };
@@ -202,8 +205,8 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         )
     };
 
-    let status = Paragraph::new(status_text)
-        .style(Style::default().bg(Color::DarkGray).fg(Color::White));
+    let status =
+        Paragraph::new(status_text).style(Style::default().bg(Color::DarkGray).fg(Color::White));
 
     f.render_widget(status, area);
 }

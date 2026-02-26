@@ -13,6 +13,7 @@ env:
 
 jobs:
   build:
+    name: Build (${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
@@ -23,9 +24,8 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             artifact: ryvos-linux-aarch64
-          # macos-13 is the last Intel runner; macos-latest is now arm64
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-latest
             artifact: ryvos-macos-x86_64
           - target: aarch64-apple-darwin
             os: macos-latest
@@ -50,7 +50,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-      - name: Cache cargo registry & build
+      - name: Cache cargo
         uses: actions/cache@v4
         with:
           path: |
@@ -58,6 +58,7 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ matrix.target }}-cargo-
 
       - name: Build release binary (native)
         if: matrix.target != 'aarch64-unknown-linux-gnu'
@@ -91,6 +92,7 @@ jobs:
           path: ${{ matrix.artifact }}
 
   release:
+    name: Create Release
     needs: build
     runs-on: ubuntu-latest
 
@@ -102,23 +104,21 @@ jobs:
         with:
           path: artifacts
 
-      - name: Generate checksums
+      - name: Flatten artifacts and generate checksums
         run: |
           cd artifacts
-          # Flatten: each artifact is in its own subdirectory
           for dir in */; do
             cp "$dir"* . 2>/dev/null || true
           done
-          # Remove the now-empty subdirectories
           find . -mindepth 1 -type d -exec rm -rf {} + 2>/dev/null || true
-          # Generate checksums for binaries only
           sha256sum ryvos-* > sha256sums.txt
           cat sha256sums.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: false
-          body_path: CHANGELOG.md
+          generate_release_notes: true
           files: |
             artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

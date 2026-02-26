@@ -20,7 +20,11 @@ impl LaneQueue {
     }
 
     /// Enqueue a request and wait for the result.
-    pub async fn send(&self, method: String, params: serde_json::Value) -> Option<serde_json::Value> {
+    pub async fn send(
+        &self,
+        method: String,
+        params: serde_json::Value,
+    ) -> Option<serde_json::Value> {
         let (respond, rx) = oneshot::channel();
         let item = LaneItem {
             method,

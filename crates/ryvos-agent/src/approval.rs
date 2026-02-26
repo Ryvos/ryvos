@@ -22,10 +22,7 @@ impl ApprovalBroker {
     }
 
     /// Create an approval request, publish event, return receiver to await.
-    pub async fn request(
-        &self,
-        req: ApprovalRequest,
-    ) -> oneshot::Receiver<ApprovalDecision> {
+    pub async fn request(&self, req: ApprovalRequest) -> oneshot::Receiver<ApprovalDecision> {
         let (tx, rx) = oneshot::channel();
         let id = req.id.clone();
 
@@ -112,14 +109,16 @@ mod tests {
         let broker = ApprovalBroker::new(event_bus);
 
         let rx = broker.request(test_request("req-2")).await;
-        assert!(broker
-            .respond(
-                "req-2",
-                ApprovalDecision::Denied {
-                    reason: "too dangerous".into()
-                }
-            )
-            .await);
+        assert!(
+            broker
+                .respond(
+                    "req-2",
+                    ApprovalDecision::Denied {
+                        reason: "too dangerous".into()
+                    }
+                )
+                .await
+        );
 
         let decision = rx.await.unwrap();
         match decision {
@@ -132,7 +131,11 @@ mod tests {
     async fn respond_unknown_id() {
         let event_bus = Arc::new(EventBus::default());
         let broker = ApprovalBroker::new(event_bus);
-        assert!(!broker.respond("nonexistent", ApprovalDecision::Approved).await);
+        assert!(
+            !broker
+                .respond("nonexistent", ApprovalDecision::Approved)
+                .await
+        );
     }
 
     #[tokio::test]
@@ -144,8 +147,7 @@ mod tests {
 
         // Simulate timeout by dropping the broker's sender side
         // In practice, the gate uses tokio::time::timeout on the receiver
-        let result =
-            tokio::time::timeout(std::time::Duration::from_millis(10), rx).await;
+        let result = tokio::time::timeout(std::time::Duration::from_millis(10), rx).await;
         assert!(result.is_err()); // timeout
     }
 

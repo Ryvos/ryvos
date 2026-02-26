@@ -31,10 +31,7 @@ pub struct PrimeOrchestrator {
 }
 
 impl PrimeOrchestrator {
-    pub fn new(
-        sub_agent_policy: SecurityPolicy,
-        builder: PrimeRuntimeBuilder,
-    ) -> Self {
+    pub fn new(sub_agent_policy: SecurityPolicy, builder: PrimeRuntimeBuilder) -> Self {
         Self {
             sub_agent_policy,
             builder,

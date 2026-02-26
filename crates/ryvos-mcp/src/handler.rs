@@ -5,18 +5,31 @@ use tracing::{debug, warn};
 
 use rmcp::handler::client::ClientHandler;
 use rmcp::model::*;
-use rmcp::ErrorData as McpError;
 use rmcp::service::{NotificationContext, RequestContext};
+use rmcp::ErrorData as McpError;
 use rmcp::RoleClient;
 
 /// Events emitted by the MCP notification handler.
 #[derive(Debug, Clone)]
 pub enum McpEvent {
-    ToolsChanged { server: String },
-    ResourcesChanged { server: String },
-    PromptsChanged { server: String },
-    ResourceUpdated { server: String, uri: String },
-    LogMessage { server: String, level: String, message: String },
+    ToolsChanged {
+        server: String,
+    },
+    ResourcesChanged {
+        server: String,
+    },
+    PromptsChanged {
+        server: String,
+    },
+    ResourceUpdated {
+        server: String,
+        uri: String,
+    },
+    LogMessage {
+        server: String,
+        level: String,
+        message: String,
+    },
 }
 
 /// Custom MCP client handler that processes server notifications

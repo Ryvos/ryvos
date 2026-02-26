@@ -72,8 +72,10 @@ impl HandoffContext {
 
         // Fallback: store the full output under each output key
         for key in output_keys {
-            self.data
-                .insert(key.clone(), serde_json::Value::String(output_text.to_string()));
+            self.data.insert(
+                key.clone(),
+                serde_json::Value::String(output_text.to_string()),
+            );
         }
     }
 

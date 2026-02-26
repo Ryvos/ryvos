@@ -83,38 +83,34 @@ impl Heartbeat {
             }
 
             let now = Utc::now();
-            let session_id = SessionId::from_string(
-                &format!("heartbeat:{}", now.format("%Y%m%d-%H%M%S")),
-            );
+            let session_id =
+                SessionId::from_string(&format!("heartbeat:{}", now.format("%Y%m%d-%H%M%S")));
 
-            self.event_bus.publish(AgentEvent::HeartbeatFired {
-                timestamp: now,
-            });
+            self.event_bus
+                .publish(AgentEvent::HeartbeatFired { timestamp: now });
 
             let prompt = self.build_prompt();
 
             info!(session = %session_id, "Heartbeat firing");
 
             match self.runtime.run(&session_id, &prompt).await {
-                Ok(response) => {
-                    match evaluate_response(&response, self.config.ack_max_chars) {
-                        HeartbeatResult::Ok => {
-                            info!(session = %session_id, chars = response.len(), "Heartbeat OK (suppressed)");
-                            self.event_bus.publish(AgentEvent::HeartbeatOk {
-                                session_id,
-                                response_chars: response.len(),
-                            });
-                        }
-                        HeartbeatResult::Alert => {
-                            warn!(session = %session_id, "Heartbeat alert");
-                            self.event_bus.publish(AgentEvent::HeartbeatAlert {
-                                session_id,
-                                message: response,
-                                target_channel: self.config.target_channel.clone(),
-                            });
-                        }
+                Ok(response) => match evaluate_response(&response, self.config.ack_max_chars) {
+                    HeartbeatResult::Ok => {
+                        info!(session = %session_id, chars = response.len(), "Heartbeat OK (suppressed)");
+                        self.event_bus.publish(AgentEvent::HeartbeatOk {
+                            session_id,
+                            response_chars: response.len(),
+                        });
                     }
-                }
+                    HeartbeatResult::Alert => {
+                        warn!(session = %session_id, "Heartbeat alert");
+                        self.event_bus.publish(AgentEvent::HeartbeatAlert {
+                            session_id,
+                            message: response,
+                            target_channel: self.config.target_channel.clone(),
+                        });
+                    }
+                },
                 Err(e) => {
                     error!(session = %session_id, error = %e, "Heartbeat run failed");
                 }
@@ -137,12 +133,7 @@ impl Heartbeat {
             _ => {}
         }
 
-        prompt.push_str(
-            self.config
-                .prompt
-                .as_deref()
-                .unwrap_or(DEFAULT_PROMPT),
-        );
+        prompt.push_str(self.config.prompt.as_deref().unwrap_or(DEFAULT_PROMPT));
 
         prompt
     }
@@ -257,10 +248,7 @@ mod tests {
 
     #[test]
     fn test_ack_detection() {
-        assert_eq!(
-            evaluate_response("HEARTBEAT_OK", 300),
-            HeartbeatResult::Ok
-        );
+        assert_eq!(evaluate_response("HEARTBEAT_OK", 300), HeartbeatResult::Ok);
         assert_eq!(
             evaluate_response("All good, nothing to report.", 300),
             HeartbeatResult::Ok
@@ -284,9 +272,6 @@ mod tests {
         );
         // Long response even with ack pattern → alert (over char limit)
         let long = format!("HEARTBEAT_OK {}", "x".repeat(300));
-        assert_eq!(
-            evaluate_response(&long, 300),
-            HeartbeatResult::Alert
-        );
+        assert_eq!(evaluate_response(&long, 300), HeartbeatResult::Alert);
     }
 }

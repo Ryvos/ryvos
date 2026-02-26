@@ -128,11 +128,7 @@ impl OutputCleaner {
     }
 
     /// Ask the LLM to fix malformed output.
-    pub async fn llm_repair(
-        &self,
-        output: &str,
-        issues: &[String],
-    ) -> Result<String, String> {
+    pub async fn llm_repair(&self, output: &str, issues: &[String]) -> Result<String, String> {
         let llm = self
             .llm
             .as_ref()

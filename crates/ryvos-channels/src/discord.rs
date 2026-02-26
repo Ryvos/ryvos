@@ -94,10 +94,7 @@ impl EventHandler for Handler {
             DmPolicy::Open => {}
         }
 
-        let key = format!(
-            "discord:channel:{}:user:{}",
-            msg.channel_id, msg.author.id
-        );
+        let key = format!("discord:channel:{}:user:{}", msg.channel_id, msg.author.id);
         let session_id = session_mgr.get_or_create(&key, "discord");
 
         // Map session -> channel for response routing
@@ -217,10 +214,7 @@ impl ChannelAdapter for DiscordAdapter {
         "discord"
     }
 
-    fn start(
-        &self,
-        tx: mpsc::Sender<MessageEnvelope>,
-    ) -> BoxFuture<'_, Result<()>> {
+    fn start(&self, tx: mpsc::Sender<MessageEnvelope>) -> BoxFuture<'_, Result<()>> {
         let token = self.config.bot_token.clone();
         let session_mgr = self.session_mgr.clone();
         let channel_map = self.channel_map.clone();
@@ -329,11 +323,7 @@ impl ChannelAdapter for DiscordAdapter {
         })
     }
 
-    fn send(
-        &self,
-        session: &SessionId,
-        content: &MessageContent,
-    ) -> BoxFuture<'_, Result<()>> {
+    fn send(&self, session: &SessionId, content: &MessageContent) -> BoxFuture<'_, Result<()>> {
         let session_key = session.0.clone();
         let content = content.clone();
         let channel_map = self.channel_map.clone();
@@ -367,12 +357,13 @@ impl ChannelAdapter for DiscordAdapter {
 
             let chunks = split_message(&text, DISCORD_MAX_LEN);
             for chunk in chunks {
-                channel_id.say(http, &chunk).await.map_err(|e| {
-                    RyvosError::Channel {
+                channel_id
+                    .say(http, &chunk)
+                    .await
+                    .map_err(|e| RyvosError::Channel {
                         channel: "discord".into(),
                         message: e.to_string(),
-                    }
-                })?;
+                    })?;
             }
 
             Ok(())
