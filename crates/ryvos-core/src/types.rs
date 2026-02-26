@@ -396,6 +396,12 @@ pub enum AgentEvent {
     DecisionMade { decision: Decision },
     /// Judge issued a verdict on the agent output.
     JudgeVerdict { session_id: SessionId, verdict: Verdict },
+    /// Heartbeat check fired.
+    HeartbeatFired { timestamp: DateTime<Utc> },
+    /// Heartbeat check returned an ack (no action needed).
+    HeartbeatOk { session_id: SessionId, response_chars: usize },
+    /// Heartbeat check returned an actionable alert.
+    HeartbeatAlert { session_id: SessionId, message: String, target_channel: Option<String> },
 }
 
 /// Thinking level for extended thinking / reasoning tokens.

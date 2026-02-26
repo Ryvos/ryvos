@@ -90,6 +90,7 @@ Ryvos is built from scratch in Rust with a different set of priorities:
 - **Interactive REPL** — quick command-line usage
 - **Daemon mode** — always-on background service with `--gateway` flag
 - **Cron scheduler** — recurring tasks with cron expressions, persistent across restarts
+- **Heartbeat** — periodic proactive agent checks with smart suppression and alert routing
 
 ### Security (Built-in, Not Bolted-on)
 - **5-tier tool classification** (T0 safe → T4 critical) with automatic tier escalation
@@ -374,6 +375,7 @@ transport = { type = "stdio", command = "npx", args = ["-y", "@modelcontextproto
 - [x] Guardian watchdog (stall, doom loop, budget detection)
 - [x] Multi-channel inbox (Telegram, Discord, Slack)
 - [x] HTTP/WebSocket gateway with Web UI
+- [x] Heartbeat system with smart suppression and alert routing
 
 ### Upcoming
 - [ ] Pre-built binaries (Windows, macOS, Linux) via GitHub Releases

@@ -74,6 +74,37 @@ impl ChannelDispatcher {
             ryvos_core::hooks::run_hooks(&hooks.on_start, &[]).await;
         }
 
+        // Spawn a heartbeat alert router task
+        {
+            let mut hb_rx = self.event_bus.subscribe();
+            let adapters = self.adapters.clone();
+            let hb_cancel = self.cancel.clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        _ = hb_cancel.cancelled() => break,
+                        event = hb_rx.recv() => {
+                            if let Ok(AgentEvent::HeartbeatAlert { session_id, message, target_channel }) = event {
+                                let content = MessageContent::Text(
+                                    format!("[Heartbeat Alert] {}", message),
+                                );
+                                if let Some(ref channel) = target_channel {
+                                    if let Some(adapter) = adapters.get(channel) {
+                                        adapter.send(&session_id, &content).await.ok();
+                                    }
+                                } else {
+                                    // Broadcast to all adapters
+                                    for adapter in adapters.values() {
+                                        adapter.send(&session_id, &content).await.ok();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         info!(count = self.adapters.len(), "Channel dispatcher running");
 
         loop {

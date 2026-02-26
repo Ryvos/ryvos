@@ -2,6 +2,15 @@
 
 All notable changes to Ryvos will be documented in this file.
 
+## [0.1.1] — 2026-02-26
+
+### Heartbeat System
+- Periodic proactive agent checks (configurable interval, default 30min)
+- Smart suppression — ack responses silenced, actionable alerts routed to channels
+- Active hours — restrict to time windows with timezone offset
+- HEARTBEAT.md workspace file for custom check instructions
+- Three new EventBus events: HeartbeatFired, HeartbeatOk, HeartbeatAlert
+
 ## [0.1.0] — 2026-02-23
 
 ### Initial Release

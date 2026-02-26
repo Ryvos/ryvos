@@ -522,6 +522,23 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
+            // Start heartbeat if configured
+            if let Some(ref hb_config) = config.heartbeat {
+                if hb_config.enabled {
+                    let heartbeat = ryvos_agent::Heartbeat::new(
+                        hb_config.clone(),
+                        runtime.clone(),
+                        event_bus.clone(),
+                        cancel.clone(),
+                        workspace.clone(),
+                    );
+                    tokio::spawn(async move {
+                        heartbeat.run().await;
+                    });
+                    info!("Heartbeat started");
+                }
+            }
+
             // Optionally start the gateway server alongside the channel dispatcher
             if gateway {
                 let gateway_config = config.gateway.clone().unwrap_or_default();
@@ -1406,6 +1423,7 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
         hooks: None,
         wizard: None,
         cron: None,
+        heartbeat: None,
         web_search: None,
         security: Default::default(),
         embedding: None,

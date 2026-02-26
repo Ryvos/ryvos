@@ -190,6 +190,14 @@ impl App {
                     text,
                 });
             }
+            AgentEvent::HeartbeatFired { .. } => {}
+            AgentEvent::HeartbeatOk { .. } => {}
+            AgentEvent::HeartbeatAlert { message, .. } => {
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!("[Heartbeat Alert] {}", message),
+                });
+            }
             AgentEvent::GuardianHint { .. }
             | AgentEvent::UsageUpdate { .. }
             | AgentEvent::DecisionMade { .. } => {}

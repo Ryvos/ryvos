@@ -123,6 +123,8 @@ fn extract_session_id(event: &AgentEvent) -> Option<&str> {
         AgentEvent::GuardianBudgetAlert { session_id, .. } => Some(&session_id.0),
         AgentEvent::GuardianHint { session_id, .. } => Some(&session_id.0),
         AgentEvent::ApprovalRequested { request } => Some(&request.session_id),
+        AgentEvent::HeartbeatOk { session_id, .. } => Some(&session_id.0),
+        AgentEvent::HeartbeatAlert { session_id, .. } => Some(&session_id.0),
         _ => None,
     }
 }
@@ -149,6 +151,9 @@ fn event_type_name(event: &AgentEvent) -> &'static str {
         AgentEvent::GoalEvaluated { .. } => "GoalEvaluated",
         AgentEvent::DecisionMade { .. } => "DecisionMade",
         AgentEvent::JudgeVerdict { .. } => "JudgeVerdict",
+        AgentEvent::HeartbeatFired { .. } => "HeartbeatFired",
+        AgentEvent::HeartbeatOk { .. } => "HeartbeatOk",
+        AgentEvent::HeartbeatAlert { .. } => "HeartbeatAlert",
     }
 }
 

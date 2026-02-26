@@ -58,6 +58,20 @@ max_tokens = 8192
 # dm_policy = "allowlist"           # allowlist | open | disabled
 # allowed_users = ["U01234ABC"]
 
+# Heartbeat — periodic proactive agent checks
+# [heartbeat]
+# enabled = true
+# interval_secs = 1800                # 30 minutes
+# target_channel = "telegram"         # Route alerts to a channel (omit to broadcast)
+# ack_max_chars = 300                 # Max response length to treat as ack
+# heartbeat_file = "HEARTBEAT.md"     # Workspace file for check context
+# prompt = "Review workspace. Respond with HEARTBEAT_OK if fine."
+#
+# [heartbeat.active_hours]
+# start_hour = 9                      # Only fire between 09:00 and 22:00
+# end_hour = 22
+# utc_offset_hours = 0                # Simple timezone offset
+
 # Lifecycle hooks — shell commands fired on events
 # [hooks]
 # on_start = ["notify-send 'Ryvos started'"]

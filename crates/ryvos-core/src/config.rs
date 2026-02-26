@@ -69,6 +69,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub cron: Option<CronConfig>,
     #[serde(default)]
+    pub heartbeat: Option<HeartbeatConfig>,
+    #[serde(default)]
     pub web_search: Option<WebSearchConfig>,
     #[serde(default)]
     pub security: SecurityConfig,
@@ -277,6 +279,77 @@ impl Default for RetryConfig {
 fn default_max_retries() -> u32 { 3 }
 fn default_initial_backoff() -> u64 { 1000 }
 fn default_max_backoff() -> u64 { 30000 }
+
+/// Active hours window for heartbeat.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveHoursConfig {
+    /// Start hour (0-23). Default: 9
+    #[serde(default = "default_active_start_hour")]
+    pub start_hour: u8,
+    /// End hour (0-23). Default: 22
+    #[serde(default = "default_active_end_hour")]
+    pub end_hour: u8,
+    /// Simple UTC offset in hours (e.g., 2 for UTC+2). Default: 0
+    #[serde(default)]
+    pub utc_offset_hours: i32,
+}
+
+impl Default for ActiveHoursConfig {
+    fn default() -> Self {
+        Self {
+            start_hour: default_active_start_hour(),
+            end_hour: default_active_end_hour(),
+            utc_offset_hours: 0,
+        }
+    }
+}
+
+fn default_active_start_hour() -> u8 { 9 }
+fn default_active_end_hour() -> u8 { 22 }
+
+/// Heartbeat configuration — periodic proactive agent checks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeartbeatConfig {
+    /// Enable heartbeat (default: false).
+    #[serde(default)]
+    pub enabled: bool,
+    /// Interval between heartbeat checks in seconds. Default: 1800 (30 min).
+    #[serde(default = "default_heartbeat_interval")]
+    pub interval_secs: u64,
+    /// Target channel for alerts (e.g., "telegram"). None = broadcast.
+    #[serde(default)]
+    pub target_channel: Option<String>,
+    /// Restrict heartbeat to active hours window.
+    #[serde(default)]
+    pub active_hours: Option<ActiveHoursConfig>,
+    /// Max response length (chars) to consider as an ack. Default: 300.
+    #[serde(default = "default_ack_max_chars")]
+    pub ack_max_chars: usize,
+    /// Workspace file for heartbeat context. Default: "HEARTBEAT.md".
+    #[serde(default = "default_heartbeat_file")]
+    pub heartbeat_file: String,
+    /// Custom prompt (overrides the default heartbeat prompt).
+    #[serde(default)]
+    pub prompt: Option<String>,
+}
+
+impl Default for HeartbeatConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            interval_secs: default_heartbeat_interval(),
+            target_channel: None,
+            active_hours: None,
+            ack_max_chars: default_ack_max_chars(),
+            heartbeat_file: default_heartbeat_file(),
+            prompt: None,
+        }
+    }
+}
+
+fn default_heartbeat_interval() -> u64 { 1800 }
+fn default_ack_max_chars() -> usize { 300 }
+fn default_heartbeat_file() -> String { "HEARTBEAT.md".to_string() }
 
 /// Cron scheduler configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
