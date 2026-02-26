@@ -106,11 +106,10 @@ jobs:
 
       - name: Flatten artifacts and generate checksums
         run: |
-          cd artifacts
-          for dir in */; do
-            cp "$dir"* . 2>/dev/null || true
-          done
-          find . -mindepth 1 -type d -exec rm -rf {} + 2>/dev/null || true
+          mkdir -p dist
+          find artifacts -type f -exec cp {} dist/ \;
+          ls -la dist/
+          cd dist
           sha256sum ryvos-* > sha256sums.txt
           cat sha256sums.txt
 
@@ -119,6 +118,6 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            artifacts/*
+            dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
