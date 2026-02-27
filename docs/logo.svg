@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#E8451A"/>
+      <stop offset="100%" stop-color="#F07030"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F07030"/>
+      <stop offset="100%" stop-color="#E8458A"/>
+    </linearGradient>
+    <linearGradient id="g3" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#E8458A"/>
+      <stop offset="100%" stop-color="#D63384"/>
+    </linearGradient>
+  </defs>
+  <!-- Left petal (red-orange) -->
+  <path d="M120 420 Q60 350 100 200 Q130 100 200 80 L260 256 Z" fill="url(#g1)"/>
+  <!-- Top petal (orange-pink) -->
+  <path d="M200 80 Q280 50 340 100 Q400 150 390 220 L260 256 Z" fill="url(#g2)"/>
+  <!-- Right petal (pink) -->
+  <path d="M390 220 Q400 310 350 370 Q300 420 240 400 L260 256 Z" fill="url(#g3)"/>
+  <!-- Overlap accent -->
+  <path d="M200 80 L260 256 L120 420 Q160 300 200 200 Z" fill="#F07030" opacity="0.3"/>
+  <!-- Dot -->
+  <circle cx="400" cy="380" r="40" fill="#F5A623"/>
+</svg>

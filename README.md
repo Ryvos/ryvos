@@ -1,11 +1,17 @@
 <div align="center">
 
-# Ryvos
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/banner.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/banner.svg">
+  <img alt="Ryvos" src="docs/banner.svg" width="100%">
+</picture>
 
-### Your autonomous AI assistant — secure, fast, and always on.
+<br/>
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
+[![Release](https://img.shields.io/github/v/release/Ryvos/ryvos?color=F07030)](https://github.com/Ryvos/ryvos/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/Ryvos/ryvos/ci.yml?label=CI)](https://github.com/Ryvos/ryvos/actions)
 
 **Goal-Driven Agents · Multi-Provider LLM · DAG Workflows · MCP-Native · Sandboxed by Default · Single Binary**
 
@@ -142,6 +148,14 @@ RYVOS_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/ma
 RYVOS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
 ```
 </details>
+
+<div align="center">
+
+<img src="docs/demo.gif" alt="Ryvos demo — security gate blocks rm -rf" width="720">
+
+*Security gate auto-blocks dangerous commands (T4) — no confirmation needed.*
+
+</div>
 
 ### Get Started
 
@@ -284,9 +298,11 @@ High-risk tool calls pause and wait for explicit approval — via REPL prompt, T
 ```toml
 [security]
 auto_approve_up_to = "t1"    # t0-t1 run automatically
-deny_above = "t4"            # t4 blocked outright
+deny_above = "t3"            # t4 blocked outright (default)
 approval_timeout_secs = 60   # Unapproved requests timeout
 ```
+
+The gate is **fail-closed** — if a tool call's arguments can't be parsed, it escalates to T4 and denies execution rather than silently allowing it.
 
 ### Sub-Agent Restrictions
 

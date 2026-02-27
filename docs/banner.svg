@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0D0D12"/>
+      <stop offset="100%" stop-color="#141420"/>
+    </linearGradient>
+    <linearGradient id="g1" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#E8451A"/>
+      <stop offset="100%" stop-color="#F07030"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F07030"/>
+      <stop offset="100%" stop-color="#E8458A"/>
+    </linearGradient>
+    <linearGradient id="g3" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#E8458A"/>
+      <stop offset="100%" stop-color="#D63384"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#F07030"/>
+      <stop offset="100%" stop-color="#E8458A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="300" rx="16" fill="url(#bg)"/>
+
+  <!-- Subtle grid lines -->
+  <g opacity="0.03" stroke="#fff" stroke-width="1">
+    <line x1="0" y1="60" x2="1200" y2="60"/>
+    <line x1="0" y1="120" x2="1200" y2="120"/>
+    <line x1="0" y1="180" x2="1200" y2="180"/>
+    <line x1="0" y1="240" x2="1200" y2="240"/>
+    <line x1="200" y1="0" x2="200" y2="300"/>
+    <line x1="400" y1="0" x2="400" y2="300"/>
+    <line x1="600" y1="0" x2="600" y2="300"/>
+    <line x1="800" y1="0" x2="800" y2="300"/>
+    <line x1="1000" y1="0" x2="1000" y2="300"/>
+  </g>
+
+  <!-- Logo mark (scaled down) -->
+  <g transform="translate(100, 55) scale(0.37)">
+    <path d="M120 420 Q60 350 100 200 Q130 100 200 80 L260 256 Z" fill="url(#g1)"/>
+    <path d="M200 80 Q280 50 340 100 Q400 150 390 220 L260 256 Z" fill="url(#g2)"/>
+    <path d="M390 220 Q400 310 350 370 Q300 420 240 400 L260 256 Z" fill="url(#g3)"/>
+    <path d="M200 80 L260 256 L120 420 Q160 300 200 200 Z" fill="#F07030" opacity="0.3"/>
+    <circle cx="400" cy="380" r="40" fill="#F5A623"/>
+  </g>
+
+  <!-- Text -->
+  <text x="340" y="165" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-weight="700" font-size="80" fill="url(#textGrad)" letter-spacing="-2">Ryvos</text>
+
+  <!-- Tagline -->
+  <text x="342" y="210" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-weight="400" font-size="22" fill="#8888AA" letter-spacing="1">Your autonomous AI assistant — secure, fast, always on.</text>
+
+  <!-- Accent line -->
+  <rect x="340" y="225" width="120" height="2" rx="1" fill="url(#textGrad)" opacity="0.6"/>
+
+  <!-- Feature pills -->
+  <g font-family="ui-monospace, 'SF Mono', monospace" font-size="13" fill="#6B6B80">
+    <rect x="340" y="245" width="90" height="26" rx="13" fill="#1A1A28" stroke="#2A2A3A" stroke-width="1"/>
+    <text x="356" y="263" fill="#F07030">Rust</text>
+    <rect x="440" y="245" width="120" height="26" rx="13" fill="#1A1A28" stroke="#2A2A3A" stroke-width="1"/>
+    <text x="456" y="263" fill="#8888AA">62 Tools</text>
+    <rect x="570" y="245" width="130" height="26" rx="13" fill="#1A1A28" stroke="#2A2A3A" stroke-width="1"/>
+    <text x="586" y="263" fill="#8888AA">14 Providers</text>
+    <rect x="710" y="245" width="150" height="26" rx="13" fill="#1A1A28" stroke="#2A2A3A" stroke-width="1"/>
+    <text x="726" y="263" fill="#8888AA">5-Tier Security</text>
+    <rect x="870" y="245" width="120" height="26" rx="13" fill="#1A1A28" stroke="#2A2A3A" stroke-width="1"/>
+    <text x="886" y="263" fill="#8888AA">15 MB RAM</text>
+  </g>
+
+  <!-- Glow effect behind logo -->
+  <circle cx="195" cy="150" r="80" fill="#F07030" opacity="0.04"/>
+</svg>
