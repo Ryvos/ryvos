@@ -686,7 +686,7 @@ async fn launch_app(config: AppConfig, mode: LaunchMode) -> Result<()> {
 
     match mode {
         LaunchMode::Tui => {
-            ryvos_tui::run_tui(runtime, event_bus, session_id).await?;
+            ryvos_tui::run_tui(runtime, event_bus, session_id, None).await?;
         }
         LaunchMode::Repl => {
             crate::run_repl(

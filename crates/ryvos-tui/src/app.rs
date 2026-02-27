@@ -3,8 +3,10 @@ use std::sync::Arc;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
+use ryvos_agent::approval::ApprovalBroker;
 use ryvos_agent::AgentRuntime;
 use ryvos_core::event::EventBus;
+use ryvos_core::security::ApprovalDecision;
 use ryvos_core::types::{AgentEvent, SessionId};
 
 use crate::event::{EventLoop, TuiEvent};
@@ -240,6 +242,7 @@ pub async fn run_app(
     runtime: Arc<AgentRuntime>,
     event_bus: Arc<EventBus>,
     session_id: SessionId,
+    broker: Option<Arc<ApprovalBroker>>,
 ) -> anyhow::Result<()> {
     let mut app = App::new(session_id.clone());
     let agent_rx = event_bus.subscribe();
@@ -282,6 +285,59 @@ pub async fn run_app(
                                     });
                                 }
                             });
+                        }
+                        InputAction::Approve(prefix) => {
+                            if let Some(ref broker) = broker {
+                                let full_id = broker.find_by_prefix(&prefix).await;
+                                match full_id {
+                                    Some(id) => {
+                                        broker.respond(&id, ApprovalDecision::Approved).await;
+                                        app.messages.push(DisplayMessage {
+                                            role: MessageRole::System,
+                                            text: format!("Approved {}", &id[..8.min(id.len())]),
+                                        });
+                                    }
+                                    None => {
+                                        app.messages.push(DisplayMessage {
+                                            role: MessageRole::Error,
+                                            text: format!("No pending approval matching '{}'", prefix),
+                                        });
+                                    }
+                                }
+                            } else {
+                                app.messages.push(DisplayMessage {
+                                    role: MessageRole::Error,
+                                    text: "Approval broker not available".to_string(),
+                                });
+                            }
+                        }
+                        InputAction::Deny(prefix, reason) => {
+                            if let Some(ref broker) = broker {
+                                let full_id = broker.find_by_prefix(&prefix).await;
+                                match full_id {
+                                    Some(id) => {
+                                        let decision = ApprovalDecision::Denied {
+                                            reason: reason.unwrap_or_else(|| "denied by user".to_string()),
+                                        };
+                                        broker.respond(&id, decision).await;
+                                        app.messages.push(DisplayMessage {
+                                            role: MessageRole::System,
+                                            text: format!("Denied {}", &id[..8.min(id.len())]),
+                                        });
+                                    }
+                                    None => {
+                                        app.messages.push(DisplayMessage {
+                                            role: MessageRole::Error,
+                                            text: format!("No pending approval matching '{}'", prefix),
+                                        });
+                                    }
+                                }
+                            } else {
+                                app.messages.push(DisplayMessage {
+                                    role: MessageRole::Error,
+                                    text: "Approval broker not available".to_string(),
+                                });
+                            }
                         }
                         InputAction::ScrollUp => {
                             app.scroll_offset = app.scroll_offset.saturating_add(3);

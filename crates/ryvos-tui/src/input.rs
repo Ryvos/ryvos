@@ -14,6 +14,10 @@ pub enum InputAction {
     ScrollUp,
     /// Scroll down.
     ScrollDown,
+    /// Approve a pending approval request.
+    Approve(String),
+    /// Deny a pending approval request with optional reason.
+    Deny(String, Option<String>),
     /// No-op (key was handled internally).
     None,
 }
@@ -50,6 +54,18 @@ impl InputHandler {
                     match trimmed {
                         "/quit" | "/exit" | "/q" => InputAction::Quit,
                         "/clear" => InputAction::Clear,
+                        _ if trimmed.starts_with("/approve ") => {
+                            let id = trimmed.strip_prefix("/approve ").unwrap().trim().to_string();
+                            InputAction::Approve(id)
+                        }
+                        _ if trimmed.starts_with("/deny ") => {
+                            let rest = trimmed.strip_prefix("/deny ").unwrap().trim();
+                            let (id, reason) = match rest.split_once(' ') {
+                                Some((id, reason)) => (id.to_string(), Some(reason.to_string())),
+                                None => (rest.to_string(), None),
+                            };
+                            InputAction::Deny(id, reason)
+                        }
                         _ if trimmed.is_empty() => InputAction::None,
                         _ => InputAction::Submit(text),
                     }

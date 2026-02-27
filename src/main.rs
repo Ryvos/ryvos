@@ -542,7 +542,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::Tui) => {
-            ryvos_tui::run_tui(runtime.clone(), event_bus.clone(), session_id).await?;
+            ryvos_tui::run_tui(runtime.clone(), event_bus.clone(), session_id, Some(broker.clone())).await?;
         }
         Some(Commands::Serve) => {
             let gateway_config = config.gateway.clone().unwrap_or_default();

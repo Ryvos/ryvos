@@ -69,6 +69,23 @@ impl ChannelAdapter for TelegramAdapter {
         let broker_arc = self.broker.clone();
 
         Box::pin(async move {
+            // Validate bot token by calling get_me
+            match bot.get_me().await {
+                Ok(me) => {
+                    info!(
+                        bot_name = %me.username(),
+                        bot_id = me.id.0,
+                        "Telegram bot authenticated"
+                    );
+                }
+                Err(e) => {
+                    error!(error = %e, "Telegram bot token invalid or network error");
+                    return Err(ryvos_core::error::RyvosError::Config(
+                        format!("Telegram bot token validation failed: {}", e),
+                    ));
+                }
+            }
+
             // Store bot for send()
             *bot_arc.lock().await = Some(bot.clone());
 
