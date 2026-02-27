@@ -118,6 +118,8 @@ enum Commands {
         #[command(subcommand)]
         action: SkillAction,
     },
+    /// Personalize your agent with a soul interview
+    Soul,
 }
 
 #[derive(Subcommand)]
@@ -230,6 +232,14 @@ async fn main() -> anyhow::Result<()> {
             no_channels,
         };
         return onboard::run_onboarding(&dest, options).await;
+    }
+
+    // Handle soul interview before config loading
+    if let Some(Commands::Soul) = &cli.command {
+        let workspace = dirs_home()
+            .map(|h| h.join(".ryvos"))
+            .unwrap_or_else(|| PathBuf::from(".ryvos"));
+        return onboard::run_soul_interview(&workspace);
     }
 
     // Handle MCP CLI subcommands before config loading
@@ -666,6 +676,7 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Completions { .. }) => unreachable!("handled before config load"),
         Some(Commands::Mcp { .. }) => unreachable!("handled before config load"),
         Some(Commands::Skill { .. }) => unreachable!("handled before config load"),
+        Some(Commands::Soul) => unreachable!("handled before config load"),
         Some(Commands::Repl) | None => {
             run_repl(
                 &runtime,
@@ -1094,6 +1105,13 @@ pub(crate) async fn run_repl(
                 }
                 continue;
             }
+            "/soul" => {
+                let workspace = config.workspace_dir();
+                if let Err(e) = onboard::run_soul_interview(&workspace) {
+                    eprintln!("Soul interview failed: {e}");
+                }
+                continue;
+            }
             "/help" => {
                 println!("Commands:");
                 println!("  /quit       Exit");
@@ -1115,6 +1133,7 @@ pub(crate) async fn run_repl(
                 println!("  /mcp prompts [server]  List MCP prompts");
                 println!("  /mcp tools [server]  List MCP tools");
                 println!("  /prompts    List all MCP prompts");
+                println!("  /soul       Personalize your agent");
                 continue;
             }
             _ if input.starts_with("/mcp__") => {

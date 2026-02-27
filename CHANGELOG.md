@@ -2,6 +2,19 @@
 
 All notable changes to Ryvos will be documented in this file.
 
+## [0.2.2] — 2026-02-27
+
+### Soul Interview
+- New `ryvos soul` command — 5-question personality interview
+- Generates ~/.ryvos/SOUL.md loaded into every conversation
+- Available via CLI (`ryvos soul`), REPL (`/soul`), and during `ryvos init`
+- Shapes communication style, personality, proactivity, and operator context
+
+### Fixes
+- Fix Telegram adapter TLS (enable rustls for teloxide)
+- Fix TUI /approve and /deny commands
+- Add bot token validation at Telegram startup
+
 ## [0.2.0] — 2026-02-26
 
 ### 50 New Built-in Tools (62 total)

@@ -2444,7 +2444,7 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "ryvos"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2475,7 +2475,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-agent"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "cron",
@@ -2498,7 +2498,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-channels"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "futures",
@@ -2518,7 +2518,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-core"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "futures",
@@ -2534,7 +2534,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-gateway"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -2557,7 +2557,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-llm"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "bytes",
  "futures",
@@ -2574,7 +2574,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-mcp"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "futures",
  "rmcp",
@@ -2588,7 +2588,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-memory"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "futures",
@@ -2605,7 +2605,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-skills"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "futures",
  "reqwest 0.12.28",
@@ -2621,7 +2621,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-tools"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "bollard",
  "chrono",
@@ -2642,7 +2642,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-tui"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "crossterm",

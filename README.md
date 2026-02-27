@@ -120,6 +120,7 @@ Ryvos is built from scratch in Rust with a different set of priorities:
 - **Role-based API keys** — Viewer, Operator, Admin roles for gateway access
 - **Phase-aware context compaction** — messages tagged by phase (planning, execution); protected messages survive compaction; phase-grouped summarization
 - **Three-layer prompt composition** — Identity (SOUL.md) → Narrative (summaries, agents) → Focus (current goal + constraints)
+- **Soul interview** — `ryvos soul` runs a 5-question personality interview that generates SOUL.md, shaping how the agent communicates, its tone, proactivity, and operator context
 
 ---
 
@@ -202,6 +203,7 @@ rm -rf ~/.ryvos   # optional: remove config and data
 | `ryvos daemon --gateway` | Always-on + Web UI in one process |
 | `ryvos init` | Interactive setup wizard |
 | `ryvos init -y` | Non-interactive setup with defaults |
+| `ryvos soul` | Personalize your agent (5-question interview → SOUL.md) |
 | `ryvos config` | Print resolved configuration |
 | `ryvos doctor` | System health checks (API, workspace, DB, channels, cron, MCP, security) |
 | `ryvos health` | Tool health statistics |

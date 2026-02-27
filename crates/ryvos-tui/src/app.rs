@@ -345,6 +345,12 @@ pub async fn run_app(
                         InputAction::ScrollDown => {
                             app.scroll_offset = app.scroll_offset.saturating_sub(3);
                         }
+                        InputAction::Soul => {
+                            app.messages.push(DisplayMessage {
+                                role: MessageRole::System,
+                                text: "Run `ryvos soul` in a terminal to personalize your agent.".to_string(),
+                            });
+                        }
                         InputAction::Newline | InputAction::None => {}
                     }
                 }

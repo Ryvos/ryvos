@@ -18,6 +18,8 @@ pub enum InputAction {
     Approve(String),
     /// Deny a pending approval request with optional reason.
     Deny(String, Option<String>),
+    /// Run the soul interview (not supported in TUI).
+    Soul,
     /// No-op (key was handled internally).
     None,
 }
@@ -54,6 +56,7 @@ impl InputHandler {
                     match trimmed {
                         "/quit" | "/exit" | "/q" => InputAction::Quit,
                         "/clear" => InputAction::Clear,
+                        "/soul" => InputAction::Soul,
                         _ if trimmed.starts_with("/approve ") => {
                             let id = trimmed.strip_prefix("/approve ").unwrap().trim().to_string();
                             InputAction::Approve(id)

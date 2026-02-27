@@ -567,6 +567,16 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
     println!();
     println!("  Config written to: {}", config_path.display());
 
+    // 13b. Soul interview
+    println!();
+    let do_soul = Confirm::new()
+        .with_prompt("Personalize your agent? (5 quick questions)")
+        .default(true)
+        .interact()?;
+    if do_soul {
+        run_soul_interview(&resolve_workspace(&config.agent.workspace))?;
+    }
+
     // 14. Service install (systemd/launchd)
     println!();
     service::install(config_path, &mode, false).await?;
@@ -622,6 +632,130 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
             println!("  Run `ryvos` when you're ready.");
         }
     }
+
+    Ok(())
+}
+
+pub fn run_soul_interview(workspace: &Path) -> Result<()> {
+    let soul_path = workspace.join("SOUL.md");
+
+    if soul_path.exists() {
+        let overwrite = Confirm::new()
+            .with_prompt("SOUL.md already exists. Overwrite?")
+            .default(false)
+            .interact()?;
+        if !overwrite {
+            println!("  Keeping existing personality.");
+            return Ok(());
+        }
+    }
+
+    println!();
+    println!("  \x1b[1;36mSoul Interview\x1b[0m — 5 quick questions to personalize your agent.");
+    println!();
+
+    // Q1: Communication style
+    let comm_options = &["Concise", "Detailed", "Balanced", "Custom"];
+    let comm_choice = Select::new()
+        .with_prompt("How should I communicate with you?")
+        .items(comm_options)
+        .default(0)
+        .interact()?;
+    let (comm_label, comm_desc) = match comm_choice {
+        0 => ("Concise", "I keep responses short, focused, and actionable. No fluff."),
+        1 => ("Detailed", "I give thorough explanations with context and examples."),
+        2 => ("Balanced", "I adapt my verbosity to the complexity of the topic."),
+        _ => {
+            let custom: String = Input::new()
+                .with_prompt("Describe your preferred communication style")
+                .interact_text()?;
+            // Leak into static to match lifetimes — only runs once
+            let label = "Custom";
+            let desc: &str = Box::leak(custom.into_boxed_str());
+            (label, desc)
+        }
+    };
+
+    // Q2: Personality
+    let pers_options = &["Professional", "Friendly & casual", "Direct & no-nonsense", "Custom"];
+    let pers_choice = Select::new()
+        .with_prompt("What personality should I have?")
+        .items(pers_options)
+        .default(1)
+        .interact()?;
+    let (pers_label, pers_desc) = match pers_choice {
+        0 => ("Professional", "I maintain a polished, respectful tone suitable for any audience."),
+        1 => ("Friendly & casual", "I'm approachable, use casual language, and celebrate wins with you."),
+        2 => ("Direct & no-nonsense", "I get straight to the point. No pleasantries, just results."),
+        _ => {
+            let custom: String = Input::new()
+                .with_prompt("Describe your preferred personality")
+                .interact_text()?;
+            let label = "Custom";
+            let desc: &str = Box::leak(custom.into_boxed_str());
+            (label, desc)
+        }
+    };
+
+    // Q3: Proactivity
+    let pro_options = &["Ask before acting", "Just do it", "Suggest then ask"];
+    let pro_choice = Select::new()
+        .with_prompt("How proactive should I be?")
+        .items(pro_options)
+        .default(2)
+        .interact()?;
+    let (pro_label, pro_desc) = match pro_choice {
+        0 => ("Ask before acting", "I always confirm before making changes or taking action."),
+        1 => ("Just do it", "I take initiative and execute tasks without waiting for permission."),
+        _ => ("Suggest then ask", "I notice opportunities and suggest improvements, but always ask before making big changes."),
+    };
+
+    // Q4: Expertise
+    let expertise: String = Input::new()
+        .with_prompt("What do you mainly work on? (e.g. Rust backend, React, DevOps)")
+        .interact_text()?;
+
+    // Q5: Name + context
+    let name: String = Input::new()
+        .with_prompt("What should I call you?")
+        .interact_text()?;
+    let context: String = Input::new()
+        .with_prompt("Anything else I should know? (blank to skip)")
+        .allow_empty(true)
+        .interact_text()?;
+
+    // Build SOUL.md
+    let mut soul = format!(
+        "# Soul\n\n\
+         ## Communication\n\
+         Style: {comm_label}\n\
+         {comm_desc}\n\n\
+         ## Personality\n\
+         Tone: {pers_label}\n\
+         {pers_desc}\n\n\
+         ## Approach\n\
+         Proactivity: {pro_label}\n\
+         {pro_desc}\n\n\
+         ## Operator\n\
+         Name: {name}\n"
+    );
+    if !context.is_empty() {
+        soul.push_str(&format!("Context: {context}\n"));
+    }
+    soul.push_str(&format!("\n## Expertise\n{expertise}\n"));
+
+    std::fs::create_dir_all(workspace)?;
+    std::fs::write(&soul_path, &soul)?;
+
+    println!();
+    println!("  \x1b[1;32mSOUL.md written to {}\x1b[0m", soul_path.display());
+    println!();
+    // Preview first few lines
+    for line in soul.lines().take(8) {
+        println!("  {}", line);
+    }
+    println!("  ...");
+    println!();
 
     Ok(())
 }
