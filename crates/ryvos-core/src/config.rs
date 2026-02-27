@@ -788,7 +788,7 @@ pub struct SlackConfig {
 pub struct SecurityConfig {
     #[serde(default = "default_security_auto_approve")]
     pub auto_approve_up_to: SecurityTier,
-    #[serde(default)]
+    #[serde(default = "default_security_deny_above")]
     pub deny_above: Option<SecurityTier>,
     #[serde(default = "default_security_timeout")]
     pub approval_timeout_secs: u64,
@@ -804,6 +804,10 @@ fn default_security_auto_approve() -> SecurityTier {
     SecurityTier::T1
 }
 
+fn default_security_deny_above() -> Option<SecurityTier> {
+    Some(SecurityTier::T3)
+}
+
 fn default_security_timeout() -> u64 {
     60
 }
@@ -812,7 +816,7 @@ impl Default for SecurityConfig {
     fn default() -> Self {
         Self {
             auto_approve_up_to: SecurityTier::T1,
-            deny_above: None,
+            deny_above: Some(SecurityTier::T3),
             approval_timeout_secs: 60,
             tool_overrides: HashMap::new(),
             dangerous_patterns: SecurityPolicy::default_patterns(),

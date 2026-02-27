@@ -86,7 +86,7 @@ impl Default for SecurityPolicy {
     fn default() -> Self {
         Self {
             auto_approve_up_to: SecurityTier::T1,
-            deny_above: None,
+            deny_above: Some(SecurityTier::T3),
             approval_timeout_secs: 60,
             tool_overrides: HashMap::new(),
             dangerous_patterns: Self::default_patterns(),
@@ -298,7 +298,7 @@ mod tests {
     fn default_policy() {
         let policy = SecurityPolicy::default();
         assert_eq!(policy.auto_approve_up_to, SecurityTier::T1);
-        assert_eq!(policy.deny_above, None);
+        assert_eq!(policy.deny_above, Some(SecurityTier::T3));
         assert_eq!(policy.approval_timeout_secs, 60);
         assert!(policy.tool_overrides.is_empty());
         assert_eq!(policy.dangerous_patterns.len(), 9);

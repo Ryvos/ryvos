@@ -90,8 +90,9 @@ impl LlmClient for AzureClient {
             let byte_stream = response.bytes_stream();
             let sse_stream = SseStream::new(byte_stream);
 
-            let delta_stream =
-                sse_stream.filter_map(|event| async move { super::openai::parse_chunk(event) });
+            let delta_stream = sse_stream
+                .map(|event| futures::stream::iter(super::openai::parse_chunk(event)))
+                .flatten();
 
             Ok(Box::pin(delta_stream) as BoxStream<'_, Result<StreamDelta>>)
         })

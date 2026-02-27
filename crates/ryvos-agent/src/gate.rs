@@ -136,16 +136,33 @@ impl SecurityGate {
     }
 
     /// Get effective tier (base + input inspection for bash).
+    ///
+    /// Fail-closed: if we cannot extract the command string from a bash tool
+    /// call, escalate to T4 rather than silently allowing it at base tier.
     fn effective_tier(
         &self,
         name: &str,
         base: SecurityTier,
         input: &serde_json::Value,
     ) -> SecurityTier {
-        // For bash-like tools: check dangerous patterns → escalate to T4
         if name == "bash" {
-            if let Some(cmd) = input.get("command").and_then(|v| v.as_str()) {
-                if self.matcher.is_dangerous(cmd).is_some() {
+            match input.get("command").and_then(|v| v.as_str()) {
+                Some(cmd) => {
+                    if let Some(label) = self.matcher.is_dangerous(cmd) {
+                        tracing::warn!(
+                            command = cmd,
+                            pattern = label,
+                            "Dangerous pattern detected — escalating to T4"
+                        );
+                        return SecurityTier::T4;
+                    }
+                }
+                None => {
+                    // Fail-closed: unparseable bash input → treat as T4
+                    tracing::warn!(
+                        input = %input,
+                        "Could not extract bash command — escalating to T4 (fail-closed)"
+                    );
                     return SecurityTier::T4;
                 }
             }
@@ -281,6 +298,24 @@ mod tests {
         let gate = make_gate(policy);
         let input = serde_json::json!({"command": "rm -rf /tmp/data"});
         // bash base T2, but rm -rf escalates to T4, which is > deny_above T3 → blocked
+        let result = gate.execute("bash", input, test_ctx()).await;
+        assert!(matches!(result, Err(RyvosError::ToolBlocked { .. })));
+    }
+
+    #[tokio::test]
+    async fn fail_closed_unparseable_bash() {
+        // If bash input has no "command" key, escalate to T4 → denied
+        let gate = make_gate(SecurityPolicy::default());
+        let input = serde_json::json!({"cmd": "rm -rf /"});
+        let result = gate.execute("bash", input, test_ctx()).await;
+        assert!(matches!(result, Err(RyvosError::ToolBlocked { .. })));
+    }
+
+    #[tokio::test]
+    async fn fail_closed_null_bash() {
+        // If bash input is null, escalate to T4 → denied
+        let gate = make_gate(SecurityPolicy::default());
+        let input = serde_json::Value::Null;
         let result = gate.execute("bash", input, test_ctx()).await;
         assert!(matches!(result, Err(RyvosError::ToolBlocked { .. })));
     }

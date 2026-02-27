@@ -229,22 +229,28 @@ pub(crate) fn convert_messages(messages: Vec<ChatMessage>) -> Vec<OaiMessage> {
     oai_msgs
 }
 
-pub(crate) fn parse_chunk(event: SseEvent) -> Option<Result<StreamDelta>> {
+pub(crate) fn parse_chunk(event: SseEvent) -> Vec<Result<StreamDelta>> {
     if event.data.trim() == "[DONE]" {
-        return None;
+        return vec![];
     }
 
     let parsed: std::result::Result<StreamChunk, _> = serde_json::from_str(&event.data);
     match parsed {
         Ok(chunk) => {
+            let mut deltas = Vec::new();
+
             if let Some(usage) = chunk.usage {
-                return Some(Ok(StreamDelta::Usage {
+                deltas.push(Ok(StreamDelta::Usage {
                     input_tokens: usage.prompt_tokens,
                     output_tokens: usage.completion_tokens,
                 }));
+                return deltas;
             }
 
-            let choice = chunk.choices.into_iter().next()?;
+            let choice = match chunk.choices.into_iter().next() {
+                Some(c) => c,
+                None => return deltas,
+            };
 
             // Check finish reason
             if let Some(reason) = choice.finish_reason {
@@ -254,29 +260,32 @@ pub(crate) fn parse_chunk(event: SseEvent) -> Option<Result<StreamDelta>> {
                     "length" => StopReason::MaxTokens,
                     _ => StopReason::EndTurn,
                 };
-                return Some(Ok(StreamDelta::Stop(stop)));
+                deltas.push(Ok(StreamDelta::Stop(stop)));
+                return deltas;
             }
 
             // Check for text delta
             if let Some(text) = choice.delta.content {
                 if !text.is_empty() {
-                    return Some(Ok(StreamDelta::TextDelta(text)));
+                    deltas.push(Ok(StreamDelta::TextDelta(text)));
                 }
             }
 
-            // Check for tool calls
+            // Check for tool calls — emit both ToolUseStart and ToolInputDelta
+            // when a provider sends name + arguments in the same SSE chunk
+            // (common with Groq, Together, and other non-OpenAI providers).
             if let Some(tool_calls) = choice.delta.tool_calls {
                 for tc in tool_calls {
                     if let Some(func) = tc.function {
                         if let Some(name) = func.name {
-                            return Some(Ok(StreamDelta::ToolUseStart {
+                            deltas.push(Ok(StreamDelta::ToolUseStart {
                                 index: tc.index,
                                 id: tc.id.unwrap_or_default(),
                                 name,
                             }));
                         }
                         if let Some(args) = func.arguments {
-                            return Some(Ok(StreamDelta::ToolInputDelta {
+                            deltas.push(Ok(StreamDelta::ToolInputDelta {
                                 index: tc.index,
                                 delta: args,
                             }));
@@ -285,11 +294,11 @@ pub(crate) fn parse_chunk(event: SseEvent) -> Option<Result<StreamDelta>> {
                 }
             }
 
-            None
+            deltas
         }
         Err(e) => {
             warn!(data = %event.data, error = %e, "Failed to parse OpenAI SSE chunk");
-            None
+            vec![]
         }
     }
 }
@@ -376,7 +385,9 @@ impl LlmClient for OpenAiClient {
             let byte_stream = response.bytes_stream();
             let sse_stream = SseStream::new(byte_stream);
 
-            let delta_stream = sse_stream.filter_map(|event| async move { parse_chunk(event) });
+            let delta_stream = sse_stream
+                .map(|event| futures::stream::iter(parse_chunk(event)))
+                .flatten();
 
             Ok(Box::pin(delta_stream) as BoxStream<'_, Result<StreamDelta>>)
         })
