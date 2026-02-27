@@ -1,12 +1,10 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/banner.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/banner.svg">
-  <img alt="Ryvos" src="docs/banner.svg" width="100%">
-</picture>
+<img src="docs/logo.png" alt="Ryvos" width="120">
 
-<br/>
+# Ryvos
+
+### Your autonomous AI assistant — secure, fast, and always on.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
