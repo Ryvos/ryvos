@@ -58,7 +58,11 @@ impl InputHandler {
                         "/clear" => InputAction::Clear,
                         "/soul" => InputAction::Soul,
                         _ if trimmed.starts_with("/approve ") => {
-                            let id = trimmed.strip_prefix("/approve ").unwrap().trim().to_string();
+                            let id = trimmed
+                                .strip_prefix("/approve ")
+                                .unwrap()
+                                .trim()
+                                .to_string();
                             InputAction::Approve(id)
                         }
                         _ if trimmed.starts_with("/deny ") => {

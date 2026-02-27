@@ -300,7 +300,10 @@ pub async fn run_app(
                                     None => {
                                         app.messages.push(DisplayMessage {
                                             role: MessageRole::Error,
-                                            text: format!("No pending approval matching '{}'", prefix),
+                                            text: format!(
+                                                "No pending approval matching '{}'",
+                                                prefix
+                                            ),
                                         });
                                     }
                                 }
@@ -317,7 +320,8 @@ pub async fn run_app(
                                 match full_id {
                                     Some(id) => {
                                         let decision = ApprovalDecision::Denied {
-                                            reason: reason.unwrap_or_else(|| "denied by user".to_string()),
+                                            reason: reason
+                                                .unwrap_or_else(|| "denied by user".to_string()),
                                         };
                                         broker.respond(&id, decision).await;
                                         app.messages.push(DisplayMessage {
@@ -328,7 +332,10 @@ pub async fn run_app(
                                     None => {
                                         app.messages.push(DisplayMessage {
                                             role: MessageRole::Error,
-                                            text: format!("No pending approval matching '{}'", prefix),
+                                            text: format!(
+                                                "No pending approval matching '{}'",
+                                                prefix
+                                            ),
                                         });
                                     }
                                 }
@@ -348,7 +355,8 @@ pub async fn run_app(
                         InputAction::Soul => {
                             app.messages.push(DisplayMessage {
                                 role: MessageRole::System,
-                                text: "Run `ryvos soul` in a terminal to personalize your agent.".to_string(),
+                                text: "Run `ryvos soul` in a terminal to personalize your agent."
+                                    .to_string(),
                             });
                         }
                         InputAction::Newline | InputAction::None => {}

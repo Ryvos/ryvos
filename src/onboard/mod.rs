@@ -662,9 +662,18 @@ pub fn run_soul_interview(workspace: &Path) -> Result<()> {
         .default(0)
         .interact()?;
     let (comm_label, comm_desc) = match comm_choice {
-        0 => ("Concise", "I keep responses short, focused, and actionable. No fluff."),
-        1 => ("Detailed", "I give thorough explanations with context and examples."),
-        2 => ("Balanced", "I adapt my verbosity to the complexity of the topic."),
+        0 => (
+            "Concise",
+            "I keep responses short, focused, and actionable. No fluff.",
+        ),
+        1 => (
+            "Detailed",
+            "I give thorough explanations with context and examples.",
+        ),
+        2 => (
+            "Balanced",
+            "I adapt my verbosity to the complexity of the topic.",
+        ),
         _ => {
             let custom: String = Input::new()
                 .with_prompt("Describe your preferred communication style")
@@ -677,16 +686,30 @@ pub fn run_soul_interview(workspace: &Path) -> Result<()> {
     };
 
     // Q2: Personality
-    let pers_options = &["Professional", "Friendly & casual", "Direct & no-nonsense", "Custom"];
+    let pers_options = &[
+        "Professional",
+        "Friendly & casual",
+        "Direct & no-nonsense",
+        "Custom",
+    ];
     let pers_choice = Select::new()
         .with_prompt("What personality should I have?")
         .items(pers_options)
         .default(1)
         .interact()?;
     let (pers_label, pers_desc) = match pers_choice {
-        0 => ("Professional", "I maintain a polished, respectful tone suitable for any audience."),
-        1 => ("Friendly & casual", "I'm approachable, use casual language, and celebrate wins with you."),
-        2 => ("Direct & no-nonsense", "I get straight to the point. No pleasantries, just results."),
+        0 => (
+            "Professional",
+            "I maintain a polished, respectful tone suitable for any audience.",
+        ),
+        1 => (
+            "Friendly & casual",
+            "I'm approachable, use casual language, and celebrate wins with you.",
+        ),
+        2 => (
+            "Direct & no-nonsense",
+            "I get straight to the point. No pleasantries, just results.",
+        ),
         _ => {
             let custom: String = Input::new()
                 .with_prompt("Describe your preferred personality")
@@ -748,7 +771,10 @@ pub fn run_soul_interview(workspace: &Path) -> Result<()> {
     std::fs::write(&soul_path, &soul)?;
 
     println!();
-    println!("  \x1b[1;32mSOUL.md written to {}\x1b[0m", soul_path.display());
+    println!(
+        "  \x1b[1;32mSOUL.md written to {}\x1b[0m",
+        soul_path.display()
+    );
     println!();
     // Preview first few lines
     for line in soul.lines().take(8) {

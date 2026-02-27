@@ -10,10 +10,23 @@ All notable changes to Ryvos will be documented in this file.
 - Available via CLI (`ryvos soul`), REPL (`/soul`), and during `ryvos init`
 - Shapes communication style, personality, proactivity, and operator context
 
+### Interactive Approval
+- REPL now prompts Y/N inline via `dialoguer::Confirm` when approval is needed
+- No more blocked-thread deadlock — approval works without needing `/approve` while agent is running
+- Eased security defaults: `auto_approve_up_to = "t3"` (normal dev workflow auto-approved), `deny_above = "t4"`
+- Only the 9 dangerous-pattern commands (rm -rf, DROP TABLE, force push, etc.) trigger an interactive prompt
+
+### Heartbeat Fix
+- Add `broadcast()` method to `ChannelAdapter` trait — sends to all known users without session mapping
+- Telegram adapter implements `broadcast()` using `allowed_users` list
+- Heartbeat alert router now uses `broadcast()` instead of `send()`, fixing the missing ChatId error
+- Default `[heartbeat]` section added to config template
+
 ### Fixes
 - Fix Telegram adapter TLS (enable rustls for teloxide)
 - Fix TUI /approve and /deny commands
 - Add bot token validation at Telegram startup
+- Fix `cargo fmt` CI check (soul interview code)
 
 ## [0.2.0] — 2026-02-26
 

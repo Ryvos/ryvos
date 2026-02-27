@@ -73,6 +73,13 @@ pub trait ChannelAdapter: Send + Sync + 'static {
         Box::pin(async { Ok(false) })
     }
 
+    /// Broadcast a message to all known users (e.g., heartbeat alerts).
+    /// Falls back to no-op by default.
+    fn broadcast(&self, content: &MessageContent) -> BoxFuture<'_, Result<()>> {
+        let _ = content;
+        Box::pin(async { Ok(()) })
+    }
+
     /// Stop the adapter gracefully.
     fn stop(&self) -> BoxFuture<'_, Result<()>>;
 }

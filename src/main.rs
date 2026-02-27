@@ -546,13 +546,35 @@ async fn main() -> anyhow::Result<()> {
                     .map_while(|l| l.ok())
                     .collect::<Vec<_>>()
                     .join("\n");
-                run_once(&runtime, &event_bus, &session_id, &input, &config.hooks).await?;
+                run_once(
+                    &runtime,
+                    &event_bus,
+                    &session_id,
+                    &input,
+                    &config.hooks,
+                    &broker,
+                )
+                .await?;
             } else {
-                run_once(&runtime, &event_bus, &session_id, &text, &config.hooks).await?;
+                run_once(
+                    &runtime,
+                    &event_bus,
+                    &session_id,
+                    &text,
+                    &config.hooks,
+                    &broker,
+                )
+                .await?;
             }
         }
         Some(Commands::Tui) => {
-            ryvos_tui::run_tui(runtime.clone(), event_bus.clone(), session_id, Some(broker.clone())).await?;
+            ryvos_tui::run_tui(
+                runtime.clone(),
+                event_bus.clone(),
+                session_id,
+                Some(broker.clone()),
+            )
+            .await?;
         }
         Some(Commands::Serve) => {
             let gateway_config = config.gateway.clone().unwrap_or_default();
@@ -705,6 +727,7 @@ async fn run_once(
     session_id: &SessionId,
     input: &str,
     hooks: &Option<HooksConfig>,
+    broker: &Arc<ApprovalBroker>,
 ) -> anyhow::Result<()> {
     // Fire on_message hook
     if let Some(hooks) = hooks {
@@ -724,6 +747,7 @@ async fn run_once(
         .map(|h| h.on_tool_call.clone())
         .unwrap_or_default();
     let session_id_str = session_id.0.clone();
+    let broker_clone = broker.clone();
 
     // Spawn event printer
     let print_handle = tokio::spawn(async move {
@@ -757,14 +781,33 @@ async fn run_once(
                 }
                 AgentEvent::ApprovalRequested { request } => {
                     eprintln!(
-                        "\n[APPROVAL REQUIRED] {} ({}): \"{}\"",
+                        "\n[APPROVAL] {} ({}): \"{}\"",
                         request.tool_name, request.tier, request.input_summary
                     );
-                    eprintln!(
-                        "  Use /approve {} or /deny {} [reason]",
-                        &request.id[..8],
-                        &request.id[..8]
-                    );
+                    let broker = broker_clone.clone();
+                    let req_id = request.id.clone();
+                    tokio::task::spawn_blocking(move || {
+                        let approved = dialoguer::Confirm::new()
+                            .with_prompt("Allow?")
+                            .default(true)
+                            .interact()
+                            .unwrap_or(false);
+                        (approved, broker, req_id)
+                    })
+                    .await
+                    .map(|(approved, broker, req_id)| {
+                        let decision = if approved {
+                            ApprovalDecision::Approved
+                        } else {
+                            ApprovalDecision::Denied {
+                                reason: "denied by user".into(),
+                            }
+                        };
+                        tokio::spawn(async move {
+                            broker.respond(&req_id, decision).await;
+                        });
+                    })
+                    .ok();
                 }
                 AgentEvent::ToolBlocked { name, tier, reason } => {
                     eprintln!("\n[BLOCKED] {} ({}): {}", name, tier, reason);
@@ -1180,6 +1223,7 @@ pub(crate) async fn run_repl(
                                         session_id,
                                         &combined,
                                         &config.hooks,
+                                        broker,
                                     )
                                     .await?;
                                 }
@@ -1227,7 +1271,7 @@ pub(crate) async fn run_repl(
             (inp, out)
         });
 
-        run_once(runtime, event_bus, session_id, input, &config.hooks).await?;
+        run_once(runtime, event_bus, session_id, input, &config.hooks, broker).await?;
 
         if let Ok((inp, out)) = usage_handle.await {
             total_input += inp;

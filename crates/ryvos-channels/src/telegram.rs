@@ -80,9 +80,10 @@ impl ChannelAdapter for TelegramAdapter {
                 }
                 Err(e) => {
                     error!(error = %e, "Telegram bot token invalid or network error");
-                    return Err(ryvos_core::error::RyvosError::Config(
-                        format!("Telegram bot token validation failed: {}", e),
-                    ));
+                    return Err(ryvos_core::error::RyvosError::Config(format!(
+                        "Telegram bot token validation failed: {}",
+                        e
+                    )));
                 }
             }
 
@@ -334,6 +335,39 @@ impl ChannelAdapter for TelegramAdapter {
                     }
                 }
             }
+        })
+    }
+
+    fn broadcast(&self, content: &MessageContent) -> BoxFuture<'_, Result<()>> {
+        let content = content.clone();
+        let bot_arc = self.bot.clone();
+        let allowed_users = self.config.allowed_users.clone();
+
+        Box::pin(async move {
+            let text = match &content {
+                MessageContent::Text(t) => t.clone(),
+                MessageContent::Streaming { delta, .. } => delta.clone(),
+            };
+            if text.is_empty() {
+                return Ok(());
+            }
+
+            let bot_guard = bot_arc.lock().await;
+            let bot = bot_guard.as_ref().ok_or_else(|| RyvosError::Channel {
+                channel: "telegram".into(),
+                message: "Bot not started".into(),
+            })?;
+
+            let chunks = split_message(&text, TELEGRAM_MAX_LEN);
+            for user_id in &allowed_users {
+                let chat_id = ChatId(*user_id);
+                for chunk in &chunks {
+                    if let Err(e) = bot.send_message(chat_id, chunk).await {
+                        warn!(user_id, error = %e, "Failed to broadcast to Telegram user");
+                    }
+                }
+            }
+            Ok(())
         })
     }
 
