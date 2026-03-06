@@ -195,32 +195,9 @@ pub fn list_installed(skills_dir: &Path) -> Vec<String> {
 
 /// Compute SHA-256 hex digest of bytes.
 fn sha256_hex(data: &[u8]) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    // Use a simple approach: call sha256sum via std
-    // For a proper implementation, we'd use the sha2 crate.
-    // Here we use a two-pass hash for a deterministic 64-char hex string.
-    let mut hasher = DefaultHasher::new();
-    data.hash(&mut hasher);
-    let h1 = hasher.finish();
-
-    let mut hasher2 = DefaultHasher::new();
-    h1.hash(&mut hasher2);
-    data.len().hash(&mut hasher2);
-    let h2 = hasher2.finish();
-
-    let mut hasher3 = DefaultHasher::new();
-    data.hash(&mut hasher3);
-    h2.hash(&mut hasher3);
-    let h3 = hasher3.finish();
-
-    let mut hasher4 = DefaultHasher::new();
-    h1.hash(&mut hasher4);
-    h3.hash(&mut hasher4);
-    let h4 = hasher4.finish();
-
-    format!("{:016x}{:016x}{:016x}{:016x}", h1, h2, h3, h4)
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(data);
+    format!("{:x}", hash)
 }
 
 #[cfg(test)]
@@ -284,6 +261,11 @@ mod tests {
         let h2 = sha256_hex(data);
         assert_eq!(h1, h2);
         assert_eq!(h1.len(), 64);
+        // Verify against known SHA-256 of "hello world"
+        assert_eq!(
+            h1,
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
     }
 
     #[test]

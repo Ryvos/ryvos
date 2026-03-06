@@ -88,6 +88,14 @@ max_tokens = 8192
 # dm_policy = "allowlist"           # allowlist | open | disabled
 # allowed_users = ["U01234ABC"]
 
+# [channels.whatsapp]
+# access_token = "${WHATSAPP_ACCESS_TOKEN}"
+# phone_number_id = "${WHATSAPP_PHONE_NUMBER_ID}"
+# verify_token = "my-verify-token"        # You choose this, must match Meta webhook config
+# dm_policy = "allowlist"                  # allowlist | open | disabled
+# allowed_users = ["15551234567"]          # E.164 phone numbers
+# NOTE: Requires Meta Business account + public URL for webhooks
+
 # Heartbeat — periodic proactive agent checks
 # [heartbeat]
 # enabled = true

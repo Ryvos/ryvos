@@ -154,6 +154,7 @@ fn event_type_name(event: &AgentEvent) -> &'static str {
         AgentEvent::HeartbeatFired { .. } => "HeartbeatFired",
         AgentEvent::HeartbeatOk { .. } => "HeartbeatOk",
         AgentEvent::HeartbeatAlert { .. } => "HeartbeatAlert",
+        AgentEvent::CronJobComplete { .. } => "CronJobComplete",
     }
 }
 

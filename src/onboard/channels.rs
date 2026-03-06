@@ -46,6 +46,7 @@ pub fn configure(mode: &OnboardingMode) -> Result<ChannelsConfig> {
         telegram,
         discord,
         slack,
+        whatsapp: None,
     })
 }
 

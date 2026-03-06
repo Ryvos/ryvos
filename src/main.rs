@@ -579,7 +579,7 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Serve) => {
             let gateway_config = config.gateway.clone().unwrap_or_default();
             info!(bind = %gateway_config.bind, "Starting WebSocket gateway");
-            let server = ryvos_gateway::GatewayServer::new(
+            let mut server = ryvos_gateway::GatewayServer::new(
                 gateway_config,
                 runtime,
                 event_bus,
@@ -587,6 +587,15 @@ async fn main() -> anyhow::Result<()> {
                 session_mgr,
                 broker,
             );
+
+            if let Some(ref wa_config) = config.channels.whatsapp {
+                let wa_adapter = ryvos_channels::WhatsAppAdapter::new(
+                    wa_config.clone(),
+                    Arc::new(ryvos_agent::SessionManager::new()),
+                );
+                server.set_whatsapp_handle(wa_adapter.webhook_handle());
+            }
+
             let cancel = tokio_util::sync::CancellationToken::new();
             let cancel_clone = cancel.clone();
 
@@ -647,7 +656,7 @@ async fn main() -> anyhow::Result<()> {
             if gateway {
                 let gateway_config = config.gateway.clone().unwrap_or_default();
                 info!(bind = %gateway_config.bind, "Starting gateway in daemon mode");
-                let server = ryvos_gateway::GatewayServer::new(
+                let mut server = ryvos_gateway::GatewayServer::new(
                     gateway_config,
                     runtime.clone(),
                     event_bus.clone(),
@@ -655,6 +664,16 @@ async fn main() -> anyhow::Result<()> {
                     session_mgr.clone(),
                     broker.clone(),
                 );
+
+                // Wire WhatsApp webhook handle into gateway if configured
+                if let Some(ref wa_config) = config.channels.whatsapp {
+                    let wa_adapter = ryvos_channels::WhatsAppAdapter::new(
+                        wa_config.clone(),
+                        session_mgr.clone(),
+                    );
+                    server.set_whatsapp_handle(wa_adapter.webhook_handle());
+                }
+
                 let gateway_cancel = cancel.clone();
                 tokio::spawn(async move {
                     if let Err(e) = server.run(gateway_cancel).await {
@@ -688,6 +707,13 @@ async fn main() -> anyhow::Result<()> {
             if let Some(ref slack_config) = config.channels.slack {
                 let mut adapter =
                     ryvos_channels::SlackAdapter::new(slack_config.clone(), session_mgr.clone());
+                adapter.set_broker(broker.clone());
+                dispatcher.add_adapter(std::sync::Arc::new(adapter));
+            }
+
+            if let Some(ref wa_config) = config.channels.whatsapp {
+                let mut adapter =
+                    ryvos_channels::WhatsAppAdapter::new(wa_config.clone(), session_mgr.clone());
                 adapter.set_broker(broker.clone());
                 dispatcher.add_adapter(std::sync::Arc::new(adapter));
             }

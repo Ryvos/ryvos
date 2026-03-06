@@ -196,6 +196,7 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
             telegram,
             discord,
             slack: None,
+            whatsapp: None,
         }
     };
 

@@ -117,6 +117,10 @@ pub struct WebhookPayload {
     pub session_id: Option<String>,
     #[serde(default)]
     pub channel: Option<String>,
+    #[serde(default)]
+    pub metadata: Option<serde_json::Value>,
+    #[serde(default)]
+    pub callback_url: Option<String>,
 }
 
 /// POST /api/hooks/wake — webhook endpoint for external triggers.
@@ -157,17 +161,95 @@ pub async fn webhook_wake(
 
     info!(session_id = %session_id, "Webhook wake triggered");
 
+    let callback_url = body.callback_url.clone();
+    let channel = body.channel.clone();
+    let metadata = body.metadata.clone();
+
     match state.runtime.run(&session_id, &body.prompt).await {
-        Ok(response) => Ok(Json(serde_json::json!({
-            "session_id": session_id.to_string(),
-            "response": response,
-            "channel": body.channel,
-        }))),
-        Err(e) => Ok(Json(serde_json::json!({
-            "session_id": session_id.to_string(),
-            "error": e.to_string(),
-        }))),
+        Ok(response) => {
+            // Fire callback if provided
+            if let Some(url) = callback_url.clone() {
+                let client = reqwest::Client::new();
+                let md = metadata.clone();
+                let cb_body = serde_json::json!({
+                    "session_id": session_id.to_string(),
+                    "response": response,
+                    "metadata": md,
+                });
+                tokio::spawn(async move {
+                    if let Err(e) = client.post(&url).json(&cb_body).send().await {
+                        tracing::warn!(url = %url, error = %e, "Webhook callback failed");
+                    }
+                });
+            }
+
+            Ok(Json(serde_json::json!({
+                "session_id": session_id.to_string(),
+                "response": response,
+                "channel": channel,
+                "metadata": metadata,
+            })))
+        }
+        Err(e) => {
+            // Fire callback with error
+            if let Some(url) = callback_url {
+                let client = reqwest::Client::new();
+                let cb_body = serde_json::json!({
+                    "session_id": session_id.to_string(),
+                    "error": e.to_string(),
+                    "metadata": metadata,
+                });
+                tokio::spawn(async move {
+                    if let Err(e) = client.post(&url).json(&cb_body).send().await {
+                        tracing::warn!(url = %url, error = %e, "Webhook callback failed");
+                    }
+                });
+            }
+
+            Ok(Json(serde_json::json!({
+                "session_id": session_id.to_string(),
+                "error": e.to_string(),
+            })))
+        }
     }
+}
+
+// ── WhatsApp webhook endpoints ───────────────────────────────
+
+#[derive(Deserialize)]
+pub struct WhatsAppVerifyQuery {
+    #[serde(rename = "hub.mode", default)]
+    pub mode: String,
+    #[serde(rename = "hub.verify_token", default)]
+    pub verify_token: String,
+    #[serde(rename = "hub.challenge", default)]
+    pub challenge: String,
+}
+
+/// GET /api/whatsapp/webhook — Meta verification handshake.
+pub async fn whatsapp_verify(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<WhatsAppVerifyQuery>,
+) -> Result<String, StatusCode> {
+    let handle = state
+        .whatsapp_handle
+        .as_ref()
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    handle
+        .verify_webhook(&q.mode, &q.verify_token, &q.challenge)
+        .ok_or(StatusCode::FORBIDDEN)
+}
+
+/// POST /api/whatsapp/webhook — Incoming messages from Meta.
+pub async fn whatsapp_incoming(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<serde_json::Value>,
+) -> StatusCode {
+    if let Some(ref handle) = state.whatsapp_handle {
+        handle.process_webhook(body).await;
+    }
+    StatusCode::OK
 }
 
 // GET /ws — WebSocket upgrade, requires auth

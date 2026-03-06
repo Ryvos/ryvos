@@ -112,7 +112,14 @@ impl CronScheduler {
 
                         let session_id = SessionId::from_string(&format!("cron:{}", job.name));
                         match self.runtime.run(&session_id, &job.prompt).await {
-                            Ok(_) => info!(job = %job.name, "Cron job completed"),
+                            Ok(response) => {
+                                info!(job = %job.name, "Cron job completed");
+                                self.event_bus.publish(AgentEvent::CronJobComplete {
+                                    name: job.name.clone(),
+                                    response,
+                                    channel: job.channel.clone(),
+                                });
+                            }
                             Err(e) => error!(job = %job.name, error = %e, "Cron job failed"),
                         }
                     }

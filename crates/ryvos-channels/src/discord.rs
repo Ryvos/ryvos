@@ -370,6 +370,43 @@ impl ChannelAdapter for DiscordAdapter {
         })
     }
 
+    fn broadcast(&self, content: &MessageContent) -> BoxFuture<'_, Result<()>> {
+        let content = content.clone();
+        let channel_map = self.channel_map.clone();
+        let http_slot = self.http.clone();
+
+        Box::pin(async move {
+            let text = match &content {
+                MessageContent::Text(t) => t.clone(),
+                MessageContent::Streaming { delta, .. } => delta.clone(),
+            };
+            if text.is_empty() {
+                return Ok(());
+            }
+
+            let http_guard = http_slot.lock().await;
+            let http = http_guard.as_ref().ok_or_else(|| RyvosError::Channel {
+                channel: "discord".into(),
+                message: "Bot not started".into(),
+            })?;
+
+            let channels: Vec<ChannelId> = {
+                let map = channel_map.lock().await;
+                map.values().copied().collect()
+            };
+
+            let chunks = split_message(&text, DISCORD_MAX_LEN);
+            for channel_id in channels {
+                for chunk in &chunks {
+                    if let Err(e) = channel_id.say(http, chunk).await {
+                        warn!(channel = %channel_id, error = %e, "Failed to broadcast to Discord channel");
+                    }
+                }
+            }
+            Ok(())
+        })
+    }
+
     fn stop(&self) -> BoxFuture<'_, Result<()>> {
         let shard_slot = self.shard_manager.clone();
 

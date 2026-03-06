@@ -161,6 +161,9 @@ impl ToolRegistry {
         // ── Communication (1) ───────────────────────────────────
         registry.register(crate::builtin::notification::NotificationSendTool);
 
+        // ── Browser Automation (5) ──────────────────────────────
+        crate::builtin::browser::register_browser_tools(&mut registry);
+
         registry
     }
 }

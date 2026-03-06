@@ -231,7 +231,8 @@ impl App {
             }
             AgentEvent::GuardianHint { .. }
             | AgentEvent::UsageUpdate { .. }
-            | AgentEvent::DecisionMade { .. } => {}
+            | AgentEvent::DecisionMade { .. }
+            | AgentEvent::CronJobComplete { .. } => {}
         }
     }
 }

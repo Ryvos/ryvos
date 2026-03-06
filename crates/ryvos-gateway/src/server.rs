@@ -8,6 +8,7 @@ use tower_http::cors::CorsLayer;
 use tracing::info;
 
 use ryvos_agent::{AgentRuntime, ApprovalBroker, SessionManager};
+use ryvos_channels::WhatsAppWebhookHandle;
 use ryvos_core::config::GatewayConfig;
 use ryvos_core::event::EventBus;
 use ryvos_core::traits::SessionStore;
@@ -24,6 +25,7 @@ pub struct GatewayServer {
     store: Arc<dyn SessionStore>,
     session_mgr: Arc<SessionManager>,
     broker: Arc<ApprovalBroker>,
+    whatsapp_handle: Option<WhatsAppWebhookHandle>,
 }
 
 impl GatewayServer {
@@ -42,7 +44,13 @@ impl GatewayServer {
             store,
             session_mgr,
             broker,
+            whatsapp_handle: None,
         }
+    }
+
+    /// Set the WhatsApp webhook handle for routing incoming messages.
+    pub fn set_whatsapp_handle(&mut self, handle: WhatsAppWebhookHandle) {
+        self.whatsapp_handle = Some(handle);
     }
 
     /// Run the gateway server until the cancellation token is triggered.
@@ -54,6 +62,7 @@ impl GatewayServer {
             store: self.store.clone(),
             session_mgr: self.session_mgr.clone(),
             broker: self.broker.clone(),
+            whatsapp_handle: self.whatsapp_handle.clone(),
         });
 
         let app = Router::new()
@@ -66,6 +75,9 @@ impl GatewayServer {
             .route("/api/sessions/{id}/messages", post(routes::send_message))
             // Webhooks
             .route("/api/hooks/wake", post(routes::webhook_wake))
+            // WhatsApp Cloud API webhooks
+            .route("/api/whatsapp/webhook", get(routes::whatsapp_verify))
+            .route("/api/whatsapp/webhook", post(routes::whatsapp_incoming))
             // Embedded Web UI
             .route("/", get(static_files::index))
             .route("/assets/{*path}", get(static_files::static_file))

@@ -386,6 +386,12 @@ pub enum AgentEvent {
     RunError { error: String },
     /// Cron job fired.
     CronFired { job_id: String, prompt: String },
+    /// Cron job completed with a response.
+    CronJobComplete {
+        name: String,
+        response: String,
+        channel: Option<String>,
+    },
     /// Approval requested for a tool call.
     ApprovalRequested { request: ApprovalRequest },
     /// Approval resolved (approved or denied).

@@ -476,6 +476,39 @@ impl ChannelAdapter for SlackAdapter {
         })
     }
 
+    fn broadcast(&self, content: &MessageContent) -> BoxFuture<'_, Result<()>> {
+        let content = content.clone();
+        let channel_map = self.channel_map.clone();
+        let http = self.http.clone();
+        let bot_token = self.config.bot_token.clone();
+
+        Box::pin(async move {
+            let text = match &content {
+                MessageContent::Text(t) => t.clone(),
+                MessageContent::Streaming { delta, .. } => delta.clone(),
+            };
+            if text.is_empty() {
+                return Ok(());
+            }
+
+            let channels: Vec<String> = {
+                let map = channel_map.lock().await;
+                map.values().cloned().collect()
+            };
+
+            let chunks = split_message(&text, SLACK_MAX_LEN);
+            for channel_id in channels {
+                for chunk in &chunks {
+                    if let Err(e) = Self::post_message(&http, &bot_token, &channel_id, chunk).await
+                    {
+                        warn!(channel = %channel_id, error = %e, "Failed to broadcast to Slack channel");
+                    }
+                }
+            }
+            Ok(())
+        })
+    }
+
     fn stop(&self) -> BoxFuture<'_, Result<()>> {
         let shutdown_tx = self.shutdown_tx.clone();
 

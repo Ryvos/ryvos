@@ -742,6 +742,8 @@ pub struct ChannelsConfig {
     pub discord: Option<DiscordConfig>,
     #[serde(default)]
     pub slack: Option<SlackConfig>,
+    #[serde(default)]
+    pub whatsapp: Option<WhatsAppConfig>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -779,6 +781,21 @@ pub struct SlackConfig {
     pub app_token: String,
     #[serde(default)]
     pub dm_policy: DmPolicy,
+    #[serde(default)]
+    pub allowed_users: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WhatsAppConfig {
+    /// Permanent access token from Meta Business.
+    pub access_token: String,
+    /// Phone number ID from Meta Business.
+    pub phone_number_id: String,
+    /// Verify token for webhook handshake (you choose this).
+    pub verify_token: String,
+    #[serde(default)]
+    pub dm_policy: DmPolicy,
+    /// Allowed phone numbers (E.164 format, e.g., "15551234567").
     #[serde(default)]
     pub allowed_users: Vec<String>,
 }
