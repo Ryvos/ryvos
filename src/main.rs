@@ -277,6 +277,13 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    // Apply provider preset defaults (base_url, extra headers) for known providers
+    let mut config = config;
+    ryvos_llm::apply_preset_defaults(&mut config.model);
+    for fb in &mut config.fallback_models {
+        ryvos_llm::apply_preset_defaults(fb);
+    }
+
     // Set up components
     let workspace = config.workspace_dir();
     std::fs::create_dir_all(&workspace).ok();

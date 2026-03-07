@@ -215,7 +215,7 @@ impl Tool for FileDeleteTool {
         "file_delete"
     }
     fn tier(&self) -> SecurityTier {
-        SecurityTier::T2
+        SecurityTier::T3
     }
     fn description(&self) -> &str {
         "Delete a file or directory (recursively)."

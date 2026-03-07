@@ -285,11 +285,20 @@ async fn run_channel_message(
         .unwrap_or_default();
     let session_id_str = session_id.0.clone();
 
-    // Run the agent in a background task
+    // Run the agent in a background task, publishing RunError on failure
     let rt = runtime.clone();
     let sid = session_id.clone();
     let text = envelope.text.clone();
-    let run_handle = tokio::spawn(async move { rt.run(&sid, &text).await });
+    let eb = event_bus.clone();
+    let run_handle = tokio::spawn(async move {
+        let result = rt.run(&sid, &text).await;
+        if let Err(ref e) = result {
+            eb.publish(AgentEvent::RunError {
+                error: e.to_string(),
+            });
+        }
+        result
+    });
 
     // Collect text deltas from the event stream
     let mut response_text = String::new();

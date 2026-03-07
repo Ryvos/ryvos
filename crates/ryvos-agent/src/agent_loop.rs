@@ -383,6 +383,13 @@ impl AgentRuntime {
                 }
             }
 
+            // Thinking-only fallback: if the model produced reasoning but no
+            // visible content (common with Qwen 3.5, DeepSeek-R1 via OpenAI-compat),
+            // promote thinking to text so the user gets a response.
+            if text_content.is_empty() && !thinking_content.is_empty() && tool_calls.is_empty() {
+                text_content = thinking_content.clone();
+            }
+
             // Build the assistant message
             let mut content_blocks = Vec::new();
             if !thinking_content.is_empty() {

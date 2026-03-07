@@ -1,6 +1,6 @@
 pub mod apply_patch;
-pub mod browser;
 pub mod bash;
+pub mod browser;
 pub mod code;
 pub mod data;
 pub mod database;

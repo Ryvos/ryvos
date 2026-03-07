@@ -107,10 +107,13 @@ async fn ensure_page() -> Result<Page> {
             message: format!("Failed to build browser config: {e}"),
         })?;
 
-    let (browser, mut handler) = Browser::launch(config).await.map_err(|e| RyvosError::ToolExecution {
-        tool: "browser".into(),
-        message: format!("Failed to launch browser: {e}"),
-    })?;
+    let (browser, mut handler) =
+        Browser::launch(config)
+            .await
+            .map_err(|e| RyvosError::ToolExecution {
+                tool: "browser".into(),
+                message: format!("Failed to launch browser: {e}"),
+            })?;
 
     // Spawn the handler loop
     tokio::spawn(async move {
@@ -121,10 +124,13 @@ async fn ensure_page() -> Result<Page> {
         }
     });
 
-    let page = browser.new_page("about:blank").await.map_err(|e| RyvosError::ToolExecution {
-        tool: "browser".into(),
-        message: format!("Failed to create page: {e}"),
-    })?;
+    let page = browser
+        .new_page("about:blank")
+        .await
+        .map_err(|e| RyvosError::ToolExecution {
+            tool: "browser".into(),
+            message: format!("Failed to create page: {e}"),
+        })?;
 
     *browser_guard = Some(browser);
     let page_clone = page.clone();
@@ -258,29 +264,35 @@ impl Tool for BrowserScreenshotTool {
             let page = ensure_page().await?;
 
             if let Some(url) = input["url"].as_str() {
-                page.goto(url).await.map_err(|e| RyvosError::ToolExecution {
-                    tool: "browser_screenshot".into(),
-                    message: format!("Navigation failed: {e}"),
-                })?;
+                page.goto(url)
+                    .await
+                    .map_err(|e| RyvosError::ToolExecution {
+                        tool: "browser_screenshot".into(),
+                        message: format!("Navigation failed: {e}"),
+                    })?;
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
 
             let png_data = if let Some(selector) = input["selector"].as_str() {
-                let element = page
-                    .find_element(selector)
+                let element =
+                    page.find_element(selector)
+                        .await
+                        .map_err(|e| RyvosError::ToolExecution {
+                            tool: "browser_screenshot".into(),
+                            message: format!("Element not found '{}': {e}", selector),
+                        })?;
+                element
+                    .screenshot(
+                        chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotFormat::Png,
+                    )
                     .await
                     .map_err(|e| RyvosError::ToolExecution {
                         tool: "browser_screenshot".into(),
-                        message: format!("Element not found '{}': {e}", selector),
-                    })?;
-                element.screenshot(
-                    chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotFormat::Png,
-                ).await.map_err(|e| RyvosError::ToolExecution {
-                    tool: "browser_screenshot".into(),
-                    message: format!("Screenshot failed: {e}"),
-                })?
+                        message: format!("Screenshot failed: {e}"),
+                    })?
             } else {
-                let params = chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotParams::builder();
+                let params =
+                    chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotParams::builder();
                 let params = if input["full_page"].as_bool().unwrap_or(false) {
                     params.capture_beyond_viewport(true)
                 } else {
@@ -355,19 +367,28 @@ impl Tool for BrowserClickTool {
 
             let page = ensure_page().await?;
 
-            let element = page.find_element(selector).await.map_err(|e| RyvosError::ToolExecution {
-                tool: "browser_click".into(),
-                message: format!("Element not found '{}': {e}", selector),
-            })?;
+            let element =
+                page.find_element(selector)
+                    .await
+                    .map_err(|e| RyvosError::ToolExecution {
+                        tool: "browser_click".into(),
+                        message: format!("Element not found '{}': {e}", selector),
+                    })?;
 
-            element.click().await.map_err(|e| RyvosError::ToolExecution {
-                tool: "browser_click".into(),
-                message: format!("Click failed: {e}"),
-            })?;
+            element
+                .click()
+                .await
+                .map_err(|e| RyvosError::ToolExecution {
+                    tool: "browser_click".into(),
+                    message: format!("Click failed: {e}"),
+                })?;
 
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
-            Ok(ToolResult::success(format!("Clicked element '{}'", selector)))
+            Ok(ToolResult::success(format!(
+                "Clicked element '{}'",
+                selector
+            )))
         })
     }
 
@@ -432,20 +453,29 @@ impl Tool for BrowserTypeTool {
 
             let page = ensure_page().await?;
 
-            let element = page.find_element(selector).await.map_err(|e| RyvosError::ToolExecution {
-                tool: "browser_type".into(),
-                message: format!("Element not found '{}': {e}", selector),
-            })?;
+            let element =
+                page.find_element(selector)
+                    .await
+                    .map_err(|e| RyvosError::ToolExecution {
+                        tool: "browser_type".into(),
+                        message: format!("Element not found '{}': {e}", selector),
+                    })?;
 
-            element.click().await.map_err(|e| RyvosError::ToolExecution {
-                tool: "browser_type".into(),
-                message: format!("Focus failed: {e}"),
-            })?;
+            element
+                .click()
+                .await
+                .map_err(|e| RyvosError::ToolExecution {
+                    tool: "browser_type".into(),
+                    message: format!("Focus failed: {e}"),
+                })?;
 
-            element.type_str(text).await.map_err(|e| RyvosError::ToolExecution {
-                tool: "browser_type".into(),
-                message: format!("Typing failed: {e}"),
-            })?;
+            element
+                .type_str(text)
+                .await
+                .map_err(|e| RyvosError::ToolExecution {
+                    tool: "browser_type".into(),
+                    message: format!("Typing failed: {e}"),
+                })?;
 
             Ok(ToolResult::success(format!(
                 "Typed {} chars into '{}'",

@@ -112,6 +112,10 @@ struct StreamDeltaContent {
     #[serde(default)]
     content: Option<String>,
     #[serde(default)]
+    reasoning: Option<String>,
+    #[serde(default)]
+    reasoning_content: Option<String>,
+    #[serde(default)]
     tool_calls: Option<Vec<OaiToolCall>>,
 }
 
@@ -262,6 +266,14 @@ pub(crate) fn parse_chunk(event: SseEvent) -> Vec<Result<StreamDelta>> {
                 };
                 deltas.push(Ok(StreamDelta::Stop(stop)));
                 return deltas;
+            }
+
+            // Check for reasoning/thinking delta (Qwen, DeepSeek, etc.)
+            let reasoning = choice.delta.reasoning.or(choice.delta.reasoning_content);
+            if let Some(text) = reasoning {
+                if !text.is_empty() {
+                    deltas.push(Ok(StreamDelta::ThinkingDelta(text)));
+                }
             }
 
             // Check for text delta
