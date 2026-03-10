@@ -10,6 +10,8 @@ use ryvos_core::config::HeartbeatConfig;
 use ryvos_core::event::EventBus;
 use ryvos_core::types::{AgentEvent, SessionId};
 
+use ryvos_memory::SessionMetaStore;
+
 use crate::AgentRuntime;
 
 /// Default prompt sent to the LLM during a heartbeat check.
@@ -39,6 +41,7 @@ pub struct Heartbeat {
     event_bus: Arc<EventBus>,
     cancel: CancellationToken,
     workspace: PathBuf,
+    session_meta: Option<Arc<SessionMetaStore>>,
 }
 
 impl Heartbeat {
@@ -55,7 +58,13 @@ impl Heartbeat {
             event_bus,
             cancel,
             workspace,
+            session_meta: None,
         }
+    }
+
+    /// Set the session meta store for CLI session resumption.
+    pub fn set_session_meta(&mut self, store: Arc<SessionMetaStore>) {
+        self.session_meta = Some(store);
     }
 
     /// Run the heartbeat loop. Blocks until cancelled.
@@ -90,29 +99,57 @@ impl Heartbeat {
                 .publish(AgentEvent::HeartbeatFired { timestamp: now });
 
             let prompt = self.build_prompt();
+            let session_key = "heartbeat:default";
 
             info!(session = %session_id, "Heartbeat firing");
 
+            // Look up CLI session ID for resumption
+            if let Some(ref meta_store) = self.session_meta {
+                if let Ok(Some(meta)) = meta_store.get(session_key) {
+                    if let Some(cli_id) = meta.cli_session_id {
+                        info!(cli_session = %cli_id, "Resuming CLI session");
+                        self.runtime.set_cli_session_id(Some(cli_id));
+                    }
+                }
+            }
+
             match self.runtime.run(&session_id, &prompt).await {
-                Ok(response) => match evaluate_response(&response, self.config.ack_max_chars) {
-                    HeartbeatResult::Ok => {
-                        info!(session = %session_id, chars = response.len(), "Heartbeat OK (suppressed)");
-                        self.event_bus.publish(AgentEvent::HeartbeatOk {
-                            session_id,
-                            response_chars: response.len(),
-                        });
+                Ok(response) => {
+                    // Capture and persist new CLI session ID
+                    if let Some(ref meta_store) = self.session_meta {
+                        if let Some(new_cli_id) = self.runtime.last_message_id() {
+                            meta_store.get_or_create(session_key, &session_id.0, "heartbeat").ok();
+                            if let Err(e) = meta_store.set_cli_session_id(session_key, &new_cli_id) {
+                                warn!(error = %e, "Failed to persist CLI session ID");
+                            }
+                        }
                     }
-                    HeartbeatResult::Alert => {
-                        warn!(session = %session_id, "Heartbeat alert");
-                        self.event_bus.publish(AgentEvent::HeartbeatAlert {
-                            session_id,
-                            message: response,
-                            target_channel: self.config.target_channel.clone(),
-                        });
+
+                    match evaluate_response(&response, self.config.ack_max_chars) {
+                        HeartbeatResult::Ok => {
+                            info!(session = %session_id, chars = response.len(), "Heartbeat OK (suppressed)");
+                            self.event_bus.publish(AgentEvent::HeartbeatOk {
+                                session_id,
+                                response_chars: response.len(),
+                            });
+                        }
+                        HeartbeatResult::Alert => {
+                            warn!(session = %session_id, "Heartbeat alert");
+                            self.event_bus.publish(AgentEvent::HeartbeatAlert {
+                                session_id,
+                                message: response,
+                                target_channel: self.config.target_channel.clone(),
+                            });
+                        }
                     }
-                },
+                }
                 Err(e) => {
                     error!(session = %session_id, error = %e, "Heartbeat run failed");
+                    // Clear CLI session ID on failure (graceful fallback)
+                    if let Some(ref meta_store) = self.session_meta {
+                        meta_store.clear_cli_session_id(session_key).ok();
+                    }
+                    self.runtime.set_cli_session_id(None);
                 }
             }
         }

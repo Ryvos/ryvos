@@ -12,6 +12,7 @@ use ryvos_core::event::EventBus;
 use ryvos_core::goal::Goal;
 use ryvos_core::traits::{LlmClient, SessionStore};
 use ryvos_core::types::*;
+use ryvos_memory::CostStore;
 use ryvos_tools::ToolRegistry;
 
 use crate::checkpoint::CheckpointStore;
@@ -46,6 +47,11 @@ pub struct AgentRuntime {
     journal: Option<Arc<FailureJournal>>,
     guardian_hints: Option<Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<GuardianAction>>>>,
     checkpoint_store: Option<Arc<CheckpointStore>>,
+    cost_store: Option<Arc<CostStore>>,
+    /// Captured CLI session ID from the last MessageId delta (for session resumption).
+    last_message_id: Arc<std::sync::Mutex<Option<String>>>,
+    /// Override CLI session ID for the next run (set before calling run()).
+    cli_session_override: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl AgentRuntime {
@@ -67,6 +73,9 @@ impl AgentRuntime {
             journal: None,
             guardian_hints: None,
             checkpoint_store: None,
+            cost_store: None,
+            last_message_id: Arc::new(std::sync::Mutex::new(None)),
+            cli_session_override: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -90,6 +99,9 @@ impl AgentRuntime {
             journal: None,
             guardian_hints: None,
             checkpoint_store: None,
+            cost_store: None,
+            last_message_id: Arc::new(std::sync::Mutex::new(None)),
+            cli_session_override: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -106,6 +118,21 @@ impl AgentRuntime {
     /// Set the checkpoint store for save/resume support.
     pub fn set_checkpoint_store(&mut self, store: Arc<CheckpointStore>) {
         self.checkpoint_store = Some(store);
+    }
+
+    /// Set the cost store for tracking run costs.
+    pub fn set_cost_store(&mut self, store: Arc<CostStore>) {
+        self.cost_store = Some(store);
+    }
+
+    /// Set the CLI session ID override for the next run (for --resume).
+    pub fn set_cli_session_id(&self, id: Option<String>) {
+        *self.cli_session_override.lock().unwrap() = id;
+    }
+
+    /// Get the last captured CLI session ID (from MessageId delta).
+    pub fn last_message_id(&self) -> Option<String> {
+        self.last_message_id.lock().unwrap().clone()
     }
 
     /// Get a cancellation token for this runtime.
@@ -153,6 +180,18 @@ impl AgentRuntime {
         let max_turns = self.config.agent.max_turns;
         let max_duration = Duration::from_secs(self.config.agent.max_duration_secs);
 
+        // Apply CLI session ID override (for claude-code --resume)
+        let cli_override = self.cli_session_override.lock().unwrap().take();
+        if cli_override.is_some() {
+            // We can't mutate self.config directly, but we note the override
+            // and apply it when building the model config for LLM calls.
+            // For now, store it back as it will be used during stream setup.
+            *self.cli_session_override.lock().unwrap() = cli_override;
+        }
+
+        // Clear last message ID before starting
+        *self.last_message_id.lock().unwrap() = None;
+
         self.event_bus.publish(AgentEvent::RunStarted {
             session_id: session_id.clone(),
         });
@@ -173,6 +212,29 @@ impl AgentRuntime {
 
         // Generate a unique run_id for checkpointing
         let run_id = uuid::Uuid::new_v4().to_string();
+
+        // Record run start in cost store
+        if let Some(ref cost_store) = self.cost_store {
+            let billing_type = if self.config.model.provider == "claude-code"
+                || self.config.model.provider == "claude-cli"
+                || self.config.model.provider == "claude-sub"
+            {
+                ryvos_llm::providers::claude_code::ClaudeCodeClient::detect_billing_type(
+                    &self.config.model,
+                )
+            } else {
+                BillingType::Api
+            };
+            if let Err(e) = cost_store.record_run(
+                &run_id,
+                &session_id.0,
+                &self.config.model.model_id,
+                &self.config.model.provider,
+                billing_type,
+            ) {
+                warn!(error = %e, "Failed to record run start");
+            }
+        }
 
         // Load history
         let mut messages = vec![system_msg];
@@ -379,7 +441,9 @@ impl AgentRuntime {
                             output_tokens,
                         });
                     }
-                    StreamDelta::MessageId(_) => {}
+                    StreamDelta::MessageId(id) => {
+                        *self.last_message_id.lock().unwrap() = Some(id);
+                    }
                 }
             }
 
@@ -492,6 +556,23 @@ impl AgentRuntime {
                             input_tokens: total_input_tokens,
                             output_tokens: total_output_tokens,
                         });
+                        // Record completion in cost store
+                        if let Some(ref cost_store) = self.cost_store {
+                            let cost = ryvos_memory::estimate_cost_cents(
+                                &self.config.model.model_id,
+                                &self.config.model.provider,
+                                BillingType::Api,
+                                total_input_tokens,
+                                total_output_tokens,
+                                &std::collections::HashMap::new(),
+                            );
+                            if let Err(e) = cost_store.complete_run(
+                                &run_id, total_input_tokens, total_output_tokens,
+                                (turn + 1) as u64, cost, "complete",
+                            ) {
+                                warn!(error = %e, "Failed to record run completion");
+                            }
+                        }
                         return Ok(final_text);
                     }
                 }
@@ -505,6 +586,23 @@ impl AgentRuntime {
                             input_tokens: total_input_tokens,
                             output_tokens: total_output_tokens,
                         });
+                        // Record completion in cost store
+                        if let Some(ref cost_store) = self.cost_store {
+                            let cost = ryvos_memory::estimate_cost_cents(
+                                &self.config.model.model_id,
+                                &self.config.model.provider,
+                                BillingType::Api,
+                                total_input_tokens,
+                                total_output_tokens,
+                                &std::collections::HashMap::new(),
+                            );
+                            if let Err(e) = cost_store.complete_run(
+                                &run_id, total_input_tokens, total_output_tokens,
+                                (turn + 1) as u64, cost, "complete",
+                            ) {
+                                warn!(error = %e, "Failed to record run completion");
+                            }
+                        }
                         return Ok(final_text);
                     }
                 }
@@ -742,6 +840,24 @@ impl AgentRuntime {
             #[allow(unused_assignments)]
             {
                 final_text = text_content;
+            }
+        }
+
+        // Record error in cost store
+        if let Some(ref cost_store) = self.cost_store {
+            let cost = ryvos_memory::estimate_cost_cents(
+                &self.config.model.model_id,
+                &self.config.model.provider,
+                BillingType::Api,
+                total_input_tokens,
+                total_output_tokens,
+                &std::collections::HashMap::new(),
+            );
+            if let Err(e) = cost_store.complete_run(
+                &run_id, total_input_tokens, total_output_tokens,
+                max_turns as u64, cost, "error",
+            ) {
+                warn!(error = %e, "Failed to record run error");
             }
         }
 

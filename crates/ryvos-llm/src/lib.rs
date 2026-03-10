@@ -10,6 +10,7 @@ pub use providers::azure::AzureClient;
 pub use providers::bedrock::BedrockClient;
 pub use providers::cohere::CohereClient;
 pub use providers::gemini::GeminiClient;
+pub use providers::claude_code::ClaudeCodeClient;
 pub use providers::openai::OpenAiClient;
 pub use retry::RetryingClient;
 
@@ -31,6 +32,7 @@ pub fn create_client(config: &ModelConfig) -> Box<dyn LlmClient> {
         "azure" | "azure-openai" => Box::new(AzureClient::new()),
         "bedrock" | "aws-bedrock" | "aws" => Box::new(BedrockClient::new()),
         "cohere" => Box::new(CohereClient::new()),
+        "claude-code" | "claude-cli" | "claude-sub" => Box::new(ClaudeCodeClient::new()),
         // Everything else uses the OpenAI-compatible client.
         // For known presets, apply default base_url and extra headers
         // via the config's extra_headers and base_url fields (set during

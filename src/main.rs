@@ -449,11 +449,31 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    // Initialize cost store if budget is configured
+    let cost_store: Option<Arc<ryvos_memory::CostStore>> = if config.budget.is_some() {
+        let cost_db_path = workspace.join("cost.db");
+        match ryvos_memory::CostStore::open(&cost_db_path) {
+            Ok(cs) => {
+                info!("Cost store initialized at {}", cost_db_path.display());
+                Some(Arc::new(cs))
+            }
+            Err(e) => {
+                error!(error = %e, "Failed to initialize cost store");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     let session_mgr = Arc::new(ryvos_agent::SessionManager::new());
     let mut runtime_inner =
         AgentRuntime::new_with_gate(config.clone(), llm, gate, store.clone(), event_bus.clone());
     if let Some(ref j) = journal {
         runtime_inner.set_journal(j.clone());
+    }
+    if let Some(ref cs) = cost_store {
+        runtime_inner.set_cost_store(cs.clone());
     }
 
     let session_id = cli
@@ -463,11 +483,15 @@ async fn main() -> anyhow::Result<()> {
 
     // Spawn Guardian watchdog if enabled
     if config.agent.guardian.enabled {
-        let (guardian, hint_rx) = Guardian::new(
+        let (mut guardian, hint_rx) = Guardian::new(
             config.agent.guardian.clone(),
             event_bus.clone(),
             runtime_inner.cancel_token(),
         );
+        // Wire dollar budget enforcement
+        if let (Some(ref cs), Some(ref bc)) = (&cost_store, &config.budget) {
+            guardian.set_budget(cs.clone(), bc.clone());
+        }
         runtime_inner.set_guardian_hints(hint_rx);
         tokio::spawn(guardian.run(session_id.clone()));
     }
@@ -595,6 +619,11 @@ async fn main() -> anyhow::Result<()> {
                 broker,
             );
 
+            // Wire cost store into gateway for monitoring dashboard
+            if let Some(ref cs) = cost_store {
+                server.set_cost_store(cs.clone(), config.budget.clone());
+            }
+
             if let Some(ref wa_config) = config.channels.whatsapp {
                 let wa_adapter = ryvos_channels::WhatsAppAdapter::new(
                     wa_config.clone(),
@@ -671,6 +700,11 @@ async fn main() -> anyhow::Result<()> {
                     session_mgr.clone(),
                     broker.clone(),
                 );
+
+                // Wire cost store into gateway for monitoring dashboard
+                if let Some(ref cs) = cost_store {
+                    server.set_cost_store(cs.clone(), config.budget.clone());
+                }
 
                 // Wire WhatsApp webhook handle into gateway if configured
                 if let Some(ref wa_config) = config.channels.whatsapp {
@@ -1778,6 +1812,8 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
         azure_api_version: None,
         aws_region: None,
         extra_headers: Default::default(),
+        claude_command: None,
+        cli_session_id: None,
     };
     ryvos_llm::apply_preset_defaults(&mut model);
 
@@ -1797,6 +1833,7 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
         embedding: None,
         daily_logs: None,
         registry: None,
+        budget: None,
     })
 }
 

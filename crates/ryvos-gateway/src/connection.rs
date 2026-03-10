@@ -140,6 +140,60 @@ pub async fn handle_connection(
                             })),
                     )
                 }
+                AgentEvent::UsageUpdate {
+                    input_tokens,
+                    output_tokens,
+                } => {
+                    let subs = event_subs.lock().await;
+                    if subs.is_empty() {
+                        continue;
+                    }
+                    let sid = subs.last().unwrap().clone();
+                    Some(
+                        ServerEvent::new(sid, "usage_update").with_data(serde_json::json!({
+                            "input_tokens": input_tokens,
+                            "output_tokens": output_tokens,
+                        })),
+                    )
+                }
+                AgentEvent::BudgetWarning {
+                    session_id,
+                    spent_cents,
+                    budget_cents,
+                    utilization_pct,
+                } => {
+                    let subs = event_subs.lock().await;
+                    if subs.is_empty() {
+                        continue;
+                    }
+                    Some(
+                        ServerEvent::new(session_id.to_string(), "budget_warning").with_data(
+                            serde_json::json!({
+                                "spent_cents": spent_cents,
+                                "budget_cents": budget_cents,
+                                "utilization_pct": utilization_pct,
+                            }),
+                        ),
+                    )
+                }
+                AgentEvent::BudgetExceeded {
+                    session_id,
+                    spent_cents,
+                    budget_cents,
+                } => {
+                    let subs = event_subs.lock().await;
+                    if subs.is_empty() {
+                        continue;
+                    }
+                    Some(
+                        ServerEvent::new(session_id.to_string(), "budget_exceeded").with_data(
+                            serde_json::json!({
+                                "spent_cents": spent_cents,
+                                "budget_cents": budget_cents,
+                            }),
+                        ),
+                    )
+                }
                 AgentEvent::TurnComplete { .. } => None,
                 AgentEvent::CronFired { .. } => None,
                 AgentEvent::ApprovalResolved { .. } => None,
@@ -147,7 +201,6 @@ pub async fn handle_connection(
                 | AgentEvent::GuardianDoomLoop { .. }
                 | AgentEvent::GuardianBudgetAlert { .. }
                 | AgentEvent::GuardianHint { .. }
-                | AgentEvent::UsageUpdate { .. }
                 | AgentEvent::GoalEvaluated { .. }
                 | AgentEvent::DecisionMade { .. }
                 | AgentEvent::JudgeVerdict { .. }

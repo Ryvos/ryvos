@@ -125,6 +125,8 @@ fn extract_session_id(event: &AgentEvent) -> Option<&str> {
         AgentEvent::ApprovalRequested { request } => Some(&request.session_id),
         AgentEvent::HeartbeatOk { session_id, .. } => Some(&session_id.0),
         AgentEvent::HeartbeatAlert { session_id, .. } => Some(&session_id.0),
+        AgentEvent::BudgetWarning { session_id, .. } => Some(&session_id.0),
+        AgentEvent::BudgetExceeded { session_id, .. } => Some(&session_id.0),
         _ => None,
     }
 }
@@ -155,6 +157,8 @@ fn event_type_name(event: &AgentEvent) -> &'static str {
         AgentEvent::HeartbeatOk { .. } => "HeartbeatOk",
         AgentEvent::HeartbeatAlert { .. } => "HeartbeatAlert",
         AgentEvent::CronJobComplete { .. } => "CronJobComplete",
+        AgentEvent::BudgetWarning { .. } => "BudgetWarning",
+        AgentEvent::BudgetExceeded { .. } => "BudgetExceeded",
     }
 }
 

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -359,6 +360,47 @@ pub struct DecisionOutcome {
     pub succeeded: bool,
 }
 
+/// Billing type — API (pay-per-token) or Subscription (flat rate).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BillingType {
+    Api,
+    Subscription,
+}
+
+impl std::fmt::Display for BillingType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Api => write!(f, "api"),
+            Self::Subscription => write!(f, "subscription"),
+        }
+    }
+}
+
+/// A cost event from an LLM call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CostEvent {
+    pub run_id: String,
+    pub session_id: String,
+    pub timestamp: DateTime<Utc>,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cost_cents: u64,
+    pub billing_type: BillingType,
+    pub model: String,
+    pub provider: String,
+}
+
+/// Aggregated cost summary over a time range.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CostSummary {
+    pub total_cost_cents: u64,
+    pub total_input_tokens: u64,
+    pub total_output_tokens: u64,
+    pub total_events: u64,
+    pub breakdown: HashMap<String, u64>,
+}
+
 /// Agent event broadcast to all subscribers.
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
@@ -455,6 +497,19 @@ pub enum AgentEvent {
         session_id: SessionId,
         message: String,
         target_channel: Option<String>,
+    },
+    /// Dollar budget warning (soft threshold crossed).
+    BudgetWarning {
+        session_id: SessionId,
+        spent_cents: u64,
+        budget_cents: u64,
+        utilization_pct: u8,
+    },
+    /// Dollar budget exceeded (hard stop).
+    BudgetExceeded {
+        session_id: SessionId,
+        spent_cents: u64,
+        budget_cents: u64,
     },
 }
 

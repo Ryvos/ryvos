@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
@@ -6,9 +7,10 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use ryvos_core::config::GuardianConfig;
+use ryvos_core::config::{BudgetConfig, GuardianConfig, ModelPricing};
 use ryvos_core::event::EventBus;
-use ryvos_core::types::{AgentEvent, SessionId};
+use ryvos_core::types::{AgentEvent, BillingType, SessionId};
+use ryvos_memory::CostStore;
 
 /// Action the Guardian sends to the agent loop.
 #[derive(Debug, Clone)]
@@ -33,6 +35,8 @@ pub struct Guardian {
     event_bus: Arc<EventBus>,
     cancel: CancellationToken,
     hint_tx: mpsc::Sender<GuardianAction>,
+    cost_store: Option<Arc<CostStore>>,
+    budget_config: Option<BudgetConfig>,
 }
 
 impl Guardian {
@@ -49,8 +53,20 @@ impl Guardian {
             event_bus,
             cancel,
             hint_tx,
+            cost_store: None,
+            budget_config: None,
         };
         (guardian, hint_rx)
+    }
+
+    /// Set the cost store and budget config for dollar-based budget enforcement.
+    pub fn set_budget(
+        &mut self,
+        cost_store: Arc<CostStore>,
+        budget_config: BudgetConfig,
+    ) {
+        self.cost_store = Some(cost_store);
+        self.budget_config = Some(budget_config);
     }
 
     /// Run the Guardian event loop. Spawned as a tokio task.
@@ -68,10 +84,34 @@ impl Guardian {
         // Stall detection
         let mut last_progress = Instant::now();
 
-        // Budget monitoring
+        // Token budget monitoring
         let mut total_tokens: u64 = 0;
         let mut warned = false;
         let mut hard_stopped = false;
+
+        // Dollar budget monitoring
+        let mut dollar_warned = false;
+        let mut dollar_stopped = false;
+        let budget_cents = self
+            .budget_config
+            .as_ref()
+            .map(|b| b.monthly_budget_cents)
+            .unwrap_or(0);
+        let dollar_warn_pct = self
+            .budget_config
+            .as_ref()
+            .map(|b| b.warn_pct)
+            .unwrap_or(80) as u64;
+        let dollar_hard_pct = self
+            .budget_config
+            .as_ref()
+            .map(|b| b.hard_stop_pct)
+            .unwrap_or(100) as u64;
+        let pricing_overrides: HashMap<String, ModelPricing> = self
+            .budget_config
+            .as_ref()
+            .map(|b| b.pricing.clone())
+            .unwrap_or_default();
 
         info!("Guardian watchdog started");
 
@@ -188,6 +228,83 @@ impl Guardian {
                                     self.cancel.cancel();
                                 }
                             }
+
+                            // Dollar budget enforcement
+                            if budget_cents > 0 && !dollar_stopped {
+                                if let Some(ref cost_store) = self.cost_store {
+                                    let cost = ryvos_memory::estimate_cost_cents(
+                                        "unknown",
+                                        "unknown",
+                                        BillingType::Api,
+                                        input_tokens,
+                                        output_tokens,
+                                        &pricing_overrides,
+                                    );
+
+                                    let event = ryvos_core::types::CostEvent {
+                                        run_id: "guardian".into(),
+                                        session_id: session_id.0.clone(),
+                                        timestamp: chrono::Utc::now(),
+                                        input_tokens,
+                                        output_tokens,
+                                        cost_cents: cost,
+                                        billing_type: BillingType::Api,
+                                        model: "unknown".into(),
+                                        provider: "unknown".into(),
+                                    };
+                                    let _ = cost_store.record_cost_event(&event);
+
+                                    if let Ok(spent) = cost_store.monthly_spend_cents() {
+                                        let warn_threshold = budget_cents * dollar_warn_pct / 100;
+                                        let hard_threshold = budget_cents * dollar_hard_pct / 100;
+
+                                        if !dollar_warned && spent >= warn_threshold {
+                                            dollar_warned = true;
+                                            let pct = (spent * 100 / budget_cents) as u8;
+                                            warn!(
+                                                spent_cents = spent,
+                                                budget_cents = budget_cents,
+                                                pct = pct,
+                                                "Guardian: dollar budget warning"
+                                            );
+                                            self.event_bus.publish(AgentEvent::BudgetWarning {
+                                                session_id: session_id.clone(),
+                                                spent_cents: spent,
+                                                budget_cents,
+                                                utilization_pct: pct,
+                                            });
+                                            let hint = format!(
+                                                "[Guardian] Budget warning: ${:.2} / ${:.2} ({}%)",
+                                                spent as f64 / 100.0,
+                                                budget_cents as f64 / 100.0,
+                                                pct
+                                            );
+                                            let _ = self.hint_tx.send(GuardianAction::InjectHint(hint)).await;
+                                        }
+
+                                        if spent >= hard_threshold {
+                                            dollar_stopped = true;
+                                            warn!(
+                                                spent_cents = spent,
+                                                budget_cents = budget_cents,
+                                                "Guardian: dollar budget exceeded"
+                                            );
+                                            self.event_bus.publish(AgentEvent::BudgetExceeded {
+                                                session_id: session_id.clone(),
+                                                spent_cents: spent,
+                                                budget_cents,
+                                            });
+                                            let reason = format!(
+                                                "Budget exceeded: ${:.2} / ${:.2}",
+                                                spent as f64 / 100.0,
+                                                budget_cents as f64 / 100.0
+                                            );
+                                            let _ = self.hint_tx.send(GuardianAction::CancelRun(reason)).await;
+                                            self.cancel.cancel();
+                                        }
+                                    }
+                                }
+                            }
                         }
                         AgentEvent::RunComplete { .. } | AgentEvent::RunError { .. } => {
                             // Reset state for next run
@@ -196,6 +313,7 @@ impl Guardian {
                             total_tokens = 0;
                             warned = false;
                             hard_stopped = false;
+                            // Don't reset dollar_warned/dollar_stopped — monthly budget persists
                         }
                         _ => {}
                     }

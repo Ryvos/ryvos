@@ -232,7 +232,9 @@ impl App {
             AgentEvent::GuardianHint { .. }
             | AgentEvent::UsageUpdate { .. }
             | AgentEvent::DecisionMade { .. }
-            | AgentEvent::CronJobComplete { .. } => {}
+            | AgentEvent::CronJobComplete { .. }
+            | AgentEvent::BudgetWarning { .. }
+            | AgentEvent::BudgetExceeded { .. } => {}
         }
     }
 }

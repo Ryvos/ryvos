@@ -24,21 +24,22 @@
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-header">
         <h1>Ryvos</h1>
-        <button id="new-session-btn" title="New session">+</button>
       </div>
-      <div id="session-list" class="session-list"></div>
+      <nav class="sidebar-nav">
+        <a href="#/dashboard" class="nav-item active" data-route="dashboard">Dashboard</a>
+        <a href="#/sessions" class="nav-item" data-route="sessions">Sessions</a>
+        <a href="#/runs" class="nav-item" data-route="runs">Runs</a>
+        <a href="#/costs" class="nav-item" data-route="costs">Costs</a>
+        <a href="#/settings" class="nav-item" data-route="settings">Settings</a>
+      </nav>
       <div class="sidebar-footer">
         <button id="logout-btn" class="btn-link">Disconnect</button>
       </div>
     </aside>
 
-    <!-- Chat area -->
-    <main id="chat" class="chat-area">
-      <div id="messages" class="messages"></div>
-      <div class="input-bar">
-        <textarea id="message-input" placeholder="Type a message..." rows="1"></textarea>
-        <button id="send-btn">Send</button>
-      </div>
+    <!-- Content area -->
+    <main id="content" class="content-area">
+      <!-- Dynamic content rendered by app.js -->
     </main>
   </div>
 

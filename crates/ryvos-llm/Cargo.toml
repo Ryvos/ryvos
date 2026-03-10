@@ -16,3 +16,4 @@ tracing.workspace = true
 tokio-util.workspace = true
 bytes = "1"
 rand.workspace = true
+tokio-stream = { version = "0.1", features = ["io-util"] }

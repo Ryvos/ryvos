@@ -67,6 +67,10 @@ pub enum RyvosError {
     #[error("Approval timeout for tool: {tool}")]
     ApprovalTimeout { tool: String },
 
+    // Budget errors
+    #[error("Budget exceeded: spent {spent_cents} cents of {budget_cents} cent budget")]
+    BudgetExceeded { spent_cents: u64, budget_cents: u64 },
+
     // MCP errors
     #[error("MCP error: {0}")]
     Mcp(String),

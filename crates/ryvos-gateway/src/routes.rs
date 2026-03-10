@@ -108,6 +108,161 @@ pub async fn send_message(
     }
 }
 
+// ── Monitoring dashboard endpoints ─────────────────────────────
+
+#[derive(Deserialize)]
+pub struct RunsQuery {
+    #[serde(default = "default_runs_limit")]
+    pub limit: u64,
+    #[serde(default)]
+    pub offset: u64,
+}
+
+fn default_runs_limit() -> u64 {
+    50
+}
+
+#[derive(Deserialize)]
+pub struct CostsQuery {
+    #[serde(default)]
+    pub from: Option<String>,
+    #[serde(default)]
+    pub to: Option<String>,
+    #[serde(default = "default_group_by")]
+    pub group_by: String,
+}
+
+fn default_group_by() -> String {
+    "model".to_string()
+}
+
+// GET /api/metrics — overview metrics for the dashboard
+pub async fn metrics(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let sessions = state.session_mgr.list();
+    let uptime_secs = state.start_time.elapsed().as_secs();
+
+    let (total_runs, total_tokens, total_cost_cents) =
+        if let Some(ref cost_store) = state.cost_store {
+            let (_runs, _) = cost_store
+                .run_history(0, 0)
+                .unwrap_or((vec![], 0));
+            let monthly = cost_store.monthly_spend_cents().unwrap_or(0);
+            // Sum tokens from run history total count
+            let total_count = cost_store
+                .run_history(1, 0)
+                .map(|(_, t)| t)
+                .unwrap_or(0);
+            (total_count, 0u64, monthly)
+        } else {
+            (0, 0, 0)
+        };
+
+    let monthly_budget_cents = state
+        .budget_config
+        .as_ref()
+        .map(|b| b.monthly_budget_cents)
+        .unwrap_or(0);
+
+    let budget_utilization_pct = if monthly_budget_cents > 0 {
+        (total_cost_cents as f64 / monthly_budget_cents as f64 * 100.0) as u64
+    } else {
+        0
+    };
+
+    Ok(Json(serde_json::json!({
+        "total_runs": total_runs,
+        "active_sessions": sessions.len(),
+        "total_tokens": total_tokens,
+        "total_cost_cents": total_cost_cents,
+        "monthly_budget_cents": monthly_budget_cents,
+        "budget_utilization_pct": budget_utilization_pct,
+        "uptime_secs": uptime_secs,
+    })))
+}
+
+// GET /api/runs — paginated run history
+pub async fn runs(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<RunsQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let cost_store = state.cost_store.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let (runs, total) = cost_store
+        .run_history(q.limit, q.offset)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(serde_json::json!({
+        "runs": runs,
+        "total": total,
+        "offset": q.offset,
+        "limit": q.limit,
+    })))
+}
+
+// GET /api/costs — cost summary with breakdown
+pub async fn costs(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<CostsQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let cost_store = state.cost_store.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+
+    let from = q
+        .from
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+        .map(|d| d.with_timezone(&chrono::Utc))
+        .unwrap_or_else(|| chrono::Utc::now() - chrono::Duration::days(30));
+
+    let to = q
+        .to
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+        .map(|d| d.with_timezone(&chrono::Utc))
+        .unwrap_or_else(chrono::Utc::now);
+
+    let summary = cost_store
+        .cost_summary(&from, &to)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let breakdown = cost_store
+        .cost_by_group(&from, &to, &q.group_by)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let breakdown_json: Vec<serde_json::Value> = breakdown
+        .into_iter()
+        .map(|(key, cost, input, output)| {
+            serde_json::json!({
+                "key": key,
+                "cost_cents": cost,
+                "input_tokens": input,
+                "output_tokens": output,
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "summary": summary,
+        "breakdown": breakdown_json,
+        "from": from.to_rfc3339(),
+        "to": to.to_rfc3339(),
+        "group_by": q.group_by,
+    })))
+}
+
 // ── Webhook endpoint ────────────────────────────────────────────
 
 #[derive(Deserialize)]

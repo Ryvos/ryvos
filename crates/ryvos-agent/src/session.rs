@@ -12,6 +12,10 @@ pub struct SessionInfo {
     pub channel: String,
     pub started_at: chrono::DateTime<chrono::Utc>,
     pub last_active: chrono::DateTime<chrono::Utc>,
+    pub cli_session_id: Option<String>,
+    pub total_runs: u64,
+    pub total_tokens: u64,
+    pub billing_type: Option<String>,
 }
 
 impl SessionManager {
@@ -37,9 +41,46 @@ impl SessionManager {
                 channel: channel.to_string(),
                 started_at: chrono::Utc::now(),
                 last_active: chrono::Utc::now(),
+                cli_session_id: None,
+                total_runs: 0,
+                total_tokens: 0,
+                billing_type: None,
             },
         );
         session_id
+    }
+
+    /// Set the CLI session ID for a session.
+    pub fn set_cli_session_id(&self, key: &str, cli_session_id: &str) {
+        let mut sessions = self.sessions.lock().unwrap();
+        if let Some(info) = sessions.get_mut(key) {
+            info.cli_session_id = Some(cli_session_id.to_string());
+        }
+    }
+
+    /// Get the CLI session ID for a session.
+    pub fn get_cli_session_id(&self, key: &str) -> Option<String> {
+        let sessions = self.sessions.lock().unwrap();
+        sessions.get(key).and_then(|i| i.cli_session_id.clone())
+    }
+
+    /// Clear the CLI session ID for a session.
+    pub fn clear_cli_session_id(&self, key: &str) {
+        let mut sessions = self.sessions.lock().unwrap();
+        if let Some(info) = sessions.get_mut(key) {
+            info.cli_session_id = None;
+        }
+    }
+
+    /// Record run stats for a session.
+    pub fn record_run_stats(&self, key: &str, tokens: u64, billing_type: &str) {
+        let mut sessions = self.sessions.lock().unwrap();
+        if let Some(info) = sessions.get_mut(key) {
+            info.total_runs += 1;
+            info.total_tokens += tokens;
+            info.billing_type = Some(billing_type.to_string());
+            info.last_active = chrono::Utc::now();
+        }
     }
 
     /// List active session keys.

@@ -2545,7 +2545,7 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "ryvos"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2576,7 +2576,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-agent"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "cron",
@@ -2599,7 +2599,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-channels"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "futures",
@@ -2619,7 +2619,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "futures",
@@ -2635,10 +2635,11 @@ dependencies = [
 
 [[package]]
 name = "ryvos-gateway"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "axum",
+ "chrono",
  "futures",
  "mime_guess",
  "reqwest 0.12.28",
@@ -2660,7 +2661,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-llm"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "futures",
@@ -2671,13 +2672,14 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-stream",
  "tokio-util",
  "tracing",
 ]
 
 [[package]]
 name = "ryvos-mcp"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "futures",
  "rmcp",
@@ -2691,7 +2693,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-memory"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "futures",
@@ -2700,6 +2702,7 @@ dependencies = [
  "ryvos-core",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -2708,7 +2711,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-skills"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "futures",
  "reqwest 0.12.28",
@@ -2725,7 +2728,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-tools"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "bollard",
@@ -2748,7 +2751,7 @@ dependencies = [
 
 [[package]]
 name = "ryvos-tui"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "crossterm",

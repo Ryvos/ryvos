@@ -98,6 +98,36 @@ impl Default for RegistryConfig {
     }
 }
 
+/// Dollar-based budget configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BudgetConfig {
+    /// Monthly budget in cents (0 = unlimited).
+    pub monthly_budget_cents: u64,
+    /// Soft warning at this percentage of budget.
+    #[serde(default = "default_warn_pct")]
+    pub warn_pct: u8,
+    /// Hard stop at this percentage of budget.
+    #[serde(default = "default_hard_stop_pct")]
+    pub hard_stop_pct: u8,
+    /// Per-model pricing overrides (cents per million tokens).
+    #[serde(default)]
+    pub pricing: HashMap<String, ModelPricing>,
+}
+
+fn default_warn_pct() -> u8 {
+    80
+}
+fn default_hard_stop_pct() -> u8 {
+    100
+}
+
+/// Per-model pricing override (cents per million tokens).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelPricing {
+    pub input_cents_per_mtok: u64,
+    pub output_cents_per_mtok: u64,
+}
+
 /// Webhook configuration for the gateway.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WebhookConfig {
@@ -139,6 +169,8 @@ pub struct AppConfig {
     pub daily_logs: Option<DailyLogsConfig>,
     #[serde(default)]
     pub registry: Option<RegistryConfig>,
+    #[serde(default)]
+    pub budget: Option<BudgetConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -367,6 +399,12 @@ pub struct ModelConfig {
     /// Extra headers to send with every LLM request.
     #[serde(default)]
     pub extra_headers: HashMap<String, String>,
+    /// Path to claude CLI binary (for claude-code provider).
+    #[serde(default)]
+    pub claude_command: Option<String>,
+    /// Runtime-only: CLI session ID for --resume (not serialized to config).
+    #[serde(skip)]
+    pub cli_session_id: Option<String>,
 }
 
 fn default_provider() -> String {

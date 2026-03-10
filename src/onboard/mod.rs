@@ -219,6 +219,8 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         azure_api_version: None,
         aws_region: None,
         extra_headers: Default::default(),
+        claude_command: None,
+        cli_session_id: None,
     };
 
     // Apply preset defaults (base_url, extra_headers)
@@ -240,6 +242,7 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         embedding: None,
         daily_logs: None,
         registry: None,
+        budget: None,
     };
 
     if let Some(parent) = config_path.parent() {
@@ -538,6 +541,8 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         azure_api_version: None,
         aws_region: None,
         extra_headers: Default::default(),
+        claude_command: None,
+        cli_session_id: None,
     };
     ryvos_llm::apply_preset_defaults(&mut model_config);
 
@@ -557,6 +562,7 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         embedding: None,
         daily_logs: None,
         registry: None,
+        budget: None,
     };
 
     if let Some(parent) = config_path.parent() {
