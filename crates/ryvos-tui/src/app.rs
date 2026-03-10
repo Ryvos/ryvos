@@ -229,6 +229,57 @@ impl App {
                     text: format!("[Heartbeat Alert] {}", message),
                 });
             }
+            AgentEvent::GraphGenerated {
+                node_count,
+                edge_count,
+                evolution_cycle,
+                ..
+            } => {
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!(
+                        "[DIRECTOR] Graph generated: {} nodes, {} edges (cycle {})",
+                        node_count, edge_count, evolution_cycle
+                    ),
+                });
+            }
+            AgentEvent::NodeComplete {
+                node_id,
+                succeeded,
+                elapsed_ms,
+                ..
+            } => {
+                let status = if succeeded { "ok" } else { "FAILED" };
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!(
+                        "[DIRECTOR] Node '{}' {} ({}ms)",
+                        node_id, status, elapsed_ms
+                    ),
+                });
+            }
+            AgentEvent::EvolutionTriggered {
+                reason, cycle, ..
+            } => {
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!("[DIRECTOR] Evolution cycle {}: {}", cycle, reason),
+                });
+            }
+            AgentEvent::SemanticFailureCaptured {
+                node_id,
+                category,
+                diagnosis,
+                ..
+            } => {
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!(
+                        "[DIRECTOR] Failure at '{}' ({}): {}",
+                        node_id, category, diagnosis
+                    ),
+                });
+            }
             AgentEvent::GuardianHint { .. }
             | AgentEvent::UsageUpdate { .. }
             | AgentEvent::DecisionMade { .. }

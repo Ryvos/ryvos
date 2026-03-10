@@ -232,6 +232,8 @@ mod tests {
             success_criteria: criteria,
             constraints: vec![],
             success_threshold: threshold,
+            version: 0,
+            metrics: std::collections::HashMap::new(),
         }
     }
 

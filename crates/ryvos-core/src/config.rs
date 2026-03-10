@@ -213,6 +213,9 @@ pub struct AgentConfig {
     /// Opt-out of memory flush before context compaction.
     #[serde(default)]
     pub disable_memory_flush: Option<bool>,
+    /// Director orchestration configuration.
+    #[serde(default)]
+    pub director: Option<DirectorConfig>,
 }
 
 impl Default for AgentConfig {
@@ -234,6 +237,7 @@ impl Default for AgentConfig {
             checkpoint: None,
             model_overrides: HashMap::new(),
             disable_memory_flush: None,
+            director: None,
         }
     }
 }
@@ -264,6 +268,41 @@ impl Default for CheckpointConfig {
 
 fn default_checkpoint_enabled() -> bool {
     true
+}
+
+/// Director orchestration configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DirectorConfig {
+    /// Enable Director orchestration (default: false).
+    #[serde(default)]
+    pub enabled: bool,
+    /// Maximum evolution cycles before giving up (default: 3).
+    #[serde(default = "default_max_evolution_cycles")]
+    pub max_evolution_cycles: u32,
+    /// Number of semantic failures before triggering evolution (default: 3).
+    #[serde(default = "default_failure_threshold")]
+    pub failure_threshold: usize,
+    /// Model override for the Director's planning LLM (defaults to main model).
+    #[serde(default)]
+    pub model: Option<ModelConfig>,
+}
+
+fn default_max_evolution_cycles() -> u32 {
+    3
+}
+fn default_failure_threshold() -> usize {
+    3
+}
+
+impl Default for DirectorConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_evolution_cycles: default_max_evolution_cycles(),
+            failure_threshold: default_failure_threshold(),
+            model: None,
+        }
+    }
 }
 
 /// Guardian watchdog configuration.
@@ -1037,6 +1076,35 @@ token = "my-token"
         let gw = config.gateway.unwrap();
         assert!(gw.api_keys.is_empty());
         assert_eq!(gw.token, Some("my-token".to_string()));
+    }
+
+    #[test]
+    fn test_director_config_defaults() {
+        let toml_str = r#"
+[model]
+model_id = "claude-sonnet-4-20250514"
+"#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.agent.director.is_none());
+    }
+
+    #[test]
+    fn test_director_config_explicit() {
+        let toml_str = r#"
+[model]
+model_id = "claude-sonnet-4-20250514"
+
+[agent.director]
+enabled = true
+max_evolution_cycles = 5
+failure_threshold = 2
+"#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        let director = config.agent.director.unwrap();
+        assert!(director.enabled);
+        assert_eq!(director.max_evolution_cycles, 5);
+        assert_eq!(director.failure_threshold, 2);
+        assert!(director.model.is_none());
     }
 
     #[test]

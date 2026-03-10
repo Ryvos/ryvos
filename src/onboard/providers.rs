@@ -5,6 +5,7 @@ pub struct ProviderChoice {
     pub provider: String,
     pub api_key: Option<String>,
     pub base_url: Option<String>,
+    pub claude_command: Option<String>,
 }
 
 pub struct ModelChoice {
@@ -25,6 +26,7 @@ pub fn select_provider() -> Result<ProviderChoice> {
         "MiniMax (API key)",
         "Vercel AI Gateway (URL + key)",
         "OpenCode Zen (URL + key)",
+        "Claude Code (CLI, no API key)",
         "Ollama (local, no key needed)",
         "Custom (OpenAI-compatible)",
     ];
@@ -76,8 +78,9 @@ pub fn select_provider() -> Result<ProviderChoice> {
         ),
         10 => configure_keyed_provider_with_custom_url("ai-gateway", "AI_GATEWAY_API_KEY"),
         11 => configure_keyed_provider_with_custom_url("opencode-zen", "OPENCODE_ZEN_API_KEY"),
-        12 => configure_ollama(),
-        13 => configure_custom(),
+        12 => configure_claude_code(),
+        13 => configure_ollama(),
+        14 => configure_custom(),
         _ => unreachable!(),
     }
 }
@@ -103,6 +106,7 @@ fn configure_keyed_provider(provider: &str, env_var: &str) -> Result<ProviderCho
         provider: provider.to_string(),
         api_key: Some(api_key),
         base_url: None,
+        claude_command: None,
     })
 }
 
@@ -131,6 +135,7 @@ fn configure_keyed_provider_with_url(
         provider: provider.to_string(),
         api_key: Some(api_key),
         base_url: Some(base_url.to_string()),
+        claude_command: None,
     })
 }
 
@@ -162,6 +167,7 @@ fn configure_keyed_provider_with_custom_url(
         provider: provider.to_string(),
         api_key: Some(api_key),
         base_url: Some(base_url),
+        claude_command: None,
     })
 }
 
@@ -175,6 +181,7 @@ fn configure_ollama() -> Result<ProviderChoice> {
         provider: "ollama".to_string(),
         api_key: None,
         base_url: Some(base_url),
+        claude_command: None,
     })
 }
 
@@ -198,7 +205,71 @@ fn configure_custom() -> Result<ProviderChoice> {
         provider: "custom".to_string(),
         api_key,
         base_url: Some(base_url),
+        claude_command: None,
     })
+}
+
+fn configure_claude_code() -> Result<ProviderChoice> {
+    let detected = detect_claude_binary();
+
+    match &detected {
+        Some(path) => {
+            // Try to get version
+            let version = std::process::Command::new(path)
+                .arg("--version")
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .unwrap_or_default();
+            let version = version.trim();
+            if version.is_empty() {
+                println!("  Found claude at: {}", path);
+            } else {
+                println!("  Found claude at: {} ({})", path, version);
+            }
+        }
+        None => {
+            println!("  \x1b[1;33mWarning:\x1b[0m claude CLI not found in PATH.");
+            println!("  Install it from https://docs.anthropic.com/en/docs/claude-code");
+        }
+    }
+
+    let default_path = detected.unwrap_or_else(|| "claude".to_string());
+    let command: String = Input::new()
+        .with_prompt("Claude CLI path")
+        .default(default_path)
+        .interact_text()?;
+
+    let billing_options = &["Subscription (Max/Pro plan, no API key)", "API key billing"];
+    let billing_choice = Select::new()
+        .with_prompt("Billing type")
+        .items(billing_options)
+        .default(0)
+        .interact()?;
+
+    let api_key = if billing_choice == 1 {
+        Some(prompt_api_key()?)
+    } else {
+        None
+    };
+
+    Ok(ProviderChoice {
+        provider: "claude-code".to_string(),
+        api_key,
+        base_url: None,
+        claude_command: Some(command),
+    })
+}
+
+fn detect_claude_binary() -> Option<String> {
+    std::process::Command::new("which")
+        .arg("claude")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 pub fn select_model(provider: &ProviderChoice) -> Result<ModelChoice> {
@@ -225,6 +296,15 @@ pub fn select_model(provider: &ProviderChoice) -> Result<ModelChoice> {
         "xiaomi" => (vec!["mimo-v2-flash", "Enter manually"], 0),
         "minimax" => (
             vec!["MiniMax-M2.1", "MiniMax-M2.1-Lightning", "Enter manually"],
+            0,
+        ),
+        "claude-code" => (
+            vec![
+                "claude-sonnet-4-20250514",
+                "claude-opus-4-20250514",
+                "default",
+                "Enter manually",
+            ],
             0,
         ),
         "ollama" => (

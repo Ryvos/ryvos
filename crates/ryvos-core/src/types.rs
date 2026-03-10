@@ -511,6 +511,33 @@ pub enum AgentEvent {
         spent_cents: u64,
         budget_cents: u64,
     },
+    /// Director generated an execution graph.
+    GraphGenerated {
+        session_id: SessionId,
+        node_count: usize,
+        edge_count: usize,
+        evolution_cycle: u32,
+    },
+    /// A graph node completed execution.
+    NodeComplete {
+        session_id: SessionId,
+        node_id: String,
+        succeeded: bool,
+        elapsed_ms: u64,
+    },
+    /// Director triggered graph evolution (re-planning after failure).
+    EvolutionTriggered {
+        session_id: SessionId,
+        reason: String,
+        cycle: u32,
+    },
+    /// Director captured a semantic failure during diagnosis.
+    SemanticFailureCaptured {
+        session_id: SessionId,
+        node_id: String,
+        category: String,
+        diagnosis: String,
+    },
 }
 
 /// Thinking level for extended thinking / reasoning tokens.

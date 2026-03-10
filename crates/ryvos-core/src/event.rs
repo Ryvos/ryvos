@@ -127,6 +127,10 @@ fn extract_session_id(event: &AgentEvent) -> Option<&str> {
         AgentEvent::HeartbeatAlert { session_id, .. } => Some(&session_id.0),
         AgentEvent::BudgetWarning { session_id, .. } => Some(&session_id.0),
         AgentEvent::BudgetExceeded { session_id, .. } => Some(&session_id.0),
+        AgentEvent::GraphGenerated { session_id, .. } => Some(&session_id.0),
+        AgentEvent::NodeComplete { session_id, .. } => Some(&session_id.0),
+        AgentEvent::EvolutionTriggered { session_id, .. } => Some(&session_id.0),
+        AgentEvent::SemanticFailureCaptured { session_id, .. } => Some(&session_id.0),
         _ => None,
     }
 }
@@ -159,6 +163,10 @@ fn event_type_name(event: &AgentEvent) -> &'static str {
         AgentEvent::CronJobComplete { .. } => "CronJobComplete",
         AgentEvent::BudgetWarning { .. } => "BudgetWarning",
         AgentEvent::BudgetExceeded { .. } => "BudgetExceeded",
+        AgentEvent::GraphGenerated { .. } => "GraphGenerated",
+        AgentEvent::NodeComplete { .. } => "NodeComplete",
+        AgentEvent::EvolutionTriggered { .. } => "EvolutionTriggered",
+        AgentEvent::SemanticFailureCaptured { .. } => "SemanticFailureCaptured",
     }
 }
 
@@ -293,5 +301,63 @@ mod tests {
         assert!(!filter.matches(&AgentEvent::RunStarted {
             session_id: SessionId::from_string("s2"),
         }));
+    }
+
+    #[test]
+    fn test_director_event_type_names() {
+        assert_eq!(
+            event_type_name(&AgentEvent::GraphGenerated {
+                session_id: SessionId::from_string("s1"),
+                node_count: 3,
+                edge_count: 2,
+                evolution_cycle: 0,
+            }),
+            "GraphGenerated"
+        );
+        assert_eq!(
+            event_type_name(&AgentEvent::NodeComplete {
+                session_id: SessionId::from_string("s1"),
+                node_id: "n1".to_string(),
+                succeeded: true,
+                elapsed_ms: 100,
+            }),
+            "NodeComplete"
+        );
+        assert_eq!(
+            event_type_name(&AgentEvent::EvolutionTriggered {
+                session_id: SessionId::from_string("s1"),
+                reason: "failure threshold".to_string(),
+                cycle: 1,
+            }),
+            "EvolutionTriggered"
+        );
+        assert_eq!(
+            event_type_name(&AgentEvent::SemanticFailureCaptured {
+                session_id: SessionId::from_string("s1"),
+                node_id: "n2".to_string(),
+                category: "logic_contradiction".to_string(),
+                diagnosis: "contradicts goal".to_string(),
+            }),
+            "SemanticFailureCaptured"
+        );
+    }
+
+    #[test]
+    fn test_director_events_extract_session_id() {
+        let event = AgentEvent::GraphGenerated {
+            session_id: SessionId::from_string("s42"),
+            node_count: 2,
+            edge_count: 1,
+            evolution_cycle: 0,
+        };
+        assert_eq!(extract_session_id(&event), Some("s42"));
+
+        let event = AgentEvent::NodeComplete {
+            session_id: SessionId::from_string("s42"),
+            node_id: "n1".to_string(),
+            succeeded: true,
+            elapsed_ms: 50,
+        };
+        assert_eq!(extract_session_id(&event), Some("s42"));
     }
 }

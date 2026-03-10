@@ -2,6 +2,7 @@ pub mod agent_loop;
 pub mod approval;
 pub mod checkpoint;
 pub mod context;
+pub mod director;
 pub mod evaluator;
 pub mod gate;
 pub mod graph;
@@ -19,6 +20,7 @@ pub mod session;
 
 pub use agent_loop::AgentRuntime;
 pub use approval::ApprovalBroker;
+pub use director::Director;
 pub use checkpoint::CheckpointStore;
 pub use evaluator::GoalEvaluator;
 pub use gate::SecurityGate;

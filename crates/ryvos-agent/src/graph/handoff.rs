@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct HandoffContext {
     data: HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    version: u64,
 }
 
 impl HandoffContext {
@@ -18,7 +20,7 @@ impl HandoffContext {
 
     /// Create a HandoffContext from initial data.
     pub fn from_map(data: HashMap<String, serde_json::Value>) -> Self {
-        Self { data }
+        Self { data, version: 0 }
     }
 
     /// Get a value by key.
@@ -34,12 +36,14 @@ impl HandoffContext {
     /// Set a value.
     pub fn set(&mut self, key: impl Into<String>, value: serde_json::Value) {
         self.data.insert(key.into(), value);
+        self.version += 1;
     }
 
     /// Set a string value.
     pub fn set_str(&mut self, key: impl Into<String>, value: impl Into<String>) {
         self.data
             .insert(key.into(), serde_json::Value::String(value.into()));
+        self.version += 1;
     }
 
     /// Merge another context into this one (overwrites on conflict).
@@ -47,6 +51,7 @@ impl HandoffContext {
         for (k, v) in &other.data {
             self.data.insert(k.clone(), v.clone());
         }
+        self.version += 1;
     }
 
     /// Extract output values for the given keys from a node's output.
@@ -66,6 +71,7 @@ impl HandoffContext {
                         self.data.insert(key.clone(), val.clone());
                     }
                 }
+                self.version += 1;
                 return;
             }
         }
@@ -77,11 +83,17 @@ impl HandoffContext {
                 serde_json::Value::String(output_text.to_string()),
             );
         }
+        self.version += 1;
     }
 
     /// Get the underlying data map.
     pub fn data(&self) -> &HashMap<String, serde_json::Value> {
         &self.data
+    }
+
+    /// Get the version counter (incremented on each mutation).
+    pub fn version(&self) -> u64 {
+        self.version
     }
 }
 
@@ -149,5 +161,35 @@ mod tests {
         map.insert("topic".into(), serde_json::json!("AI"));
         let ctx = HandoffContext::from_map(map);
         assert_eq!(ctx.get_str("topic"), Some("AI"));
+    }
+
+    #[test]
+    fn test_version_increments() {
+        let mut ctx = HandoffContext::new();
+        assert_eq!(ctx.version(), 0);
+
+        ctx.set_str("a", "1");
+        assert_eq!(ctx.version(), 1);
+
+        ctx.set("b", serde_json::json!(2));
+        assert_eq!(ctx.version(), 2);
+
+        let mut other = HandoffContext::new();
+        other.set_str("c", "3");
+        ctx.merge(&other);
+        assert_eq!(ctx.version(), 3);
+
+        ctx.ingest_output(&["d".into()], "hello");
+        assert_eq!(ctx.version(), 4);
+
+        ctx.ingest_output(&["x".into()], r#"{"x": 42}"#);
+        assert_eq!(ctx.version(), 5);
+    }
+
+    #[test]
+    fn test_ingest_empty_no_version_bump() {
+        let mut ctx = HandoffContext::new();
+        ctx.ingest_output(&[], "anything");
+        assert_eq!(ctx.version(), 0);
     }
 }

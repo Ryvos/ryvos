@@ -228,6 +228,60 @@ pub async fn handle_connection(
                 AgentEvent::GuardianBudgetAlert { session_id, .. } => Some(
                     ServerEvent::new(session_id.to_string(), "guardian_budget_alert"),
                 ),
+                AgentEvent::GraphGenerated {
+                    session_id,
+                    node_count,
+                    edge_count,
+                    evolution_cycle,
+                } => Some(
+                    ServerEvent::new(session_id.to_string(), "graph_generated").with_data(
+                        serde_json::json!({
+                            "node_count": node_count,
+                            "edge_count": edge_count,
+                            "evolution_cycle": evolution_cycle,
+                        }),
+                    ),
+                ),
+                AgentEvent::NodeComplete {
+                    session_id,
+                    node_id,
+                    succeeded,
+                    elapsed_ms,
+                } => Some(
+                    ServerEvent::new(session_id.to_string(), "node_complete").with_data(
+                        serde_json::json!({
+                            "node_id": node_id,
+                            "succeeded": succeeded,
+                            "elapsed_ms": elapsed_ms,
+                        }),
+                    ),
+                ),
+                AgentEvent::EvolutionTriggered {
+                    session_id,
+                    reason,
+                    cycle,
+                } => Some(
+                    ServerEvent::new(session_id.to_string(), "evolution_triggered").with_data(
+                        serde_json::json!({
+                            "reason": reason,
+                            "cycle": cycle,
+                        }),
+                    ),
+                ),
+                AgentEvent::SemanticFailureCaptured {
+                    session_id,
+                    node_id,
+                    category,
+                    diagnosis,
+                } => Some(
+                    ServerEvent::new(session_id.to_string(), "semantic_failure").with_data(
+                        serde_json::json!({
+                            "node_id": node_id,
+                            "category": category,
+                            "diagnosis": diagnosis,
+                        }),
+                    ),
+                ),
                 AgentEvent::TurnComplete { .. } => None,
                 AgentEvent::ApprovalResolved { .. } => None,
                 AgentEvent::GuardianHint { .. }

@@ -111,6 +111,7 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         "cohere" => "command-r-plus".to_string(),
         "azure" | "azure-openai" => "gpt-4o".to_string(),
         "bedrock" | "aws" => "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string(),
+        "claude-code" | "claude-cli" | "claude-sub" => "claude-sonnet-4-20250514".to_string(),
         _ => "claude-sonnet-4-20250514".to_string(),
     });
 
@@ -205,6 +206,21 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         last_run_version: Some(env!("CARGO_PKG_VERSION").to_string()),
     };
 
+    let claude_command = if provider_name == "claude-code" {
+        std::env::var("RYVOS_CLAUDE_COMMAND").ok().or_else(|| {
+            std::process::Command::new("which")
+                .arg("claude")
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        })
+    } else {
+        None
+    };
+
     let mut model = ModelConfig {
         provider: provider_name,
         model_id,
@@ -219,7 +235,7 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         azure_api_version: None,
         aws_region: None,
         extra_headers: Default::default(),
-        claude_command: None,
+        claude_command,
         cli_session_id: None,
     };
 
@@ -300,6 +316,10 @@ fn resolve_non_interactive_provider(
         "bedrock" | "aws" => {
             // Bedrock uses AWS credentials, not an API key
             Ok((None, None))
+        }
+        "claude-code" | "claude-cli" | "claude-sub" => {
+            // Claude Code CLI — no API key needed for subscription billing
+            Ok((api_key_flag, None))
         }
         _ => {
             // Generic: use provided key or try common env var patterns
@@ -541,7 +561,7 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         azure_api_version: None,
         aws_region: None,
         extra_headers: Default::default(),
-        claude_command: None,
+        claude_command: provider.claude_command,
         cli_session_id: None,
     };
     ryvos_llm::apply_preset_defaults(&mut model_config);

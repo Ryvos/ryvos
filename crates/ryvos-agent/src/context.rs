@@ -348,6 +348,8 @@ mod tests {
                 value: None,
             }],
             success_threshold: 0.9,
+            version: 0,
+            metrics: std::collections::HashMap::new(),
         };
 
         let msg = ContextBuilder::new()

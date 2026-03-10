@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use ryvos_core::config::ModelConfig;
 use ryvos_core::goal::Goal;
 
 /// A node in the execution graph.
@@ -31,6 +32,9 @@ pub struct Node {
     /// Optional goal for this node.
     #[serde(default)]
     pub goal: Option<Goal>,
+    /// Optional model override for this node (e.g., use a stronger model for critical steps).
+    #[serde(default)]
+    pub model: Option<ModelConfig>,
 }
 
 fn default_max_turns() -> usize {
@@ -49,6 +53,7 @@ impl Node {
             tools: vec![],
             max_turns: default_max_turns(),
             goal: None,
+            model: None,
         }
     }
 
@@ -79,6 +84,12 @@ impl Node {
     /// Set max turns.
     pub fn with_max_turns(mut self, turns: usize) -> Self {
         self.max_turns = turns;
+        self
+    }
+
+    /// Set a model override for this node.
+    pub fn with_model(mut self, model: ModelConfig) -> Self {
+        self.model = Some(model);
         self
     }
 

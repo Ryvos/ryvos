@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 /// A goal that defines what success looks like for an agent run.
@@ -13,6 +15,12 @@ pub struct Goal {
     /// Minimum weighted score to pass (0.0 to 1.0). Default: 0.9.
     #[serde(default = "default_threshold")]
     pub success_threshold: f64,
+    /// Version counter — bumped on each evolution cycle.
+    #[serde(default)]
+    pub version: u32,
+    /// Metrics collected during execution (e.g., latency, token counts).
+    #[serde(default)]
+    pub metrics: HashMap<String, f64>,
 }
 
 fn default_threshold() -> f64 {
@@ -125,6 +133,37 @@ pub struct GoalEvaluation {
     pub constraint_violations: Vec<ConstraintViolation>,
 }
 
+/// A goal wrapped with failure history for Director orchestration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoalObject {
+    pub goal: Goal,
+    #[serde(default)]
+    pub failure_history: Vec<SemanticFailure>,
+    #[serde(default)]
+    pub evolution_count: u32,
+}
+
+/// A semantic failure captured by the Director during diagnosis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticFailure {
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub node_id: String,
+    pub category: FailureCategory,
+    pub diagnosis: String,
+    pub attempted_action: String,
+}
+
+/// Category of semantic failure for structured downstream processing.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum FailureCategory {
+    LogicContradiction,
+    VelocityDrift,
+    ConstraintViolation,
+    FailureAccumulation,
+    QualityDeficiency,
+}
+
 impl Goal {
     /// Evaluate the output against all deterministic criteria (OutputContains, OutputEquals).
     /// Returns results for criteria that can be evaluated without an LLM.
@@ -224,6 +263,8 @@ mod tests {
             success_criteria: criteria,
             constraints: vec![],
             success_threshold: threshold,
+            version: 0,
+            metrics: HashMap::new(),
         }
     }
 
@@ -373,6 +414,8 @@ mod tests {
                 value: Some(serde_json::json!(60)),
             }],
             success_threshold: 0.8,
+            version: 0,
+            metrics: HashMap::new(),
         };
 
         let json = serde_json::to_string(&goal).unwrap();
@@ -381,5 +424,45 @@ mod tests {
         assert_eq!(parsed.success_criteria.len(), 2);
         assert_eq!(parsed.constraints.len(), 1);
         assert!((parsed.success_threshold - 0.8).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_goal_object_serde_roundtrip() {
+        let goal_obj = GoalObject {
+            goal: make_goal(vec![contains_criterion("c1", "ok", 1.0)], 0.9),
+            failure_history: vec![SemanticFailure {
+                timestamp: chrono::Utc::now(),
+                node_id: "n1".to_string(),
+                category: FailureCategory::LogicContradiction,
+                diagnosis: "output contradicts constraint".to_string(),
+                attempted_action: "generate code".to_string(),
+            }],
+            evolution_count: 2,
+        };
+
+        let json = serde_json::to_string(&goal_obj).unwrap();
+        let parsed: GoalObject = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.evolution_count, 2);
+        assert_eq!(parsed.failure_history.len(), 1);
+        assert_eq!(
+            parsed.failure_history[0].category,
+            FailureCategory::LogicContradiction
+        );
+        assert_eq!(parsed.failure_history[0].node_id, "n1");
+    }
+
+    #[test]
+    fn test_goal_version_and_metrics() {
+        let mut goal = make_goal(vec![], 0.5);
+        assert_eq!(goal.version, 0);
+        assert!(goal.metrics.is_empty());
+
+        goal.version = 3;
+        goal.metrics.insert("latency_ms".to_string(), 150.0);
+
+        let json = serde_json::to_string(&goal).unwrap();
+        let parsed: Goal = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.version, 3);
+        assert_eq!(parsed.metrics.get("latency_ms"), Some(&150.0));
     }
 }

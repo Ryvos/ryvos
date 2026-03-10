@@ -170,12 +170,24 @@ impl AgentRuntime {
 
     /// Run the agent loop with an optional goal.
     /// If a goal is provided, the agent evaluates output against it and retries if not met.
+    /// When Director orchestration is enabled AND a goal is provided, delegates to Director.
     pub async fn run_with_goal(
         &self,
         session_id: &SessionId,
         user_message: &str,
         goal: Option<&Goal>,
     ) -> Result<String> {
+        // Director delegation: if enabled and a goal is provided, use Director orchestration
+        if let (Some(goal), Some(ref director_cfg)) =
+            (goal, self.config.agent.director.as_ref())
+        {
+            if director_cfg.enabled {
+                return self
+                    .run_with_director(session_id, user_message, goal)
+                    .await;
+            }
+        }
+
         let start = Instant::now();
         let max_turns = self.config.agent.max_turns;
         let max_duration = Duration::from_secs(self.config.agent.max_duration_secs);
@@ -862,5 +874,64 @@ impl AgentRuntime {
         }
 
         Err(RyvosError::MaxTurnsExceeded(max_turns))
+    }
+
+    /// Delegate execution to the Director orchestrator.
+    fn run_with_director<'a>(
+        &'a self,
+        session_id: &'a SessionId,
+        user_message: &'a str,
+        goal: &'a Goal,
+    ) -> futures::future::BoxFuture<'a, Result<String>> {
+        Box::pin(async move {
+            use ryvos_core::goal::GoalObject;
+
+            let director_cfg = self
+                .config
+                .agent
+                .director
+                .as_ref()
+                .expect("director config checked before call");
+
+            let director_model = director_cfg
+                .model
+                .clone()
+                .unwrap_or_else(|| self.config.model.clone());
+
+            let director = crate::director::Director::new(
+                self.llm.clone(),
+                director_model,
+                self.event_bus.clone(),
+                director_cfg.max_evolution_cycles,
+                director_cfg.failure_threshold,
+            );
+
+            let mut goal_obj = GoalObject {
+                goal: goal.clone(),
+                failure_history: vec![],
+                evolution_count: 0,
+            };
+
+            // Set the goal description to include the user message if it's generic
+            if goal_obj.goal.description.is_empty() {
+                goal_obj.goal.description = user_message.to_string();
+            }
+
+            let result = director.run(&mut goal_obj, self, session_id).await?;
+
+            self.event_bus.publish(AgentEvent::RunComplete {
+                session_id: session_id.clone(),
+                total_turns: result.total_nodes_executed,
+                input_tokens: 0,
+                output_tokens: 0,
+            });
+
+            if result.succeeded {
+                Ok(result.output)
+            } else {
+                // Return the best-effort output even on failure
+                Ok(result.output)
+            }
+        })
     }
 }
