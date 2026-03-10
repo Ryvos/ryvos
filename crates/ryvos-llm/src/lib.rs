@@ -8,9 +8,9 @@ use ryvos_core::traits::LlmClient;
 pub use providers::anthropic::AnthropicClient;
 pub use providers::azure::AzureClient;
 pub use providers::bedrock::BedrockClient;
+pub use providers::claude_code::ClaudeCodeClient;
 pub use providers::cohere::CohereClient;
 pub use providers::gemini::GeminiClient;
-pub use providers::claude_code::ClaudeCodeClient;
 pub use providers::openai::OpenAiClient;
 pub use retry::RetryingClient;
 

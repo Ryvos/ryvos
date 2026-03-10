@@ -33,273 +33,270 @@ pub async fn handle_connection(
     let mut event_rx = event_bus.subscribe();
     let event_ws_tx = ws_tx.clone();
     let event_subs = subscribed_sessions.clone();
-    let event_task = tokio::spawn(async move {
-        while let Ok(event) = event_rx.recv().await {
-            let server_event = match &event {
-                AgentEvent::TextDelta(text) => {
-                    let subs = event_subs.lock().await;
-                    if subs.is_empty() {
-                        continue;
-                    }
-                    let sid = subs.last().unwrap().clone();
-                    Some(ServerEvent::new(sid, "text_delta").with_text(text.clone()))
-                }
-                AgentEvent::ToolStart { name, input } => {
-                    let subs = event_subs.lock().await;
-                    if subs.is_empty() {
-                        continue;
-                    }
-                    let sid = subs.last().unwrap().clone();
-                    Some(
-                        ServerEvent::new(sid, "tool_start")
-                            .with_tool(name.clone())
-                            .with_data(input.clone()),
-                    )
-                }
-                AgentEvent::ToolEnd { name, result } => {
-                    let subs = event_subs.lock().await;
-                    if subs.is_empty() {
-                        continue;
-                    }
-                    let sid = subs.last().unwrap().clone();
-                    Some(
-                        ServerEvent::new(sid, "tool_end")
-                            .with_tool(name.clone())
-                            .with_data(serde_json::json!({
-                                "content": result.content,
-                                "is_error": result.is_error,
-                            })),
-                    )
-                }
-                AgentEvent::RunStarted { session_id } => {
-                    Some(ServerEvent::new(session_id.to_string(), "run_started"))
-                }
-                AgentEvent::RunComplete {
-                    session_id,
-                    total_turns,
-                    input_tokens,
-                    output_tokens,
-                } => {
-                    Some(
-                        ServerEvent::new(session_id.to_string(), "run_complete").with_data(
-                            serde_json::json!({
-                                "total_turns": total_turns,
-                                "input_tokens": input_tokens,
-                                "output_tokens": output_tokens,
-                            }),
+    let event_task =
+        tokio::spawn(async move {
+            while let Ok(event) = event_rx.recv().await {
+                let server_event =
+                    match &event {
+                        AgentEvent::TextDelta(text) => {
+                            let subs = event_subs.lock().await;
+                            if subs.is_empty() {
+                                continue;
+                            }
+                            let sid = subs.last().unwrap().clone();
+                            Some(ServerEvent::new(sid, "text_delta").with_text(text.clone()))
+                        }
+                        AgentEvent::ToolStart { name, input } => {
+                            let subs = event_subs.lock().await;
+                            if subs.is_empty() {
+                                continue;
+                            }
+                            let sid = subs.last().unwrap().clone();
+                            Some(
+                                ServerEvent::new(sid, "tool_start")
+                                    .with_tool(name.clone())
+                                    .with_data(input.clone()),
+                            )
+                        }
+                        AgentEvent::ToolEnd { name, result } => {
+                            let subs = event_subs.lock().await;
+                            if subs.is_empty() {
+                                continue;
+                            }
+                            let sid = subs.last().unwrap().clone();
+                            Some(
+                                ServerEvent::new(sid, "tool_end")
+                                    .with_tool(name.clone())
+                                    .with_data(serde_json::json!({
+                                        "content": result.content,
+                                        "is_error": result.is_error,
+                                    })),
+                            )
+                        }
+                        AgentEvent::RunStarted { session_id } => {
+                            Some(ServerEvent::new(session_id.to_string(), "run_started"))
+                        }
+                        AgentEvent::RunComplete {
+                            session_id,
+                            total_turns,
+                            input_tokens,
+                            output_tokens,
+                        } => Some(
+                            ServerEvent::new(session_id.to_string(), "run_complete").with_data(
+                                serde_json::json!({
+                                    "total_turns": total_turns,
+                                    "input_tokens": input_tokens,
+                                    "output_tokens": output_tokens,
+                                }),
+                            ),
                         ),
-                    )
-                }
-                AgentEvent::RunError { error } => {
-                    let subs = event_subs.lock().await;
-                    if subs.is_empty() {
-                        continue;
-                    }
-                    let sid = subs.last().unwrap().clone();
-                    Some(
-                        ServerEvent::new(sid, "run_error")
-                            .with_data(serde_json::json!({ "error": error })),
-                    )
-                }
-                AgentEvent::ApprovalRequested { request } => {
-                    let subs = event_subs.lock().await;
-                    if subs.is_empty() {
-                        continue;
-                    }
-                    let sid = subs.last().unwrap().clone();
-                    Some(
-                        ServerEvent::new(sid, "approval_requested").with_data(serde_json::json!({
-                            "id": request.id,
-                            "tool_name": request.tool_name,
-                            "tier": request.tier.to_string(),
-                            "input_summary": request.input_summary,
-                            "session_id": request.session_id,
-                        })),
-                    )
-                }
-                AgentEvent::ToolBlocked { name, tier, reason } => {
-                    let subs = event_subs.lock().await;
-                    if subs.is_empty() {
-                        continue;
-                    }
-                    let sid = subs.last().unwrap().clone();
-                    Some(
-                        ServerEvent::new(sid, "tool_blocked")
-                            .with_tool(name.clone())
-                            .with_data(serde_json::json!({
-                                "tier": tier.to_string(),
-                                "reason": reason,
-                            })),
-                    )
-                }
-                AgentEvent::UsageUpdate {
-                    input_tokens,
-                    output_tokens,
-                } => {
-                    let subs = event_subs.lock().await;
-                    if subs.is_empty() {
-                        continue;
-                    }
-                    let sid = subs.last().unwrap().clone();
-                    Some(
-                        ServerEvent::new(sid, "usage_update").with_data(serde_json::json!({
-                            "input_tokens": input_tokens,
-                            "output_tokens": output_tokens,
-                        })),
-                    )
-                }
-                AgentEvent::BudgetWarning {
-                    session_id,
-                    spent_cents,
-                    budget_cents,
-                    utilization_pct,
-                } => {
-                    let subs = event_subs.lock().await;
-                    if subs.is_empty() {
-                        continue;
-                    }
-                    Some(
-                        ServerEvent::new(session_id.to_string(), "budget_warning").with_data(
-                            serde_json::json!({
-                                "spent_cents": spent_cents,
-                                "budget_cents": budget_cents,
-                                "utilization_pct": utilization_pct,
-                            }),
+                        AgentEvent::RunError { error } => {
+                            let subs = event_subs.lock().await;
+                            if subs.is_empty() {
+                                continue;
+                            }
+                            let sid = subs.last().unwrap().clone();
+                            Some(
+                                ServerEvent::new(sid, "run_error")
+                                    .with_data(serde_json::json!({ "error": error })),
+                            )
+                        }
+                        AgentEvent::ApprovalRequested { request } => {
+                            let subs = event_subs.lock().await;
+                            if subs.is_empty() {
+                                continue;
+                            }
+                            let sid = subs.last().unwrap().clone();
+                            Some(ServerEvent::new(sid, "approval_requested").with_data(
+                                serde_json::json!({
+                                    "id": request.id,
+                                    "tool_name": request.tool_name,
+                                    "tier": request.tier.to_string(),
+                                    "input_summary": request.input_summary,
+                                    "session_id": request.session_id,
+                                }),
+                            ))
+                        }
+                        AgentEvent::ToolBlocked { name, tier, reason } => {
+                            let subs = event_subs.lock().await;
+                            if subs.is_empty() {
+                                continue;
+                            }
+                            let sid = subs.last().unwrap().clone();
+                            Some(
+                                ServerEvent::new(sid, "tool_blocked")
+                                    .with_tool(name.clone())
+                                    .with_data(serde_json::json!({
+                                        "tier": tier.to_string(),
+                                        "reason": reason,
+                                    })),
+                            )
+                        }
+                        AgentEvent::UsageUpdate {
+                            input_tokens,
+                            output_tokens,
+                        } => {
+                            let subs = event_subs.lock().await;
+                            if subs.is_empty() {
+                                continue;
+                            }
+                            let sid = subs.last().unwrap().clone();
+                            Some(ServerEvent::new(sid, "usage_update").with_data(
+                                serde_json::json!({
+                                    "input_tokens": input_tokens,
+                                    "output_tokens": output_tokens,
+                                }),
+                            ))
+                        }
+                        AgentEvent::BudgetWarning {
+                            session_id,
+                            spent_cents,
+                            budget_cents,
+                            utilization_pct,
+                        } => {
+                            let subs = event_subs.lock().await;
+                            if subs.is_empty() {
+                                continue;
+                            }
+                            Some(
+                                ServerEvent::new(session_id.to_string(), "budget_warning")
+                                    .with_data(serde_json::json!({
+                                        "spent_cents": spent_cents,
+                                        "budget_cents": budget_cents,
+                                        "utilization_pct": utilization_pct,
+                                    })),
+                            )
+                        }
+                        AgentEvent::BudgetExceeded {
+                            session_id,
+                            spent_cents,
+                            budget_cents,
+                        } => {
+                            let subs = event_subs.lock().await;
+                            if subs.is_empty() {
+                                continue;
+                            }
+                            Some(
+                                ServerEvent::new(session_id.to_string(), "budget_exceeded")
+                                    .with_data(serde_json::json!({
+                                        "spent_cents": spent_cents,
+                                        "budget_cents": budget_cents,
+                                    })),
+                            )
+                        }
+                        AgentEvent::HeartbeatFired { timestamp } => Some(
+                            ServerEvent::new("system".to_string(), "heartbeat_fired").with_data(
+                                serde_json::json!({ "timestamp": timestamp.to_rfc3339() }),
+                            ),
                         ),
-                    )
-                }
-                AgentEvent::BudgetExceeded {
-                    session_id,
-                    spent_cents,
-                    budget_cents,
-                } => {
-                    let subs = event_subs.lock().await;
-                    if subs.is_empty() {
-                        continue;
-                    }
-                    Some(
-                        ServerEvent::new(session_id.to_string(), "budget_exceeded").with_data(
-                            serde_json::json!({
-                                "spent_cents": spent_cents,
-                                "budget_cents": budget_cents,
-                            }),
+                        AgentEvent::HeartbeatOk {
+                            session_id,
+                            response_chars,
+                        } => Some(
+                            ServerEvent::new(session_id.to_string(), "heartbeat_ok")
+                                .with_data(serde_json::json!({ "response_chars": response_chars })),
                         ),
-                    )
-                }
-                AgentEvent::HeartbeatFired { timestamp } => Some(
-                    ServerEvent::new("system".to_string(), "heartbeat_fired")
-                        .with_data(serde_json::json!({ "timestamp": timestamp.to_rfc3339() })),
-                ),
-                AgentEvent::HeartbeatOk {
-                    session_id,
-                    response_chars,
-                } => Some(
-                    ServerEvent::new(session_id.to_string(), "heartbeat_ok")
-                        .with_data(serde_json::json!({ "response_chars": response_chars })),
-                ),
-                AgentEvent::HeartbeatAlert {
-                    session_id,
-                    message,
-                    target_channel,
-                } => Some(
-                    ServerEvent::new(session_id.to_string(), "heartbeat_alert")
-                        .with_data(serde_json::json!({
-                            "message": message,
-                            "target_channel": target_channel,
-                        })),
-                ),
-                AgentEvent::CronFired { job_id, .. } => Some(
-                    ServerEvent::new("system".to_string(), "cron_fired")
-                        .with_data(serde_json::json!({ "job_name": job_id })),
-                ),
-                AgentEvent::CronJobComplete {
-                    name,
-                    ..
-                } => Some(
-                    ServerEvent::new("system".to_string(), "cron_complete")
-                        .with_data(serde_json::json!({ "job_name": name })),
-                ),
-                AgentEvent::GuardianStall { session_id, .. } => Some(
-                    ServerEvent::new(session_id.to_string(), "guardian_stall"),
-                ),
-                AgentEvent::GuardianDoomLoop { session_id, .. } => Some(
-                    ServerEvent::new(session_id.to_string(), "guardian_doom_loop"),
-                ),
-                AgentEvent::GuardianBudgetAlert { session_id, .. } => Some(
-                    ServerEvent::new(session_id.to_string(), "guardian_budget_alert"),
-                ),
-                AgentEvent::GraphGenerated {
-                    session_id,
-                    node_count,
-                    edge_count,
-                    evolution_cycle,
-                } => Some(
-                    ServerEvent::new(session_id.to_string(), "graph_generated").with_data(
-                        serde_json::json!({
-                            "node_count": node_count,
-                            "edge_count": edge_count,
-                            "evolution_cycle": evolution_cycle,
-                        }),
-                    ),
-                ),
-                AgentEvent::NodeComplete {
-                    session_id,
-                    node_id,
-                    succeeded,
-                    elapsed_ms,
-                } => Some(
-                    ServerEvent::new(session_id.to_string(), "node_complete").with_data(
-                        serde_json::json!({
-                            "node_id": node_id,
-                            "succeeded": succeeded,
-                            "elapsed_ms": elapsed_ms,
-                        }),
-                    ),
-                ),
-                AgentEvent::EvolutionTriggered {
-                    session_id,
-                    reason,
-                    cycle,
-                } => Some(
-                    ServerEvent::new(session_id.to_string(), "evolution_triggered").with_data(
-                        serde_json::json!({
-                            "reason": reason,
-                            "cycle": cycle,
-                        }),
-                    ),
-                ),
-                AgentEvent::SemanticFailureCaptured {
-                    session_id,
-                    node_id,
-                    category,
-                    diagnosis,
-                } => Some(
-                    ServerEvent::new(session_id.to_string(), "semantic_failure").with_data(
-                        serde_json::json!({
-                            "node_id": node_id,
-                            "category": category,
-                            "diagnosis": diagnosis,
-                        }),
-                    ),
-                ),
-                AgentEvent::TurnComplete { .. } => None,
-                AgentEvent::ApprovalResolved { .. } => None,
-                AgentEvent::GuardianHint { .. }
-                | AgentEvent::GoalEvaluated { .. }
-                | AgentEvent::DecisionMade { .. }
-                | AgentEvent::JudgeVerdict { .. } => None,
-            };
+                        AgentEvent::HeartbeatAlert {
+                            session_id,
+                            message,
+                            target_channel,
+                        } => Some(
+                            ServerEvent::new(session_id.to_string(), "heartbeat_alert").with_data(
+                                serde_json::json!({
+                                    "message": message,
+                                    "target_channel": target_channel,
+                                }),
+                            ),
+                        ),
+                        AgentEvent::CronFired { job_id, .. } => Some(
+                            ServerEvent::new("system".to_string(), "cron_fired")
+                                .with_data(serde_json::json!({ "job_name": job_id })),
+                        ),
+                        AgentEvent::CronJobComplete { name, .. } => Some(
+                            ServerEvent::new("system".to_string(), "cron_complete")
+                                .with_data(serde_json::json!({ "job_name": name })),
+                        ),
+                        AgentEvent::GuardianStall { session_id, .. } => {
+                            Some(ServerEvent::new(session_id.to_string(), "guardian_stall"))
+                        }
+                        AgentEvent::GuardianDoomLoop { session_id, .. } => Some(ServerEvent::new(
+                            session_id.to_string(),
+                            "guardian_doom_loop",
+                        )),
+                        AgentEvent::GuardianBudgetAlert { session_id, .. } => Some(
+                            ServerEvent::new(session_id.to_string(), "guardian_budget_alert"),
+                        ),
+                        AgentEvent::GraphGenerated {
+                            session_id,
+                            node_count,
+                            edge_count,
+                            evolution_cycle,
+                        } => Some(
+                            ServerEvent::new(session_id.to_string(), "graph_generated").with_data(
+                                serde_json::json!({
+                                    "node_count": node_count,
+                                    "edge_count": edge_count,
+                                    "evolution_cycle": evolution_cycle,
+                                }),
+                            ),
+                        ),
+                        AgentEvent::NodeComplete {
+                            session_id,
+                            node_id,
+                            succeeded,
+                            elapsed_ms,
+                        } => Some(
+                            ServerEvent::new(session_id.to_string(), "node_complete").with_data(
+                                serde_json::json!({
+                                    "node_id": node_id,
+                                    "succeeded": succeeded,
+                                    "elapsed_ms": elapsed_ms,
+                                }),
+                            ),
+                        ),
+                        AgentEvent::EvolutionTriggered {
+                            session_id,
+                            reason,
+                            cycle,
+                        } => Some(
+                            ServerEvent::new(session_id.to_string(), "evolution_triggered")
+                                .with_data(serde_json::json!({
+                                    "reason": reason,
+                                    "cycle": cycle,
+                                })),
+                        ),
+                        AgentEvent::SemanticFailureCaptured {
+                            session_id,
+                            node_id,
+                            category,
+                            diagnosis,
+                        } => Some(
+                            ServerEvent::new(session_id.to_string(), "semantic_failure").with_data(
+                                serde_json::json!({
+                                    "node_id": node_id,
+                                    "category": category,
+                                    "diagnosis": diagnosis,
+                                }),
+                            ),
+                        ),
+                        AgentEvent::TurnComplete { .. } => None,
+                        AgentEvent::ApprovalResolved { .. } => None,
+                        AgentEvent::GuardianHint { .. }
+                        | AgentEvent::GoalEvaluated { .. }
+                        | AgentEvent::DecisionMade { .. }
+                        | AgentEvent::JudgeVerdict { .. } => None,
+                    };
 
-            if let Some(evt) = server_event {
-                if let Ok(json) = serde_json::to_string(&evt) {
-                    let mut tx = event_ws_tx.lock().await;
-                    if tx.send(Message::Text(json.into())).await.is_err() {
-                        break;
+                if let Some(evt) = server_event {
+                    if let Ok(json) = serde_json::to_string(&evt) {
+                        let mut tx = event_ws_tx.lock().await;
+                        if tx.send(Message::Text(json.into())).await.is_err() {
+                            break;
+                        }
                     }
                 }
             }
-        }
-    });
+        });
 
     // Create a lane for serial request processing
     let (lane, mut lane_rx) = LaneQueue::new(32);

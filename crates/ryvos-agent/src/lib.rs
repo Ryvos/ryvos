@@ -20,8 +20,8 @@ pub mod session;
 
 pub use agent_loop::AgentRuntime;
 pub use approval::ApprovalBroker;
-pub use director::Director;
 pub use checkpoint::CheckpointStore;
+pub use director::Director;
 pub use evaluator::GoalEvaluator;
 pub use gate::SecurityGate;
 pub use graph::{

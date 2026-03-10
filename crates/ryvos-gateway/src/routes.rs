@@ -150,15 +150,10 @@ pub async fn metrics(
 
     let (total_runs, total_tokens, total_cost_cents) =
         if let Some(ref cost_store) = state.cost_store {
-            let (_runs, _) = cost_store
-                .run_history(0, 0)
-                .unwrap_or((vec![], 0));
+            let (_runs, _) = cost_store.run_history(0, 0).unwrap_or((vec![], 0));
             let monthly = cost_store.monthly_spend_cents().unwrap_or(0);
             // Sum tokens from run history total count
-            let total_count = cost_store
-                .run_history(1, 0)
-                .map(|(_, t)| t)
-                .unwrap_or(0);
+            let total_count = cost_store.run_history(1, 0).map(|(_, t)| t).unwrap_or(0);
             (total_count, 0u64, monthly)
         } else {
             (0, 0, 0)
@@ -228,11 +223,10 @@ pub async fn costs(
         .map(|d| d.with_timezone(&chrono::Utc))
         .unwrap_or_else(|| chrono::Utc::now() - chrono::Duration::days(30));
 
-    let to = q
-        .to
-        .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
-        .map(|d| d.with_timezone(&chrono::Utc))
-        .unwrap_or_else(chrono::Utc::now);
+    let to =
+        q.to.and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+            .map(|d| d.with_timezone(&chrono::Utc))
+            .unwrap_or_else(chrono::Utc::now);
 
     let summary = cost_store
         .cost_summary(&from, &to)

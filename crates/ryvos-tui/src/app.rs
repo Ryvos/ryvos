@@ -258,9 +258,7 @@ impl App {
                     ),
                 });
             }
-            AgentEvent::EvolutionTriggered {
-                reason, cycle, ..
-            } => {
+            AgentEvent::EvolutionTriggered { reason, cycle, .. } => {
                 self.messages.push(DisplayMessage {
                     role: MessageRole::System,
                     text: format!("[DIRECTOR] Evolution cycle {}: {}", cycle, reason),

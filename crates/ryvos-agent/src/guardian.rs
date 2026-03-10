@@ -60,11 +60,7 @@ impl Guardian {
     }
 
     /// Set the cost store and budget config for dollar-based budget enforcement.
-    pub fn set_budget(
-        &mut self,
-        cost_store: Arc<CostStore>,
-        budget_config: BudgetConfig,
-    ) {
+    pub fn set_budget(&mut self, cost_store: Arc<CostStore>, budget_config: BudgetConfig) {
         self.cost_store = Some(cost_store);
         self.budget_config = Some(budget_config);
     }

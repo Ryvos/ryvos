@@ -50,7 +50,9 @@ impl SessionMetaStore {
         .map_err(|e| RyvosError::Database(e.to_string()))?;
 
         debug!("SessionMetaStore opened at {}", path.display());
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     /// Get or create session meta for a key.
@@ -65,20 +67,20 @@ impl SessionMetaStore {
         if let Some(meta) = existing {
             // Update last_active
             conn.execute(
-                    "UPDATE session_meta SET last_active = ?1 WHERE session_key = ?2",
-                    params![Utc::now().to_rfc3339(), session_key],
-                )
-                .map_err(|e| RyvosError::Database(e.to_string()))?;
+                "UPDATE session_meta SET last_active = ?1 WHERE session_key = ?2",
+                params![Utc::now().to_rfc3339(), session_key],
+            )
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
             return Ok(meta);
         }
 
         let now = Utc::now().to_rfc3339();
         conn.execute(
-                "INSERT INTO session_meta (session_key, session_id, channel, started_at, last_active)
+            "INSERT INTO session_meta (session_key, session_id, channel, started_at, last_active)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![session_key, session_id, channel, now, now],
-            )
-            .map_err(|e| RyvosError::Database(e.to_string()))?;
+            params![session_key, session_id, channel, now, now],
+        )
+        .map_err(|e| RyvosError::Database(e.to_string()))?;
 
         Ok(SessionMeta {
             session_key: session_key.to_string(),
@@ -129,17 +131,13 @@ impl SessionMetaStore {
     }
 
     /// Set the CLI session ID (for --resume).
-    pub fn set_cli_session_id(
-        &self,
-        session_key: &str,
-        cli_session_id: &str,
-    ) -> Result<()> {
+    pub fn set_cli_session_id(&self, session_key: &str, cli_session_id: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-                "UPDATE session_meta SET cli_session_id = ?1, last_active = ?2 WHERE session_key = ?3",
-                params![cli_session_id, Utc::now().to_rfc3339(), session_key],
-            )
-            .map_err(|e| RyvosError::Database(e.to_string()))?;
+            "UPDATE session_meta SET cli_session_id = ?1, last_active = ?2 WHERE session_key = ?3",
+            params![cli_session_id, Utc::now().to_rfc3339(), session_key],
+        )
+        .map_err(|e| RyvosError::Database(e.to_string()))?;
         Ok(())
     }
 
@@ -147,10 +145,10 @@ impl SessionMetaStore {
     pub fn clear_cli_session_id(&self, session_key: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-                "UPDATE session_meta SET cli_session_id = NULL WHERE session_key = ?1",
-                params![session_key],
-            )
-            .map_err(|e| RyvosError::Database(e.to_string()))?;
+            "UPDATE session_meta SET cli_session_id = NULL WHERE session_key = ?1",
+            params![session_key],
+        )
+        .map_err(|e| RyvosError::Database(e.to_string()))?;
         Ok(())
     }
 
@@ -163,11 +161,11 @@ impl SessionMetaStore {
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-                "UPDATE session_meta SET total_runs = total_runs + 1, total_tokens = total_tokens + ?1,
+            "UPDATE session_meta SET total_runs = total_runs + 1, total_tokens = total_tokens + ?1,
                  billing_type = ?2, last_active = ?3 WHERE session_key = ?4",
-                params![tokens, billing_type, Utc::now().to_rfc3339(), session_key],
-            )
-            .map_err(|e| RyvosError::Database(e.to_string()))?;
+            params![tokens, billing_type, Utc::now().to_rfc3339(), session_key],
+        )
+        .map_err(|e| RyvosError::Database(e.to_string()))?;
         Ok(())
     }
 
@@ -250,12 +248,8 @@ mod tests {
         store
             .get_or_create("tg:user:123", "s1", "telegram")
             .unwrap();
-        store
-            .record_run_stats("tg:user:123", 5000, "api")
-            .unwrap();
-        store
-            .record_run_stats("tg:user:123", 3000, "api")
-            .unwrap();
+        store.record_run_stats("tg:user:123", 5000, "api").unwrap();
+        store.record_run_stats("tg:user:123", 3000, "api").unwrap();
 
         let meta = store.get("tg:user:123").unwrap().unwrap();
         assert_eq!(meta.total_runs, 2);

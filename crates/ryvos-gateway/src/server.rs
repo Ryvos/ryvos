@@ -62,7 +62,11 @@ impl GatewayServer {
     }
 
     /// Set the cost store and budget config for monitoring dashboard.
-    pub fn set_cost_store(&mut self, cost_store: Arc<CostStore>, budget_config: Option<BudgetConfig>) {
+    pub fn set_cost_store(
+        &mut self,
+        cost_store: Arc<CostStore>,
+        budget_config: Option<BudgetConfig>,
+    ) {
         self.cost_store = Some(cost_store);
         self.budget_config = budget_config;
     }

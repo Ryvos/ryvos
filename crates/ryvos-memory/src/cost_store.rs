@@ -17,8 +17,7 @@ pub struct CostStore {
 impl CostStore {
     /// Open (or create) the cost database.
     pub fn open(path: &Path) -> Result<Self> {
-        let conn =
-            Connection::open(path).map_err(|e| RyvosError::Database(e.to_string()))?;
+        let conn = Connection::open(path).map_err(|e| RyvosError::Database(e.to_string()))?;
 
         conn.execute_batch(
             "
@@ -56,7 +55,9 @@ impl CostStore {
         .map_err(|e| RyvosError::Database(e.to_string()))?;
 
         debug!("CostStore opened at {}", path.display());
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     /// Record a single cost event.
@@ -84,7 +85,11 @@ impl CostStore {
     /// Get total spend in cents for the current calendar month.
     pub fn monthly_spend_cents(&self) -> Result<u64> {
         let now = Utc::now();
-        let month_start = format!("{}-{:02}-01T00:00:00+00:00", now.format("%Y"), now.format("%m"));
+        let month_start = format!(
+            "{}-{:02}-01T00:00:00+00:00",
+            now.format("%Y"),
+            now.format("%m")
+        );
 
         let conn = self.conn.lock().unwrap();
         let cents: i64 = conn
@@ -208,28 +213,24 @@ impl CostStore {
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-                "UPDATE run_log SET end_time = ?1, input_tokens = ?2, output_tokens = ?3,
+            "UPDATE run_log SET end_time = ?1, input_tokens = ?2, output_tokens = ?3,
                  total_turns = ?4, cost_cents = ?5, status = ?6 WHERE run_id = ?7",
-                params![
-                    Utc::now().to_rfc3339(),
-                    input_tokens,
-                    output_tokens,
-                    total_turns,
-                    cost_cents,
-                    status,
-                    run_id,
-                ],
-            )
-            .map_err(|e| RyvosError::Database(e.to_string()))?;
+            params![
+                Utc::now().to_rfc3339(),
+                input_tokens,
+                output_tokens,
+                total_turns,
+                cost_cents,
+                status,
+                run_id,
+            ],
+        )
+        .map_err(|e| RyvosError::Database(e.to_string()))?;
         Ok(())
     }
 
     /// Get paginated run history.
-    pub fn run_history(
-        &self,
-        limit: u64,
-        offset: u64,
-    ) -> Result<(Vec<serde_json::Value>, u64)> {
+    pub fn run_history(&self, limit: u64, offset: u64) -> Result<(Vec<serde_json::Value>, u64)> {
         let conn = self.conn.lock().unwrap();
         let total: i64 = conn
             .query_row("SELECT COUNT(*) FROM run_log", [], |row| row.get(0))

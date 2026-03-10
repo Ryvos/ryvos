@@ -118,8 +118,11 @@ impl Heartbeat {
                     // Capture and persist new CLI session ID
                     if let Some(ref meta_store) = self.session_meta {
                         if let Some(new_cli_id) = self.runtime.last_message_id() {
-                            meta_store.get_or_create(session_key, &session_id.0, "heartbeat").ok();
-                            if let Err(e) = meta_store.set_cli_session_id(session_key, &new_cli_id) {
+                            meta_store
+                                .get_or_create(session_key, &session_id.0, "heartbeat")
+                                .ok();
+                            if let Err(e) = meta_store.set_cli_session_id(session_key, &new_cli_id)
+                            {
                                 warn!(error = %e, "Failed to persist CLI session ID");
                             }
                         }

@@ -70,10 +70,7 @@ impl LlmClient for ClaudeCodeClient {
                 .collect::<Vec<_>>()
                 .join("\n");
 
-            let claude_bin = config
-                .claude_command
-                .as_deref()
-                .unwrap_or("claude");
+            let claude_bin = config.claude_command.as_deref().unwrap_or("claude");
 
             let mut args = vec![
                 "--print".to_string(),
@@ -155,8 +152,8 @@ impl LlmClient for ClaudeCodeClient {
                 let _ = child.wait().await;
             });
 
-            let stream = tokio_stream::wrappers::LinesStream::new(lines)
-                .filter_map(|line_result: std::result::Result<String, std::io::Error>| async move {
+            let stream = tokio_stream::wrappers::LinesStream::new(lines).filter_map(
+                |line_result: std::result::Result<String, std::io::Error>| async move {
                     let line: String = match line_result {
                         Ok(l) => l,
                         Err(e) => {
@@ -179,7 +176,8 @@ impl LlmClient for ClaudeCodeClient {
                     };
 
                     parse_stream_json(&json)
-                });
+                },
+            );
 
             Ok(Box::pin(stream) as BoxStream<'_, Result<StreamDelta>>)
         })
@@ -219,20 +217,17 @@ fn parse_stream_json(json: &serde_json::Value) -> Option<Result<StreamDelta>> {
                     "tool_use" => {
                         let id = block["id"].as_str().unwrap_or("").to_string();
                         let name = block["name"].as_str().unwrap_or("").to_string();
-                        let _input = block.get("input").cloned().unwrap_or(serde_json::Value::Null);
+                        let _input = block
+                            .get("input")
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null);
                         // Emit ToolUseStart — input arrives via content_block_delta events
-                        return Some(Ok(StreamDelta::ToolUseStart {
-                            index: 0,
-                            id,
-                            name,
-                        }));
+                        return Some(Ok(StreamDelta::ToolUseStart { index: 0, id, name }));
                     }
                     "thinking" => {
                         if let Some(thinking) = block["thinking"].as_str() {
                             if !thinking.is_empty() {
-                                return Some(Ok(StreamDelta::ThinkingDelta(
-                                    thinking.to_string(),
-                                )));
+                                return Some(Ok(StreamDelta::ThinkingDelta(thinking.to_string())));
                             }
                         }
                     }

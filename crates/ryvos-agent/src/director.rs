@@ -103,12 +103,7 @@ impl Director {
                 .context
                 .get_str("final_output")
                 .map(|s| s.to_string())
-                .or_else(|| {
-                    exec_result
-                        .node_results
-                        .last()
-                        .map(|nr| nr.output.clone())
-                })
+                .or_else(|| exec_result.node_results.last().map(|nr| nr.output.clone()))
                 .unwrap_or_default();
 
             // 3. Evaluate result
@@ -174,12 +169,7 @@ impl Director {
             let failures: Vec<String> = goal_obj
                 .failure_history
                 .iter()
-                .map(|f| {
-                    format!(
-                        "- Node '{}': {:?} — {}",
-                        f.node_id, f.category, f.diagnosis
-                    )
-                })
+                .map(|f| format!("- Node '{}': {:?} — {}", f.node_id, f.category, f.diagnosis))
                 .collect();
             format!(
                 "\n\nPrevious failures (avoid repeating):\n{}",
@@ -272,10 +262,7 @@ Keep the graph minimal (2-5 nodes). Respond with ONLY the JSON object."#,
         // use Judge for full evaluation
         let judge = Judge::new(self.llm.clone(), self.config.clone());
         match judge.evaluate(output, &[], &goal_obj.goal).await {
-            Ok(verdict) => matches!(
-                verdict,
-                ryvos_core::types::Verdict::Accept { .. }
-            ),
+            Ok(verdict) => matches!(verdict, ryvos_core::types::Verdict::Accept { .. }),
             Err(_) => false,
         }
     }
@@ -323,13 +310,12 @@ Keep the graph minimal (2-5 nodes). Respond with ONLY the JSON object."#,
                     attempted_action: "complete goal".to_string(),
                 };
 
-                self.event_bus
-                    .publish(AgentEvent::SemanticFailureCaptured {
-                        session_id: session_id.clone(),
-                        node_id: "overall".to_string(),
-                        category: format!("{:?}", failure.category),
-                        diagnosis,
-                    });
+                self.event_bus.publish(AgentEvent::SemanticFailureCaptured {
+                    session_id: session_id.clone(),
+                    node_id: "overall".to_string(),
+                    category: format!("{:?}", failure.category),
+                    diagnosis,
+                });
 
                 failures.push(failure);
             }
@@ -360,13 +346,12 @@ Keep the graph minimal (2-5 nodes). Respond with ONLY the JSON object."#,
                         attempted_action: format!("execute node {}", nr.node_id),
                     };
 
-                    self.event_bus
-                        .publish(AgentEvent::SemanticFailureCaptured {
-                            session_id: session_id.clone(),
-                            node_id: nr.node_id.clone(),
-                            category: format!("{:?}", failure.category),
-                            diagnosis,
-                        });
+                    self.event_bus.publish(AgentEvent::SemanticFailureCaptured {
+                        session_id: session_id.clone(),
+                        node_id: nr.node_id.clone(),
+                        category: format!("{:?}", failure.category),
+                        diagnosis,
+                    });
 
                     failures.push(failure);
                 }
@@ -569,7 +554,8 @@ mod tests {
 
     #[test]
     fn test_parse_diagnosis() {
-        let response = r#"{"category": "logic_contradiction", "diagnosis": "output contradicts constraint"}"#;
+        let response =
+            r#"{"category": "logic_contradiction", "diagnosis": "output contradicts constraint"}"#;
         let (cat, diag) = parse_diagnosis(response);
         assert_eq!(cat, FailureCategory::LogicContradiction);
         assert_eq!(diag, "output contradicts constraint");
