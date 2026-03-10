@@ -72,10 +72,6 @@ pub async fn handle_connection(
                     )
                 }
                 AgentEvent::RunStarted { session_id } => {
-                    let subs = event_subs.lock().await;
-                    if !subs.contains(&session_id.to_string()) {
-                        continue;
-                    }
                     Some(ServerEvent::new(session_id.to_string(), "run_started"))
                 }
                 AgentEvent::RunComplete {
@@ -84,10 +80,6 @@ pub async fn handle_connection(
                     input_tokens,
                     output_tokens,
                 } => {
-                    let subs = event_subs.lock().await;
-                    if !subs.contains(&session_id.to_string()) {
-                        continue;
-                    }
                     Some(
                         ServerEvent::new(session_id.to_string(), "run_complete").with_data(
                             serde_json::json!({
@@ -194,20 +186,54 @@ pub async fn handle_connection(
                         ),
                     )
                 }
+                AgentEvent::HeartbeatFired { timestamp } => Some(
+                    ServerEvent::new("system".to_string(), "heartbeat_fired")
+                        .with_data(serde_json::json!({ "timestamp": timestamp.to_rfc3339() })),
+                ),
+                AgentEvent::HeartbeatOk {
+                    session_id,
+                    response_chars,
+                } => Some(
+                    ServerEvent::new(session_id.to_string(), "heartbeat_ok")
+                        .with_data(serde_json::json!({ "response_chars": response_chars })),
+                ),
+                AgentEvent::HeartbeatAlert {
+                    session_id,
+                    message,
+                    target_channel,
+                } => Some(
+                    ServerEvent::new(session_id.to_string(), "heartbeat_alert")
+                        .with_data(serde_json::json!({
+                            "message": message,
+                            "target_channel": target_channel,
+                        })),
+                ),
+                AgentEvent::CronFired { job_id, .. } => Some(
+                    ServerEvent::new("system".to_string(), "cron_fired")
+                        .with_data(serde_json::json!({ "job_name": job_id })),
+                ),
+                AgentEvent::CronJobComplete {
+                    name,
+                    ..
+                } => Some(
+                    ServerEvent::new("system".to_string(), "cron_complete")
+                        .with_data(serde_json::json!({ "job_name": name })),
+                ),
+                AgentEvent::GuardianStall { session_id, .. } => Some(
+                    ServerEvent::new(session_id.to_string(), "guardian_stall"),
+                ),
+                AgentEvent::GuardianDoomLoop { session_id, .. } => Some(
+                    ServerEvent::new(session_id.to_string(), "guardian_doom_loop"),
+                ),
+                AgentEvent::GuardianBudgetAlert { session_id, .. } => Some(
+                    ServerEvent::new(session_id.to_string(), "guardian_budget_alert"),
+                ),
                 AgentEvent::TurnComplete { .. } => None,
-                AgentEvent::CronFired { .. } => None,
                 AgentEvent::ApprovalResolved { .. } => None,
-                AgentEvent::GuardianStall { .. }
-                | AgentEvent::GuardianDoomLoop { .. }
-                | AgentEvent::GuardianBudgetAlert { .. }
-                | AgentEvent::GuardianHint { .. }
+                AgentEvent::GuardianHint { .. }
                 | AgentEvent::GoalEvaluated { .. }
                 | AgentEvent::DecisionMade { .. }
-                | AgentEvent::JudgeVerdict { .. }
-                | AgentEvent::HeartbeatFired { .. }
-                | AgentEvent::HeartbeatOk { .. }
-                | AgentEvent::HeartbeatAlert { .. }
-                | AgentEvent::CronJobComplete { .. } => None,
+                | AgentEvent::JudgeVerdict { .. } => None,
             };
 
             if let Some(evt) = server_event {

@@ -33,7 +33,6 @@
     });
     logoutBtn.addEventListener('click', handleLogout);
 
-    // Route handling
     window.addEventListener('hashchange', handleRoute);
     handleRoute();
   }
@@ -88,46 +87,64 @@
     var wsUrl = proto + '//' + location.host + '/ws';
     if (apiKey) wsUrl += '?token=' + encodeURIComponent(apiKey);
 
-    ws = new WebSocket(wsUrl);
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (_) {
+      return;
+    }
 
     ws.onopen = function () {
+      updateConnectionStatus(true);
       fetchSessions();
     };
 
     ws.onmessage = function (e) {
       var data;
       try { data = JSON.parse(e.data); } catch (_) { return; }
+      if (data.type === 'event') handleEvent(data);
+    };
 
-      if (data.type === 'event') {
-        handleEvent(data);
-      }
+    ws.onerror = function () {
+      updateConnectionStatus(false);
     };
 
     ws.onclose = function () {
+      updateConnectionStatus(false);
       setTimeout(function () { if (apiKey) connect(); }, 3000);
     };
   }
 
+  function updateConnectionStatus(connected) {
+    var el = document.getElementById('conn-status');
+    if (!el) return;
+    var dot = el.querySelector('.status-dot');
+    var text = el.querySelector('span:last-child');
+    if (connected) {
+      if (dot) dot.style.background = 'var(--success)';
+      if (dot) dot.style.boxShadow = '0 0 6px var(--success)';
+      if (text) text.textContent = 'Connected';
+    } else {
+      if (dot) dot.style.background = 'var(--text-muted)';
+      if (dot) dot.style.boxShadow = 'none';
+      if (text) text.textContent = 'Disconnected';
+    }
+  }
+
   function wsSend(method, params) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    var frame = {
+    ws.send(JSON.stringify({
       type: 'request',
       id: String(Date.now()),
       method: method,
       params: params || {},
-    };
-    ws.send(JSON.stringify(frame));
+    }));
   }
 
   // --- Events ---
   function handleEvent(data) {
     var evt = data.event;
     if (!evt) return;
-
-    // Feed activity to dashboard
     addActivityItem(evt, data.session_id);
-
-    // Handle chat events for session view
     if (currentRoute === 'chat' && data.session_id === currentSessionId) {
       handleChatEvent(evt);
     }
@@ -135,39 +152,68 @@
 
   function addActivityItem(evt, sessionId) {
     var item = {
-      time: new Date().toLocaleTimeString(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       kind: evt.kind,
-      session: sessionId ? sessionId.substring(0, 12) : '',
+      session: sessionId ? sessionId.substring(0, 10) : '',
       detail: '',
     };
     switch (evt.kind) {
-      case 'text_delta': return; // Too noisy
+      case 'text_delta': return;
       case 'run_started': item.detail = 'Run started'; break;
       case 'run_complete':
-        item.detail = 'Run complete (' + (evt.data && evt.data.total_turns || '?') + ' turns)';
+        item.detail = 'Completed in ' + (evt.data && evt.data.total_turns || '?') + ' turns';
         break;
       case 'run_error': item.detail = 'Error: ' + (evt.data && evt.data.error || '?'); break;
       case 'tool_start': item.detail = 'Tool: ' + (evt.tool || '?'); break;
       case 'tool_end': item.detail = 'Tool done: ' + (evt.tool || '?'); break;
       case 'usage_update':
-        item.detail = 'Tokens: +' + (evt.data && evt.data.input_tokens || 0) + '/' + (evt.data && evt.data.output_tokens || 0);
+        item.detail = '+' + (evt.data && evt.data.input_tokens || 0) + ' in / +' + (evt.data && evt.data.output_tokens || 0) + ' out';
         break;
       case 'budget_warning':
-        item.detail = 'Budget warning: ' + (evt.data && evt.data.utilization_pct || '?') + '%';
+        item.detail = 'Budget at ' + (evt.data && evt.data.utilization_pct || '?') + '%';
         break;
       case 'budget_exceeded':
         item.detail = 'Budget exceeded!';
+        break;
+      case 'heartbeat_fired':
+        item.detail = 'Heartbeat fired';
+        item.session = 'system';
+        break;
+      case 'heartbeat_ok':
+        item.detail = 'Heartbeat OK (' + (evt.data && evt.data.response_chars || 0) + ' chars)';
+        break;
+      case 'heartbeat_alert':
+        item.detail = 'Heartbeat ALERT: ' + truncate(evt.data && evt.data.message || '', 60);
+        break;
+      case 'cron_fired':
+        item.detail = 'Cron: ' + (evt.data && evt.data.job_name || '?');
+        item.session = 'system';
+        break;
+      case 'cron_complete':
+        item.detail = 'Cron done: ' + (evt.data && evt.data.job_name || '?');
+        break;
+      case 'guardian_stall':
+        item.detail = 'Guardian: stall detected';
+        break;
+      case 'guardian_doom_loop':
+        item.detail = 'Guardian: doom loop detected';
+        break;
+      case 'guardian_budget_alert':
+        item.detail = 'Guardian: budget alert';
+        break;
+      case 'approval_requested':
+        item.detail = 'Approval needed: ' + (evt.data && evt.data.tool_name || '?');
+        break;
+      case 'tool_blocked':
+        item.detail = 'Blocked: ' + (evt.tool || '?');
         break;
       default: item.detail = evt.kind; break;
     }
     activityFeed.unshift(item);
     if (activityFeed.length > 50) activityFeed.pop();
 
-    // Update dashboard feed if visible
     var feedEl = document.getElementById('activity-feed');
-    if (feedEl) {
-      renderActivityFeed(feedEl);
-    }
+    if (feedEl) renderActivityFeed(feedEl);
   }
 
   function handleChatEvent(evt) {
@@ -188,9 +234,7 @@
       case 'run_complete':
         if (streaming) {
           updateMessageBody(streamingEl, streamingText, false);
-          streaming = false;
-          streamingEl = null;
-          streamingText = '';
+          streaming = false; streamingEl = null; streamingText = '';
         }
         var sendBtn = document.getElementById('send-btn');
         var msgInput = document.getElementById('message-input');
@@ -216,7 +260,6 @@
 
     currentRoute = route;
 
-    // Update nav
     document.querySelectorAll('.nav-item').forEach(function (el) {
       el.classList.toggle('active', el.dataset.route === route ||
         (route === 'chat' && el.dataset.route === 'sessions'));
@@ -237,24 +280,24 @@
   function renderDashboard() {
     content.innerHTML =
       '<div class="dashboard">' +
-      '<h2>Dashboard</h2>' +
-      '<div class="metric-cards" id="metric-cards">Loading...</div>' +
+      '<div class="page-header"><h2>Dashboard</h2><p>Overview of your Ryvos instance</p></div>' +
+      '<div class="metric-cards" id="metric-cards">' + metricCardSkeleton(5) + '</div>' +
       '<div class="dashboard-grid">' +
-      '<div class="card"><h3>Activity Feed</h3><div id="activity-feed" class="activity-feed"></div></div>' +
-      '<div class="card"><h3>Recent Runs (7d)</h3><div id="run-chart" class="run-chart">Loading...</div></div>' +
+      '<div class="card"><div class="card-header"><h3>Activity Feed</h3><span class="card-badge">Live</span></div>' +
+      '<div id="activity-feed" class="activity-feed"></div></div>' +
+      '<div class="card"><div class="card-header"><h3>Runs</h3><span class="card-badge">7 days</span></div>' +
+      '<div id="run-chart" class="run-chart"></div></div>' +
       '</div></div>';
 
     apiFetch('/api/metrics').then(function (data) {
       var cards = document.getElementById('metric-cards');
       if (!cards) return;
       cards.innerHTML =
-        metricCard('Runs', data.total_runs) +
-        metricCard('Sessions', data.active_sessions) +
-        metricCard('Spend', '$' + (data.total_cost_cents / 100).toFixed(2)) +
-        metricCard('Budget', data.monthly_budget_cents > 0
-          ? data.budget_utilization_pct + '%'
-          : 'Unlimited') +
-        metricCard('Uptime', formatDuration(data.uptime_secs));
+        metricCard('Runs', data.total_runs, 'runs', SVG_ACTIVITY) +
+        metricCard('Sessions', data.active_sessions, 'sessions', SVG_USERS) +
+        metricCard('Spend', '$' + (data.total_cost_cents / 100).toFixed(2), 'spend', SVG_DOLLAR) +
+        metricCard('Budget', data.monthly_budget_cents > 0 ? data.budget_utilization_pct + '%' : 'Unlimited', 'budget', SVG_SHIELD) +
+        metricCard('Uptime', formatDuration(data.uptime_secs), 'uptime', SVG_CLOCK);
     }).catch(function () {
       var cards = document.getElementById('metric-cards');
       if (cards) cards.innerHTML = '<p class="text-muted">Failed to load metrics</p>';
@@ -263,25 +306,41 @@
     var feedEl = document.getElementById('activity-feed');
     if (feedEl) renderActivityFeed(feedEl);
 
-    // Load recent runs for chart
     apiFetch('/api/runs?limit=100').then(function (data) {
       var chartEl = document.getElementById('run-chart');
       if (!chartEl) return;
       renderRunChart(chartEl, data.runs || []);
     }).catch(function () {
       var chartEl = document.getElementById('run-chart');
-      if (chartEl) chartEl.innerHTML = '<p class="text-muted">No data</p>';
+      if (chartEl) chartEl.innerHTML = '<p class="feed-empty">No run data yet</p>';
     });
   }
 
-  function metricCard(label, value) {
-    return '<div class="metric-card"><div class="metric-value">' + value +
-      '</div><div class="metric-label">' + label + '</div></div>';
+  // SVG icon constants
+  var SVG_ACTIVITY = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
+  var SVG_USERS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>';
+  var SVG_DOLLAR = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>';
+  var SVG_SHIELD = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
+  var SVG_CLOCK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+
+  function metricCard(label, value, type, icon) {
+    return '<div class="metric-card">' +
+      '<div class="metric-icon ' + type + '">' + icon + '</div>' +
+      '<div class="metric-value">' + value + '</div>' +
+      '<div class="metric-label">' + label + '</div></div>';
+  }
+
+  function metricCardSkeleton(count) {
+    var html = '';
+    for (var i = 0; i < count; i++) {
+      html += '<div class="metric-card" style="min-height:100px"><div class="metric-label" style="margin-top:2rem">Loading...</div></div>';
+    }
+    return html;
   }
 
   function renderActivityFeed(el) {
     if (activityFeed.length === 0) {
-      el.innerHTML = '<p class="text-muted">Waiting for events...</p>';
+      el.innerHTML = '<p class="feed-empty">Waiting for events...</p>';
       return;
     }
     var html = '';
@@ -289,21 +348,20 @@
       var cls = item.kind === 'run_error' || item.kind === 'budget_exceeded'
         ? ' feed-error' : (item.kind === 'budget_warning' ? ' feed-warn' : '');
       html += '<div class="feed-item' + cls + '">' +
+        '<span class="feed-dot"></span>' +
         '<span class="feed-time">' + item.time + '</span>' +
-        '<span class="feed-session">' + item.session + '</span>' +
-        '<span class="feed-detail">' + item.detail + '</span></div>';
+        '<span class="feed-detail">' + item.detail + '</span>' +
+        '<span class="feed-session">' + item.session + '</span></div>';
     });
     el.innerHTML = html;
   }
 
   function renderRunChart(el, runs) {
-    // Group runs by day (last 7 days)
     var days = {};
     var now = new Date();
     for (var i = 6; i >= 0; i--) {
       var d = new Date(now); d.setDate(d.getDate() - i);
-      var key = d.toISOString().split('T')[0];
-      days[key] = 0;
+      days[d.toISOString().split('T')[0]] = 0;
     }
     runs.forEach(function (r) {
       if (r.start_time) {
@@ -315,20 +373,44 @@
     var labels = Object.keys(days);
     var values = Object.values(days);
     var max = Math.max.apply(null, values) || 1;
+    var total = values.reduce(function (a, b) { return a + b; }, 0);
 
-    var barWidth = Math.floor(280 / labels.length) - 4;
-    var svg = '<svg width="100%" height="160" viewBox="0 0 300 160">';
+    if (total === 0) {
+      el.innerHTML = '<p class="feed-empty">No runs in the last 7 days</p>';
+      return;
+    }
+
+    var w = 380, h = 160, pad = 30;
+    var barW = Math.floor((w - pad * 2) / labels.length) - 6;
+    var svg = '<svg width="100%" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">';
+
+    // Grid lines
+    for (var g = 0; g <= 3; g++) {
+      var gy = pad + (h - pad * 2) * (1 - g / 3);
+      svg += '<line x1="' + pad + '" y1="' + gy + '" x2="' + (w - pad) + '" y2="' + gy + '" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>';
+    }
+
     labels.forEach(function (label, i) {
-      var h = (values[i] / max) * 120;
-      var x = i * (barWidth + 4) + 10;
-      var y = 130 - h;
-      svg += '<rect x="' + x + '" y="' + y + '" width="' + barWidth +
-        '" height="' + h + '" fill="var(--accent)" rx="2"/>';
-      svg += '<text x="' + (x + barWidth / 2) + '" y="148" text-anchor="middle" ' +
-        'fill="var(--text-muted)" font-size="9">' + label.substring(5) + '</text>';
+      var barH = (values[i] / max) * (h - pad * 2 - 10);
+      var x = pad + i * ((w - pad * 2) / labels.length) + 3;
+      var y = h - pad - barH;
+
+      // Bar with gradient
+      svg += '<defs><linearGradient id="bg' + i + '" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0.6"/>' +
+        '</linearGradient></defs>';
+      svg += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + barH +
+        '" fill="url(#bg' + i + ')" rx="4"/>';
+
+      // Day label
+      var dayName = new Date(label + 'T12:00:00').toLocaleDateString([], { weekday: 'short' });
+      svg += '<text x="' + (x + barW / 2) + '" y="' + (h - 8) + '" text-anchor="middle" ' +
+        'fill="var(--text-muted)" font-size="10" font-family="Inter, sans-serif">' + dayName + '</text>';
+
+      // Value on top
       if (values[i] > 0) {
-        svg += '<text x="' + (x + barWidth / 2) + '" y="' + (y - 4) + '" text-anchor="middle" ' +
-          'fill="var(--text)" font-size="10">' + values[i] + '</text>';
+        svg += '<text x="' + (x + barW / 2) + '" y="' + (y - 6) + '" text-anchor="middle" ' +
+          'fill="var(--text-secondary)" font-size="11" font-weight="600" font-family="Inter, sans-serif">' + values[i] + '</text>';
       }
     });
     svg += '</svg>';
@@ -337,7 +419,8 @@
 
   // --- Sessions ---
   function renderSessions() {
-    content.innerHTML = '<div class="page"><h2>Sessions</h2><div id="session-list">Loading...</div></div>';
+    content.innerHTML = '<div class="page"><div class="page-header"><h2>Sessions</h2><p>Active conversation sessions</p></div>' +
+      '<div id="session-list"></div></div>';
     fetchSessions();
   }
 
@@ -348,14 +431,14 @@
       if (!listEl) return;
 
       if (sessions.length === 0) {
-        listEl.innerHTML = '<p class="text-muted">No active sessions</p>';
+        listEl.innerHTML = '<p class="feed-empty" style="padding:3rem 0">No active sessions</p>';
         return;
       }
 
-      var html = '<div class="table-wrap"><table><thead><tr><th>Session</th><th>Actions</th></tr></thead><tbody>';
+      var html = '<div class="table-wrap"><table><thead><tr><th>Session ID</th><th>Actions</th></tr></thead><tbody>';
       sessions.forEach(function (s) {
-        html += '<tr><td>' + escapeHtml(truncate(s, 50)) + '</td>' +
-          '<td><a href="#/chat/' + encodeURIComponent(s) + '" class="btn-sm">Chat</a></td></tr>';
+        html += '<tr><td style="font-family:var(--font-mono);font-size:0.8rem">' + escapeHtml(truncate(s, 50)) + '</td>' +
+          '<td><a href="#/chat/' + encodeURIComponent(s) + '" class="btn-sm">Open Chat</a></td></tr>';
       });
       html += '</tbody></table></div>';
       listEl.innerHTML = html;
@@ -371,7 +454,7 @@
 
     content.innerHTML =
       '<div class="chat-view">' +
-      '<div class="chat-header"><a href="#/sessions" class="back-link">← Sessions</a>' +
+      '<div class="chat-header"><a href="#/sessions" class="back-link">&larr; Sessions</a>' +
       '<span class="chat-title">' + escapeHtml(truncate(sessionId, 40)) + '</span>' +
       '<button id="new-session-btn" class="btn-sm">+ New</button></div>' +
       '<div id="messages" class="messages"></div>' +
@@ -389,11 +472,9 @@
     });
     msgInput.addEventListener('input', autoResize);
     newBtn.addEventListener('click', function () {
-      var sid = 'web-' + Date.now().toString(36);
-      window.location.hash = '#/chat/' + sid;
+      window.location.hash = '#/chat/web-' + Date.now().toString(36);
     });
 
-    // Load history
     var messagesEl = document.getElementById('messages');
     apiFetch('/api/sessions/' + encodeURIComponent(sessionId) + '/history?limit=100').then(function (data) {
       var msgs = data.messages || [];
@@ -422,9 +503,8 @@
 
   // --- Runs ---
   function renderRuns() {
-    content.innerHTML = '<div class="page"><h2>Run History</h2><div id="runs-table">Loading...</div>' +
-      '<div id="runs-pagination" class="pagination"></div></div>';
-
+    content.innerHTML = '<div class="page"><div class="page-header"><h2>Run History</h2><p>All recorded agent runs</p></div>' +
+      '<div id="runs-table"></div><div id="runs-pagination" class="pagination"></div></div>';
     loadRuns(0);
   }
 
@@ -434,7 +514,7 @@
       if (!el) return;
       var runs = data.runs || [];
       if (runs.length === 0) {
-        el.innerHTML = '<p class="text-muted">No runs recorded yet</p>';
+        el.innerHTML = '<p class="feed-empty" style="padding:3rem 0">No runs recorded yet</p>';
         return;
       }
       var html = '<div class="table-wrap"><table><thead><tr>' +
@@ -443,14 +523,14 @@
       runs.forEach(function (r) {
         var tokens = (r.input_tokens || 0) + (r.output_tokens || 0);
         var cost = '$' + ((r.cost_cents || 0) / 100).toFixed(3);
-        var time = r.start_time ? new Date(r.start_time).toLocaleString() : '-';
+        var time = r.start_time ? new Date(r.start_time).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
         html += '<tr>' +
-          '<td class="text-muted">' + time + '</td>' +
-          '<td>' + truncate(r.session_id || '', 12) + '</td>' +
+          '<td style="font-family:var(--font-mono);font-size:0.8rem">' + time + '</td>' +
+          '<td style="font-family:var(--font-mono);font-size:0.75rem">' + truncate(r.session_id || '', 12) + '</td>' +
           '<td>' + escapeHtml(r.model || '-') + '</td>' +
           '<td>' + (r.total_turns || 0) + '</td>' +
           '<td>' + tokens.toLocaleString() + '</td>' +
-          '<td>' + cost + '</td>' +
+          '<td style="font-family:var(--font-mono)">' + cost + '</td>' +
           '<td><span class="badge badge-' + (r.billing_type || 'api') + '">' +
           (r.billing_type || 'api') + '</span></td>' +
           '<td><span class="status-' + (r.status || 'unknown') + '">' +
@@ -459,7 +539,6 @@
       html += '</tbody></table></div>';
       el.innerHTML = html;
 
-      // Pagination
       var pagEl = document.getElementById('runs-pagination');
       if (pagEl && data.total > 20) {
         var pages = Math.ceil(data.total / 20);
@@ -476,7 +555,7 @@
       }
     }).catch(function () {
       var el = document.getElementById('runs-table');
-      if (el) el.innerHTML = '<p class="text-muted">Failed to load runs (cost tracking may not be configured)</p>';
+      if (el) el.innerHTML = '<p class="feed-empty" style="padding:3rem 0">Cost tracking not configured</p>';
     });
   }
 
@@ -486,16 +565,16 @@
     var thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
 
     content.innerHTML =
-      '<div class="page"><h2>Cost Analysis</h2>' +
+      '<div class="page"><div class="page-header"><h2>Cost Analysis</h2><p>Token usage and spending breakdown</p></div>' +
       '<div class="cost-controls">' +
-      '<label>From: <input type="date" id="cost-from" value="' + thirtyDaysAgo.toISOString().split('T')[0] + '"></label>' +
-      '<label>To: <input type="date" id="cost-to" value="' + now.toISOString().split('T')[0] + '"></label>' +
-      '<label>Group by: <select id="cost-group">' +
+      '<label>From <input type="date" id="cost-from" value="' + thirtyDaysAgo.toISOString().split('T')[0] + '"></label>' +
+      '<label>To <input type="date" id="cost-to" value="' + now.toISOString().split('T')[0] + '"></label>' +
+      '<label>Group by <select id="cost-group">' +
       '<option value="model">Model</option><option value="provider">Provider</option>' +
       '<option value="day">Day</option></select></label>' +
-      '<button id="cost-refresh" class="btn-sm">Refresh</button></div>' +
-      '<div id="cost-summary" class="cost-summary">Loading...</div>' +
-      '<div id="cost-table">Loading...</div></div>';
+      '<button id="cost-refresh" class="btn-primary">Refresh</button></div>' +
+      '<div id="cost-summary" class="cost-summary"></div>' +
+      '<div id="cost-table"></div></div>';
 
     document.getElementById('cost-refresh').addEventListener('click', loadCosts);
     loadCosts();
@@ -513,10 +592,10 @@
         var s = data.summary;
         summEl.innerHTML =
           '<div class="metric-cards">' +
-          metricCard('Total Cost', '$' + ((s.total_cost_cents || 0) / 100).toFixed(2)) +
-          metricCard('Input Tokens', (s.total_input_tokens || 0).toLocaleString()) +
-          metricCard('Output Tokens', (s.total_output_tokens || 0).toLocaleString()) +
-          metricCard('Events', (s.total_events || 0).toLocaleString()) +
+          metricCard('Total Cost', '$' + ((s.total_cost_cents || 0) / 100).toFixed(2), 'spend', SVG_DOLLAR) +
+          metricCard('Input Tokens', (s.total_input_tokens || 0).toLocaleString(), 'runs', SVG_ACTIVITY) +
+          metricCard('Output Tokens', (s.total_output_tokens || 0).toLocaleString(), 'sessions', SVG_ACTIVITY) +
+          metricCard('Events', (s.total_events || 0).toLocaleString(), 'uptime', SVG_CLOCK) +
           '</div>';
       }
 
@@ -524,14 +603,14 @@
       if (!tableEl) return;
       var breakdown = data.breakdown || [];
       if (breakdown.length === 0) {
-        tableEl.innerHTML = '<p class="text-muted">No cost data for this period</p>';
+        tableEl.innerHTML = '<p class="feed-empty" style="padding:2rem 0">No cost data for this period</p>';
         return;
       }
       var html = '<div class="table-wrap"><table><thead><tr><th>' +
         capitalizeFirst(groupBy) + '</th><th>Cost</th><th>Input Tokens</th><th>Output Tokens</th></tr></thead><tbody>';
       breakdown.forEach(function (row) {
-        html += '<tr><td>' + escapeHtml(row.key) + '</td>' +
-          '<td>$' + ((row.cost_cents || 0) / 100).toFixed(3) + '</td>' +
+        html += '<tr><td style="font-weight:500">' + escapeHtml(row.key) + '</td>' +
+          '<td style="font-family:var(--font-mono)">$' + ((row.cost_cents || 0) / 100).toFixed(3) + '</td>' +
           '<td>' + (row.input_tokens || 0).toLocaleString() + '</td>' +
           '<td>' + (row.output_tokens || 0).toLocaleString() + '</td></tr>';
       });
@@ -539,39 +618,47 @@
       tableEl.innerHTML = html;
     }).catch(function () {
       var el = document.getElementById('cost-table');
-      if (el) el.innerHTML = '<p class="text-muted">Cost tracking not configured</p>';
+      if (el) el.innerHTML = '<p class="feed-empty" style="padding:2rem 0">Cost tracking not configured</p>';
     });
   }
 
   // --- Settings ---
   function renderSettings() {
-    content.innerHTML = '<div class="page"><h2>Settings</h2><div id="settings-content">Loading...</div></div>';
+    content.innerHTML = '<div class="page"><div class="page-header"><h2>Settings</h2><p>System info and budget configuration</p></div>' +
+      '<div class="settings-grid" id="settings-content"></div></div>';
+
+    var settingsEl = document.getElementById('settings-content');
+
     apiFetch('/api/health').then(function (data) {
-      var el = document.getElementById('settings-content');
-      if (!el) return;
-      el.innerHTML =
-        '<div class="card"><h3>System</h3>' +
-        '<p><strong>Version:</strong> ' + (data.version || 'unknown') + '</p>' +
-        '<p><strong>Status:</strong> ' + (data.status || 'unknown') + '</p></div>' +
-        '<div class="card"><h3>Budget</h3><div id="budget-info">Loading...</div></div>';
+      var html =
+        '<div class="card"><div class="card-header"><h3>System</h3></div>' +
+        '<p style="margin-bottom:0.5rem"><strong style="color:var(--text-muted);font-size:0.8rem">VERSION</strong><br>' +
+        '<span style="font-size:1.1rem;font-weight:600">' + (data.version || 'unknown') + '</span></p>' +
+        '<p><strong style="color:var(--text-muted);font-size:0.8rem">STATUS</strong><br>' +
+        '<span style="color:var(--success);font-weight:600">' + (data.status || 'unknown') + '</span></p></div>';
+
+      settingsEl.innerHTML = html + '<div class="card"><div class="card-header"><h3>Budget</h3></div><div id="budget-info"></div></div>';
 
       apiFetch('/api/metrics').then(function (m) {
         var budgetEl = document.getElementById('budget-info');
         if (!budgetEl) return;
         if (m.monthly_budget_cents > 0) {
+          var pct = Math.min(m.budget_utilization_pct, 100);
+          var color = pct > 90 ? 'var(--error)' : pct > 70 ? 'var(--warning)' : 'var(--accent)';
           budgetEl.innerHTML =
-            '<p><strong>Monthly Budget:</strong> $' + (m.monthly_budget_cents / 100).toFixed(2) + '</p>' +
-            '<p><strong>Spent:</strong> $' + (m.total_cost_cents / 100).toFixed(2) + '</p>' +
-            '<p><strong>Utilization:</strong> ' + m.budget_utilization_pct + '%</p>' +
-            '<div class="budget-bar"><div class="budget-fill" style="width:' +
-            Math.min(m.budget_utilization_pct, 100) + '%"></div></div>';
+            '<p style="margin-bottom:0.5rem"><strong style="color:var(--text-muted);font-size:0.8rem">MONTHLY BUDGET</strong><br>' +
+            '<span style="font-size:1.1rem;font-weight:600">$' + (m.monthly_budget_cents / 100).toFixed(2) + '</span></p>' +
+            '<p style="margin-bottom:0.5rem"><strong style="color:var(--text-muted);font-size:0.8rem">SPENT</strong><br>' +
+            '<span style="font-size:1.1rem;font-weight:600">$' + (m.total_cost_cents / 100).toFixed(2) + '</span></p>' +
+            '<p style="margin-bottom:0.5rem"><strong style="color:var(--text-muted);font-size:0.8rem">UTILIZATION</strong><br>' +
+            '<span style="font-size:1.1rem;font-weight:600;color:' + color + '">' + m.budget_utilization_pct + '%</span></p>' +
+            '<div class="budget-bar"><div class="budget-fill" style="width:' + pct + '%;background:' + color + '"></div></div>';
         } else {
-          budgetEl.innerHTML = '<p class="text-muted">No budget configured</p>';
+          budgetEl.innerHTML = '<p class="text-muted" style="padding:1rem 0">No budget configured. Add <code style="font-family:var(--font-mono);background:var(--bg-base);padding:0.15rem 0.4rem;border-radius:4px">[budget]</code> to your config.toml.</p>';
         }
       }).catch(function () {});
     }).catch(function () {
-      var el = document.getElementById('settings-content');
-      if (el) el.innerHTML = '<p class="text-muted">Failed to load settings</p>';
+      settingsEl.innerHTML = '<p class="text-muted">Failed to load settings</p>';
     });
   }
 
@@ -624,8 +711,7 @@
   }
 
   function escapeHtml(s) {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function capitalizeFirst(s) {
