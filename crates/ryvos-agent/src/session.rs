@@ -83,6 +83,30 @@ impl SessionManager {
         }
     }
 
+    /// Restore a session from persistent storage (e.g. SessionMetaStore).
+    pub fn restore(
+        &self,
+        key: &str,
+        session_id: &str,
+        channel: &str,
+        cli_session_id: Option<&str>,
+    ) {
+        let mut sessions = self.sessions.lock().unwrap();
+        sessions.insert(
+            key.to_string(),
+            SessionInfo {
+                session_id: SessionId::from_string(session_id),
+                channel: channel.to_string(),
+                started_at: chrono::Utc::now(),
+                last_active: chrono::Utc::now(),
+                cli_session_id: cli_session_id.map(String::from),
+                total_runs: 0,
+                total_tokens: 0,
+                billing_type: None,
+            },
+        );
+    }
+
     /// List active session keys.
     pub fn list(&self) -> Vec<String> {
         self.sessions.lock().unwrap().keys().cloned().collect()

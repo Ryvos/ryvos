@@ -149,6 +149,7 @@ impl ChannelAdapter for TelegramAdapter {
                             let envelope = MessageEnvelope {
                                 id: uuid::Uuid::new_v4().to_string(),
                                 session_id,
+                                session_key: key.clone(),
                                 channel: "telegram".into(),
                                 sender: user.id.0.to_string(),
                                 text,

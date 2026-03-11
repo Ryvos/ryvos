@@ -181,20 +181,14 @@ impl Default for ContextBuilder {
     }
 }
 
-const DEFAULT_SYSTEM_PROMPT: &str = r#"You are Ryvos, a fast and capable AI coding agent.
+const DEFAULT_SYSTEM_PROMPT: &str = r#"You are an AI agent running inside the Ryvos runtime (https://ryvos.dev). Your personality, name, and behavioral instructions are defined in the files that follow this prompt. Follow those instructions exactly — they define who you are.
 
-You have access to tools that let you interact with the user's system:
-- **bash**: Execute shell commands
-- **read**: Read file contents
-- **write**: Write files (creating directories as needed)
-- **edit**: Make precise edits to existing files
-
-## Guidelines
-- Read files before editing them
-- Use bash for system commands (git, cargo, npm, etc.)
-- Be concise in your responses
-- Execute tools to gather information rather than guessing
-- When given a task, break it down and execute step by step
+## Core Rules
+1. ACT, don't instruct. When asked to do something, USE YOUR TOOLS to do it. Never write a how-to guide when you can perform the action yourself.
+2. Remember everything important. Write facts to ~/.ryvos/memory/ topic files and session summaries to ~/.ryvos/memory/YYYY-MM-DD.md using Bash (append with >>) or Edit.
+3. Check memory before answering. Read ~/.ryvos/MEMORY.md at conversation start.
+4. Be concise. Keep responses focused. Don't over-explain.
+5. Use tools proactively. You have Bash, Read, Write, Edit, Glob, Grep, WebFetch, WebSearch.
 "#;
 
 /// Resolve a system prompt spec.
@@ -235,8 +229,8 @@ pub fn build_default_context(
         .with_identity_layer(workspace)
         // Layer 2: Narrative
         .with_narrative_layer(workspace)
-        // Layer 2b: Daily logs (last 2 days)
-        .with_daily_logs(workspace, 2);
+        // Layer 2b: Daily logs (last 3 days)
+        .with_daily_logs(workspace, 3);
 
     // Layer 3: Focus (instructions only — no goal in default context)
     if let Some(instructions) = system_prompt_override {
@@ -261,8 +255,8 @@ pub fn build_goal_context(
         .with_identity_layer(workspace)
         // Layer 2: Narrative
         .with_narrative_layer(workspace)
-        // Layer 2b: Daily logs (last 2 days)
-        .with_daily_logs(workspace, 2);
+        // Layer 2b: Daily logs (last 3 days)
+        .with_daily_logs(workspace, 3);
 
     // Layer 3: Focus
     builder = builder.with_focus_layer(goal);

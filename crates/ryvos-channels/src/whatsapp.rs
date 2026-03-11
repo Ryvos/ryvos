@@ -402,6 +402,7 @@ impl WhatsAppWebhookHandle {
                     let envelope = MessageEnvelope {
                         id: uuid::Uuid::new_v4().to_string(),
                         session_id,
+                        session_key: key.clone(),
                         channel: "whatsapp".into(),
                         sender: from,
                         text,

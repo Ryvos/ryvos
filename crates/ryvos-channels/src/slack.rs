@@ -376,6 +376,7 @@ impl ChannelAdapter for SlackAdapter {
                                         let msg_envelope = MessageEnvelope {
                                             id: uuid::Uuid::new_v4().to_string(),
                                             session_id,
+                                            session_key: key.clone(),
                                             channel: "slack".into(),
                                             sender: user_id,
                                             text: msg_text,

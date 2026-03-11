@@ -281,6 +281,7 @@ pub trait AgentSpawner: Send + Sync + 'static {
 pub struct MessageEnvelope {
     pub id: String,
     pub session_id: SessionId,
+    pub session_key: String,
     pub channel: String,
     pub sender: String,
     pub text: String,

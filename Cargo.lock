@@ -2606,6 +2606,7 @@ dependencies = [
  "reqwest 0.12.28",
  "ryvos-agent",
  "ryvos-core",
+ "ryvos-memory",
  "serde",
  "serde_json",
  "serenity",

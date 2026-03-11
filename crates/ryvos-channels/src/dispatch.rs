@@ -11,6 +11,7 @@ use ryvos_core::event::EventBus;
 use ryvos_core::security::ApprovalDecision;
 use ryvos_core::traits::ChannelAdapter;
 use ryvos_core::types::{AgentEvent, MessageContent, MessageEnvelope};
+use ryvos_memory::SessionMetaStore;
 
 /// Dispatches incoming channel messages to the agent runtime
 /// and routes responses back to the originating adapter.
@@ -21,6 +22,7 @@ pub struct ChannelDispatcher {
     adapters: HashMap<String, Arc<dyn ChannelAdapter>>,
     hooks: Option<HooksConfig>,
     broker: Option<Arc<ApprovalBroker>>,
+    session_meta: Option<Arc<SessionMetaStore>>,
 }
 
 impl ChannelDispatcher {
@@ -36,6 +38,7 @@ impl ChannelDispatcher {
             adapters: HashMap::new(),
             hooks: None,
             broker: None,
+            session_meta: None,
         }
     }
 
@@ -52,6 +55,11 @@ impl ChannelDispatcher {
     /// Set the approval broker for HITL approval handling.
     pub fn set_broker(&mut self, broker: Arc<ApprovalBroker>) {
         self.broker = Some(broker);
+    }
+
+    /// Set the session meta store for CLI session resumption persistence.
+    pub fn set_session_meta(&mut self, store: Arc<SessionMetaStore>) {
+        self.session_meta = Some(store);
     }
 
     /// Start all adapters and dispatch incoming messages until cancelled.
@@ -131,8 +139,9 @@ impl ChannelDispatcher {
                                 let event_bus = self.event_bus.clone();
                                 let hooks = self.hooks.clone();
                                 let broker = self.broker.clone();
+                                let session_meta = self.session_meta.clone();
                                 tokio::spawn(run_channel_message(
-                                    runtime, event_bus, adapter, env, hooks, broker,
+                                    runtime, event_bus, adapter, env, hooks, broker, session_meta,
                                 ));
                             } else {
                                 error!(channel = %env.channel, "No adapter for channel");
@@ -239,6 +248,7 @@ async fn run_channel_message(
     envelope: MessageEnvelope,
     hooks: Option<HooksConfig>,
     _broker: Option<Arc<ApprovalBroker>>,
+    session_meta: Option<Arc<SessionMetaStore>>,
 ) {
     let session_id = envelope.session_id.clone();
 
@@ -284,6 +294,23 @@ async fn run_channel_message(
         .map(|h| h.on_tool_error.clone())
         .unwrap_or_default();
     let session_id_str = session_id.0.clone();
+
+    // Resume previous CLI session if available
+    if let Some(ref meta_store) = session_meta {
+        if let Ok(Some(meta)) = meta_store.get(&envelope.session_key) {
+            if let Some(cli_id) = meta.cli_session_id {
+                info!(cli_session = %cli_id, session_key = %envelope.session_key, "Resuming CLI session");
+                runtime.set_cli_session_id(Some(cli_id));
+            }
+        }
+    }
+
+    // Ensure session meta row exists for persistence
+    if let Some(ref meta_store) = session_meta {
+        meta_store
+            .get_or_create(&envelope.session_key, &session_id.0, &envelope.channel)
+            .ok();
+    }
 
     // Run the agent in a background task, publishing RunError on failure
     let rt = runtime.clone();
@@ -405,6 +432,16 @@ async fn run_channel_message(
     // Wait for the run task to finish
     if let Err(e) = run_handle.await {
         error!(error = %e, "Agent task panicked");
+    }
+
+    // Persist CLI session ID for next message (--resume)
+    if let Some(ref meta_store) = session_meta {
+        if let Some(new_cli_id) = runtime.last_message_id() {
+            info!(cli_session = %new_cli_id, session_key = %envelope.session_key, "Persisting CLI session ID");
+            meta_store
+                .set_cli_session_id(&envelope.session_key, &new_cli_id)
+                .ok();
+        }
     }
 
     // Fire on_response hook

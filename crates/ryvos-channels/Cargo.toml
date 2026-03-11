@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 ryvos-core.workspace = true
 ryvos-agent.workspace = true
+ryvos-memory.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 futures.workspace = true

@@ -271,6 +271,9 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
     std::fs::write(config_path, &toml_str)?;
     println!("Config written to: {}", config_path.display());
 
+    // Create workspace templates
+    create_workspace_templates(&resolve_workspace(&config.agent.workspace))?;
+
     // Auto-install service
     let mode = OnboardingMode::QuickStart;
     service::install(config_path, &mode, true).await?;
@@ -598,6 +601,9 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
     println!();
     println!("  Config written to: {}", config_path.display());
 
+    // 13a. Create workspace templates (BOOT.md, TOOLS.md, MEMORY.md, etc.)
+    create_workspace_templates(&resolve_workspace(&config.agent.workspace))?;
+
     // 13b. Soul interview
     println!();
     let do_soul = Confirm::new()
@@ -662,6 +668,40 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         _ => {
             println!("  Run `ryvos` when you're ready.");
         }
+    }
+
+    Ok(())
+}
+
+/// Create workspace template files (BOOT.md, TOOLS.md, IDENTITY.md, MEMORY.md, memory/).
+/// These are the agent's soul infrastructure — created during init, populated at runtime.
+pub fn create_workspace_templates(workspace: &Path) -> Result<()> {
+    std::fs::create_dir_all(workspace)?;
+    let memory_dir = workspace.join("memory");
+    std::fs::create_dir_all(&memory_dir)?;
+
+    // Only create files that don't already exist — never overwrite user customizations.
+    let templates: &[(&str, &str)] = &[
+        ("BOOT.md", include_str!("templates/BOOT.md")),
+        ("TOOLS.md", include_str!("templates/TOOLS.md")),
+        ("IDENTITY.md", include_str!("templates/IDENTITY.md")),
+        ("MEMORY.md", include_str!("templates/MEMORY.md")),
+        ("memory/facts.md", include_str!("templates/memory_facts.md")),
+        ("memory/projects.md", include_str!("templates/memory_projects.md")),
+        ("memory/preferences.md", include_str!("templates/memory_preferences.md")),
+    ];
+
+    let mut created = Vec::new();
+    for (name, content) in templates {
+        let path = workspace.join(name);
+        if !path.exists() {
+            std::fs::write(&path, content)?;
+            created.push(*name);
+        }
+    }
+
+    if !created.is_empty() {
+        println!("  Created workspace templates: {}", created.join(", "));
     }
 
     Ok(())

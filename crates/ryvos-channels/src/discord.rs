@@ -106,6 +106,7 @@ impl EventHandler for Handler {
         let envelope = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             session_id,
+            session_key: key.clone(),
             channel: "discord".into(),
             sender: msg.author.id.to_string(),
             text: msg.content.clone(),

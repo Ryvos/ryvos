@@ -224,11 +224,14 @@ pub fn memory_flush_prompt() -> ChatMessage {
     ChatMessage {
         role: Role::User,
         content: vec![ContentBlock::Text {
-            text: "[System] Context window is nearing capacity. Before compaction, please \
-                   persist any important durable information using the `memory_write` and \
-                   `daily_log_write` tools. Save key decisions, file paths, code snippets, \
-                   and any context you'll need after compaction. When done, respond with \
-                   exactly: FLUSH_COMPLETE"
+            text: "[System] Context window is nearing capacity. Before compaction, persist \
+                   important information to your memory files using Write or Bash (append with >>):\n\
+                   - Facts (IPs, paths, credentials) → ~/.ryvos/memory/facts.md\n\
+                   - Project decisions/status → ~/.ryvos/memory/projects.md\n\
+                   - User preferences → ~/.ryvos/memory/preferences.md\n\
+                   - Session summary → ~/.ryvos/MEMORY.md (Recent section)\n\
+                   - Activity log → ~/.ryvos/memory/YYYY-MM-DD.md\n\
+                   Save anything you'll need after compaction. When done, respond with exactly: FLUSH_COMPLETE"
                 .to_string(),
         }],
         timestamp: Some(chrono::Utc::now()),

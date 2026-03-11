@@ -670,6 +670,30 @@ async fn main() -> anyhow::Result<()> {
                 cancel_clone.cancel();
             });
 
+            // Create persistent session meta store
+            let data_dir = workspace.join("data");
+            std::fs::create_dir_all(&data_dir).ok();
+            let session_meta = Arc::new(
+                ryvos_memory::SessionMetaStore::open(&data_dir.join("session_meta.db"))
+                    .expect("Failed to open session meta store"),
+            );
+
+            // Hydrate in-memory sessions from persistent store
+            if let Ok(metas) = session_meta.list() {
+                let count = metas.len();
+                for meta in metas {
+                    session_mgr.restore(
+                        &meta.session_key,
+                        &meta.session_id,
+                        &meta.channel,
+                        meta.cli_session_id.as_deref(),
+                    );
+                }
+                if count > 0 {
+                    info!(count, "Hydrated sessions from persistent store");
+                }
+            }
+
             // Start cron scheduler if configured
             if let Some(ref cron_config) = config.cron {
                 if !cron_config.jobs.is_empty() {
@@ -689,13 +713,14 @@ async fn main() -> anyhow::Result<()> {
             // Start heartbeat if configured
             if let Some(ref hb_config) = config.heartbeat {
                 if hb_config.enabled {
-                    let heartbeat = ryvos_agent::Heartbeat::new(
+                    let mut heartbeat = ryvos_agent::Heartbeat::new(
                         hb_config.clone(),
                         runtime.clone(),
                         event_bus.clone(),
                         cancel.clone(),
                         workspace.clone(),
                     );
+                    heartbeat.set_session_meta(session_meta.clone());
                     tokio::spawn(async move {
                         heartbeat.run().await;
                     });
@@ -741,6 +766,7 @@ async fn main() -> anyhow::Result<()> {
             let mut dispatcher = ryvos_channels::ChannelDispatcher::new(runtime, event_bus, cancel);
 
             dispatcher.set_broker(broker.clone());
+            dispatcher.set_session_meta(session_meta.clone());
 
             if let Some(ref hooks_config) = config.hooks {
                 dispatcher.set_hooks(hooks_config.clone());

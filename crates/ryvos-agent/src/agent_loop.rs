@@ -192,13 +192,11 @@ impl AgentRuntime {
         let max_turns = self.config.agent.max_turns;
         let max_duration = Duration::from_secs(self.config.agent.max_duration_secs);
 
-        // Apply CLI session ID override (for claude-code --resume)
-        let cli_override = self.cli_session_override.lock().unwrap().take();
-        if cli_override.is_some() {
-            // We can't mutate self.config directly, but we note the override
-            // and apply it when building the model config for LLM calls.
-            // For now, store it back as it will be used during stream setup.
-            *self.cli_session_override.lock().unwrap() = cli_override;
+        // Apply CLI session ID override to model config for --resume
+        let mut model_config = self.config.model.clone();
+        if let Some(cli_id) = self.cli_session_override.lock().unwrap().take() {
+            info!(cli_session = %cli_id, "Applying CLI session override for --resume");
+            model_config.cli_session_id = Some(cli_id);
         }
 
         // Clear last message ID before starting
@@ -291,7 +289,7 @@ impl AgentRuntime {
                 };
                 if let Ok(mut stream) = self
                     .llm
-                    .chat_stream(&self.config.model, messages.clone(), &flush_tool_defs)
+                    .chat_stream(&model_config, messages.clone(), &flush_tool_defs)
                     .await
                 {
                     let mut flush_text = String::new();
@@ -317,7 +315,10 @@ impl AgentRuntime {
 
                     // Execute any memory tool calls from the flush
                     for tc in &flush_tool_calls {
-                        if tc.name.starts_with("memory") || tc.name.starts_with("daily_log") {
+                        if tc.name.starts_with("memory") || tc.name.starts_with("daily_log")
+                            || tc.name == "write" || tc.name == "Write"
+                            || tc.name == "bash" || tc.name == "Bash"
+                        {
                             let input: serde_json::Value =
                                 serde_json::from_str(&tc.input_json).unwrap_or_default();
                             let _ = self.execute_tool(&tc.name, input, flush_ctx.clone()).await;
@@ -336,7 +337,7 @@ impl AgentRuntime {
 
         if self.config.agent.enable_summarization {
             let pruned =
-                summarize_and_prune(&mut messages, budget, 6, &*self.llm, &self.config.model)
+                summarize_and_prune(&mut messages, budget, 6, &*self.llm, &model_config)
                     .await?;
             if pruned > 0 {
                 info!(
@@ -401,7 +402,7 @@ impl AgentRuntime {
 
             // Stream from LLM
             let stream_result = tokio::select! {
-                result = self.llm.chat_stream(&self.config.model, messages.clone(), &tool_defs) => result,
+                result = self.llm.chat_stream(&model_config, messages.clone(), &tool_defs) => result,
                 _ = self.cancel.cancelled() => return Err(RyvosError::Cancelled),
             };
 
@@ -454,7 +455,8 @@ impl AgentRuntime {
                         });
                     }
                     StreamDelta::MessageId(id) => {
-                        *self.last_message_id.lock().unwrap() = Some(id);
+                        *self.last_message_id.lock().unwrap() = Some(id.clone());
+                        model_config.cli_session_id = Some(id);
                     }
                 }
             }
