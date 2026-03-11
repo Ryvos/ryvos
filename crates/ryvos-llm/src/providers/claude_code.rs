@@ -1,11 +1,15 @@
+use std::sync::Arc;
+
 use futures::future::BoxFuture;
 use futures::stream::{BoxStream, StreamExt};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tracing::{debug, error};
+use tokio::sync::Mutex;
+use tracing::{debug, error, warn};
 
 use ryvos_core::config::ModelConfig;
 use ryvos_core::error::{Result, RyvosError};
+use ryvos_core::security::DangerousPatternMatcher;
 use ryvos_core::traits::LlmClient;
 use ryvos_core::types::*;
 
@@ -14,11 +18,27 @@ use ryvos_core::types::*;
 /// This enables subscription billing: users with a Claude Max/Pro subscription
 /// pay nothing per-token. Ryvos spawns the CLI as a child process and parses
 /// its stream-json output.
-pub struct ClaudeCodeClient;
+///
+/// Security: intermediate tool_use events are inspected against the configured
+/// dangerous-command patterns. If a match is found, the child process is killed
+/// before it can execute the command.
+pub struct ClaudeCodeClient {
+    /// Compiled dangerous-pattern matcher for intercepting CLI tool calls.
+    pattern_matcher: Option<Arc<DangerousPatternMatcher>>,
+}
 
 impl ClaudeCodeClient {
     pub fn new() -> Self {
-        Self
+        Self {
+            pattern_matcher: None,
+        }
+    }
+
+    /// Create a client with security pattern matching enabled.
+    pub fn with_patterns(patterns: &[ryvos_core::security::DangerousPattern]) -> Self {
+        Self {
+            pattern_matcher: Some(Arc::new(DangerousPatternMatcher::new(patterns))),
+        }
     }
 
     /// Detect billing type: if an API key is set, it's pay-per-token.
@@ -41,6 +61,7 @@ impl LlmClient for ClaudeCodeClient {
     ) -> BoxFuture<'_, Result<BoxStream<'_, Result<StreamDelta>>>> {
         let config = config.clone();
         let messages = messages;
+        let matcher = self.pattern_matcher.clone();
 
         Box::pin(async move {
             // Extract the last user message as the prompt
@@ -49,7 +70,8 @@ impl LlmClient for ClaudeCodeClient {
                 .rev()
                 .find_map(|m| {
                     if m.role == Role::User {
-                        Some(m.text())
+                        let t = m.text();
+                        if t.is_empty() { None } else { Some(t) }
                     } else {
                         None
                     }
@@ -74,12 +96,26 @@ impl LlmClient for ClaudeCodeClient {
 
             let mut args = vec![
                 "--print".to_string(),
-                "-".to_string(),
                 "--output-format".to_string(),
                 "stream-json".to_string(),
                 "--verbose".to_string(),
-                "--dangerously-skip-permissions".to_string(),
             ];
+
+            // Security: if cli_allowed_tools is explicitly configured, use --allowedTools
+            // to restrict the CLI. Otherwise use --dangerously-skip-permissions for
+            // headless operation (security handled by guardian + stream interception).
+            if !config.cli_allowed_tools.is_empty() {
+                args.push("--allowedTools".to_string());
+                for tool in &config.cli_allowed_tools {
+                    args.push(tool.clone());
+                }
+                // Permission mode when using allowedTools
+                let perm_mode = config.cli_permission_mode.as_deref().unwrap_or("plan");
+                args.push("--permission-mode".to_string());
+                args.push(perm_mode.to_string());
+            } else {
+                args.push("--dangerously-skip-permissions".to_string());
+            }
 
             // Model override
             if config.model_id != "default" && !config.model_id.is_empty() {
@@ -132,7 +168,11 @@ impl LlmClient for ClaudeCodeClient {
             let reader = BufReader::new(stdout);
             let lines = reader.lines();
 
-            // Spawn a task to wait for the child process and log stderr
+            // Share the child PID so the stream can kill it if needed
+            let child_id = child.id();
+            let killed = Arc::new(Mutex::new(false));
+
+            // Spawn a task to drain stderr and wait for the child process
             let stderr = child.stderr.take();
             tokio::spawn(async move {
                 if let Some(stderr) = stderr {
@@ -153,29 +193,31 @@ impl LlmClient for ClaudeCodeClient {
             });
 
             let stream = tokio_stream::wrappers::LinesStream::new(lines).filter_map(
-                |line_result: std::result::Result<String, std::io::Error>| async move {
-                    let line: String = match line_result {
-                        Ok(l) => l,
-                        Err(e) => {
-                            error!(error = %e, "Error reading claude CLI stdout");
-                            return Some(Err(RyvosError::LlmStream(e.to_string())));
-                        }
-                    };
+                move |line_result: std::result::Result<String, std::io::Error>| {
+                    let matcher = matcher.clone();
+                    let killed = killed.clone();
 
-                    let trimmed = line.trim();
-                    if trimmed.is_empty() {
-                        return None;
-                    }
+                    async move {
+                        let line: String = match line_result {
+                            Ok(l) => l,
+                            Err(e) => {
+                                error!(error = %e, "Error reading claude CLI stream");
+                                return Some(Err(RyvosError::LlmStream(e.to_string())));
+                            }
+                        };
 
-                    let json: serde_json::Value = match serde_json::from_str(trimmed) {
-                        Ok(v) => v,
-                        Err(_) => {
-                            // Not all lines are JSON (progress indicators, etc.)
+                        let trimmed = line.trim();
+                        if trimmed.is_empty() {
                             return None;
                         }
-                    };
 
-                    parse_stream_json(&json)
+                        let json: serde_json::Value = match serde_json::from_str(trimmed) {
+                            Ok(v) => v,
+                            Err(_) => return None,
+                        };
+
+                        parse_stream_json(&json, matcher.as_deref(), child_id, &killed).await
+                    }
                 },
             );
 
@@ -184,13 +226,23 @@ impl LlmClient for ClaudeCodeClient {
     }
 }
 
-/// Parse a single stream-json line from the claude CLI.
-fn parse_stream_json(json: &serde_json::Value) -> Option<Result<StreamDelta>> {
+/// Parse a single stream-json line from the Claude CLI.
+///
+/// The Claude CLI manages tool execution internally. We:
+/// - Extract session ID from "system" init events
+/// - Inspect "assistant" tool_use blocks against dangerous patterns and KILL
+///   the child process if a dangerous command is about to execute
+/// - Extract final result text from the "result" event
+async fn parse_stream_json(
+    json: &serde_json::Value,
+    matcher: Option<&DangerousPatternMatcher>,
+    child_id: Option<u32>,
+    killed: &Mutex<bool>,
+) -> Option<Result<StreamDelta>> {
     let msg_type = json["type"].as_str()?;
 
     match msg_type {
         "system" => {
-            // System init message contains the session ID
             if json.get("subtype").and_then(|s| s.as_str()) == Some("init") {
                 if let Some(session_id) = json["session_id"].as_str() {
                     return Some(Ok(StreamDelta::MessageId(session_id.to_string())));
@@ -199,154 +251,70 @@ fn parse_stream_json(json: &serde_json::Value) -> Option<Result<StreamDelta>> {
             None
         }
         "assistant" => {
-            // Assistant message with content blocks
-            let content = json.get("content")?;
-            let blocks = content.as_array()?;
+            // Check tool_use blocks for dangerous commands BEFORE the CLI executes them.
+            if let Some(matcher) = matcher {
+                let content = json
+                    .get("message")
+                    .and_then(|m| m.get("content"))
+                    .or_else(|| json.get("content"));
 
-            // We return deltas for each block — caller accumulates
-            for block in blocks {
-                let block_type = block["type"].as_str().unwrap_or("");
-                match block_type {
-                    "text" => {
-                        if let Some(text) = block["text"].as_str() {
-                            if !text.is_empty() {
-                                return Some(Ok(StreamDelta::TextDelta(text.to_string())));
+                if let Some(blocks) = content.and_then(|c| c.as_array()) {
+                    for block in blocks {
+                        if block["type"].as_str() == Some("tool_use") {
+                            let tool_name = block["name"].as_str().unwrap_or("");
+                            // For Bash/shell tools, check the command input
+                            if tool_name == "Bash" || tool_name == "bash" {
+                                let input = block.get("input").and_then(|i| {
+                                    i["command"]
+                                        .as_str()
+                                        .or_else(|| i["cmd"].as_str())
+                                        .or_else(|| i.as_str())
+                                });
+                                if let Some(cmd) = input {
+                                    if let Some(label) = matcher.is_dangerous(cmd) {
+                                        warn!(
+                                            tool = tool_name,
+                                            command = cmd,
+                                            pattern = label,
+                                            "SECURITY: Killing claude CLI — dangerous command detected"
+                                        );
+                                        // Kill the child process
+                                        let mut k = killed.lock().await;
+                                        if !*k {
+                                            *k = true;
+                                            if let Some(pid) = child_id {
+                                                let _ = std::process::Command::new("kill")
+                                                    .args(["-9", &pid.to_string()])
+                                                    .output();
+                                            }
+                                        }
+                                        return Some(Err(RyvosError::SecurityViolation(
+                                            format!(
+                                                "Blocked dangerous command ({}): {}",
+                                                label,
+                                                &cmd[..cmd.len().min(100)]
+                                            ),
+                                        )));
+                                    }
+                                }
                             }
                         }
                     }
-                    "tool_use" => {
-                        let id = block["id"].as_str().unwrap_or("").to_string();
-                        let name = block["name"].as_str().unwrap_or("").to_string();
-                        let _input = block
-                            .get("input")
-                            .cloned()
-                            .unwrap_or(serde_json::Value::Null);
-                        // Emit ToolUseStart — input arrives via content_block_delta events
-                        return Some(Ok(StreamDelta::ToolUseStart { index: 0, id, name }));
-                    }
-                    "thinking" => {
-                        if let Some(thinking) = block["thinking"].as_str() {
-                            if !thinking.is_empty() {
-                                return Some(Ok(StreamDelta::ThinkingDelta(thinking.to_string())));
-                            }
-                        }
-                    }
-                    _ => {}
                 }
             }
+            // Don't emit any deltas from assistant events — we use result.result
             None
         }
         "result" => {
-            // Final result with usage stats
-            let mut deltas = vec![];
-
-            if let Some(usage) = json.get("usage") {
-                let input = usage["input_tokens"].as_u64().unwrap_or(0);
-                let output = usage["output_tokens"].as_u64().unwrap_or(0);
-                if input > 0 || output > 0 {
-                    deltas.push(StreamDelta::Usage {
-                        input_tokens: input,
-                        output_tokens: output,
-                    });
+            // Final result — extract the accumulated text.
+            if let Some(text) = json["result"].as_str() {
+                if !text.is_empty() {
+                    return Some(Ok(StreamDelta::TextDelta(text.to_string())));
                 }
             }
-
-            // Also extract session_id from result if present
-            if let Some(session_id) = json["session_id"].as_str() {
-                return Some(Ok(StreamDelta::MessageId(session_id.to_string())));
-            }
-
-            // Return Stop + Usage (Stop takes precedence as the final signal)
-            let stop_reason = json["stop_reason"]
-                .as_str()
-                .map(|s| match s {
-                    "end_turn" => StopReason::EndTurn,
-                    "tool_use" => StopReason::ToolUse,
-                    "max_tokens" => StopReason::MaxTokens,
-                    _ => StopReason::EndTurn,
-                })
-                .unwrap_or(StopReason::EndTurn);
-
-            Some(Ok(StreamDelta::Stop(stop_reason)))
+            Some(Ok(StreamDelta::Stop(StopReason::EndTurn)))
         }
-        "content_block_delta" => {
-            // Streaming content delta
-            if let Some(delta) = json.get("delta") {
-                let delta_type = delta["type"].as_str().unwrap_or("");
-                match delta_type {
-                    "text_delta" => {
-                        if let Some(text) = delta["text"].as_str() {
-                            return Some(Ok(StreamDelta::TextDelta(text.to_string())));
-                        }
-                    }
-                    "thinking_delta" => {
-                        if let Some(thinking) = delta["thinking"].as_str() {
-                            return Some(Ok(StreamDelta::ThinkingDelta(thinking.to_string())));
-                        }
-                    }
-                    "input_json_delta" => {
-                        if let Some(partial) = delta["partial_json"].as_str() {
-                            let index = json["index"].as_u64().unwrap_or(0) as usize;
-                            return Some(Ok(StreamDelta::ToolInputDelta {
-                                index,
-                                delta: partial.to_string(),
-                            }));
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            None
-        }
-        "content_block_start" => {
-            if let Some(block) = json.get("content_block") {
-                if block["type"].as_str() == Some("tool_use") {
-                    let id = block["id"].as_str().unwrap_or("").to_string();
-                    let name = block["name"].as_str().unwrap_or("").to_string();
-                    let index = json["index"].as_u64().unwrap_or(0) as usize;
-                    return Some(Ok(StreamDelta::ToolUseStart { index, id, name }));
-                }
-            }
-            None
-        }
-        "message_start" => {
-            // Extract session/message ID
-            if let Some(msg) = json.get("message") {
-                if let Some(id) = msg["id"].as_str() {
-                    return Some(Ok(StreamDelta::MessageId(id.to_string())));
-                }
-            }
-            None
-        }
-        "message_delta" => {
-            // Usage in message_delta
-            if let Some(usage) = json.get("usage") {
-                let input = usage["input_tokens"].as_u64().unwrap_or(0);
-                let output = usage["output_tokens"].as_u64().unwrap_or(0);
-                if input > 0 || output > 0 {
-                    return Some(Ok(StreamDelta::Usage {
-                        input_tokens: input,
-                        output_tokens: output,
-                    }));
-                }
-            }
-            if let Some(delta) = json.get("delta") {
-                if let Some(stop_reason) = delta["stop_reason"].as_str() {
-                    let reason = match stop_reason {
-                        "end_turn" => StopReason::EndTurn,
-                        "tool_use" => StopReason::ToolUse,
-                        "max_tokens" => StopReason::MaxTokens,
-                        _ => StopReason::EndTurn,
-                    };
-                    return Some(Ok(StreamDelta::Stop(reason)));
-                }
-            }
-            None
-        }
-        _ => {
-            // Unknown type — ignore
-            None
-        }
+        _ => None,
     }
 }
 
@@ -354,34 +322,9 @@ fn parse_stream_json(json: &serde_json::Value) -> Option<Result<StreamDelta>> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn detect_billing_type_api() {
-        let config = ModelConfig {
-            provider: "claude-code".into(),
-            model_id: "claude-sonnet-4".into(),
-            api_key: Some("sk-test".into()),
-            base_url: None,
-            max_tokens: 8192,
-            temperature: 0.0,
-            thinking: ThinkingLevel::Off,
-            retry: None,
-            azure_resource: None,
-            azure_deployment: None,
-            azure_api_version: None,
-            aws_region: None,
-            extra_headers: Default::default(),
-            claude_command: None,
-            cli_session_id: None,
-        };
-        assert_eq!(
-            ClaudeCodeClient::detect_billing_type(&config),
-            BillingType::Api
-        );
-    }
-
-    #[test]
-    fn detect_billing_type_subscription() {
-        let config = ModelConfig {
+    /// Helper to create a test ModelConfig with sensible defaults.
+    fn test_config() -> ModelConfig {
+        ModelConfig {
             provider: "claude-code".into(),
             model_id: "claude-sonnet-4".into(),
             api_key: None,
@@ -396,8 +339,25 @@ mod tests {
             aws_region: None,
             extra_headers: Default::default(),
             claude_command: None,
+            cli_allowed_tools: vec![],
+            cli_permission_mode: None,
             cli_session_id: None,
-        };
+        }
+    }
+
+    #[test]
+    fn detect_billing_type_api() {
+        let mut config = test_config();
+        config.api_key = Some("sk-test".into());
+        assert_eq!(
+            ClaudeCodeClient::detect_billing_type(&config),
+            BillingType::Api
+        );
+    }
+
+    #[test]
+    fn detect_billing_type_subscription() {
+        let config = test_config();
         assert_eq!(
             ClaudeCodeClient::detect_billing_type(&config),
             BillingType::Subscription
@@ -411,28 +371,151 @@ mod tests {
             "subtype": "init",
             "session_id": "abc-123"
         });
-        let delta = parse_stream_json(&json).unwrap().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let killed = Mutex::new(false);
+        let delta = rt
+            .block_on(parse_stream_json(&json, None, None, &killed))
+            .unwrap()
+            .unwrap();
         assert!(matches!(delta, StreamDelta::MessageId(id) if id == "abc-123"));
     }
 
     #[test]
-    fn parse_text_delta() {
+    fn parse_result_with_text() {
         let json = serde_json::json!({
-            "type": "assistant",
-            "content": [{"type": "text", "text": "Hello world"}]
+            "type": "result",
+            "subtype": "success",
+            "result": "Hello! How can I help you?",
+            "stop_reason": "end_turn",
+            "session_id": "abc-123",
+            "usage": {"input_tokens": 100, "output_tokens": 50}
         });
-        let delta = parse_stream_json(&json).unwrap().unwrap();
-        assert!(matches!(delta, StreamDelta::TextDelta(t) if t == "Hello world"));
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let killed = Mutex::new(false);
+        let delta = rt
+            .block_on(parse_stream_json(&json, None, None, &killed))
+            .unwrap()
+            .unwrap();
+        assert!(matches!(delta, StreamDelta::TextDelta(t) if t == "Hello! How can I help you?"));
     }
 
     #[test]
-    fn parse_result_stop() {
+    fn parse_result_empty_text() {
         let json = serde_json::json!({
             "type": "result",
-            "stop_reason": "end_turn",
-            "usage": {"input_tokens": 100, "output_tokens": 50}
+            "subtype": "success",
+            "result": "",
+            "stop_reason": "end_turn"
         });
-        let delta = parse_stream_json(&json).unwrap().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let killed = Mutex::new(false);
+        let delta = rt
+            .block_on(parse_stream_json(&json, None, None, &killed))
+            .unwrap()
+            .unwrap();
         assert!(matches!(delta, StreamDelta::Stop(StopReason::EndTurn)));
+    }
+
+    #[test]
+    fn parse_assistant_safe_tool_ignored() {
+        let json = serde_json::json!({
+            "type": "assistant",
+            "message": {
+                "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "ls -la"}}]
+            }
+        });
+        let patterns = ryvos_core::security::SecurityPolicy::default_patterns();
+        let matcher = DangerousPatternMatcher::new(&patterns);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let killed = Mutex::new(false);
+        // Safe command — should be ignored (returns None)
+        let result = rt.block_on(parse_stream_json(&json, Some(&matcher), None, &killed));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn parse_assistant_dangerous_tool_blocked() {
+        let json = serde_json::json!({
+            "type": "assistant",
+            "message": {
+                "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "rm -rf /home/user"}}]
+            }
+        });
+        let patterns = ryvos_core::security::SecurityPolicy::default_patterns();
+        let matcher = DangerousPatternMatcher::new(&patterns);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let killed = Mutex::new(false);
+        let result = rt
+            .block_on(parse_stream_json(&json, Some(&matcher), None, &killed))
+            .unwrap();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("recursive delete"), "got: {}", err);
+        assert!(*rt.block_on(killed.lock()));
+    }
+
+    #[test]
+    fn parse_unknown_type_ignored() {
+        let json = serde_json::json!({"type": "rate_limit_event"});
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let killed = Mutex::new(false);
+        assert!(rt
+            .block_on(parse_stream_json(&json, None, None, &killed))
+            .is_none());
+    }
+
+    /// Helper to build CLI args the same way chat_stream does.
+    fn build_args(config: &ModelConfig) -> Vec<String> {
+        let mut args = vec![
+            "--print".to_string(),
+            "--output-format".to_string(),
+            "stream-json".to_string(),
+            "--verbose".to_string(),
+        ];
+        if !config.cli_allowed_tools.is_empty() {
+            args.push("--allowedTools".to_string());
+            for tool in &config.cli_allowed_tools {
+                args.push(tool.clone());
+            }
+            let perm_mode = config.cli_permission_mode.as_deref().unwrap_or("plan");
+            args.push("--permission-mode".to_string());
+            args.push(perm_mode.to_string());
+        } else {
+            args.push("--dangerously-skip-permissions".to_string());
+        }
+        args
+    }
+
+    /// Default (no cli_allowed_tools) uses --dangerously-skip-permissions for headless mode.
+    #[test]
+    fn default_uses_dangerously_skip_permissions() {
+        let config = test_config();
+        let args = build_args(&config);
+        assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
+        assert!(!args.contains(&"--allowedTools".to_string()));
+    }
+
+    /// When cli_allowed_tools is set, uses --allowedTools instead.
+    #[test]
+    fn explicit_allowed_tools_replaces_skip_permissions() {
+        let mut config = test_config();
+        config.cli_allowed_tools = vec!["Read".into(), "Glob".into()];
+        let args = build_args(&config);
+        assert!(!args.contains(&"--dangerously-skip-permissions".to_string()));
+        assert!(args.contains(&"--allowedTools".to_string()));
+        assert!(args.contains(&"Read".to_string()));
+        assert!(args.contains(&"Glob".to_string()));
+        assert!(args.contains(&"--permission-mode".to_string()));
+        assert!(args.contains(&"plan".to_string()));
+    }
+
+    /// Custom permission mode is respected.
+    #[test]
+    fn custom_permission_mode() {
+        let mut config = test_config();
+        config.cli_allowed_tools = vec!["Bash".into()];
+        config.cli_permission_mode = Some("dontAsk".into());
+        let args = build_args(&config);
+        assert!(args.contains(&"dontAsk".to_string()));
     }
 }

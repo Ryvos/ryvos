@@ -52,6 +52,8 @@ pub struct AgentRuntime {
     last_message_id: Arc<std::sync::Mutex<Option<String>>>,
     /// Override CLI session ID for the next run (set before calling run()).
     cli_session_override: Arc<std::sync::Mutex<Option<String>>>,
+    /// Self-reference for sub-agent spawning (set after Arc wrapping).
+    pub spawner: Arc<tokio::sync::Mutex<Option<Arc<dyn ryvos_core::types::AgentSpawner>>>>,
 }
 
 impl AgentRuntime {
@@ -76,6 +78,7 @@ impl AgentRuntime {
             cost_store: None,
             last_message_id: Arc::new(std::sync::Mutex::new(None)),
             cli_session_override: Arc::new(std::sync::Mutex::new(None)),
+            spawner: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -102,6 +105,7 @@ impl AgentRuntime {
             cost_store: None,
             last_message_id: Arc::new(std::sync::Mutex::new(None)),
             cli_session_override: Arc::new(std::sync::Mutex::new(None)),
+            spawner: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -353,7 +357,7 @@ impl AgentRuntime {
             session_id: session_id.clone(),
             working_dir: std::env::current_dir().unwrap_or_else(|_| workspace.clone()),
             store: Some(self.store.clone()),
-            agent_spawner: None, // Set externally when AgentRuntime is wrapped in Arc
+            agent_spawner: self.spawner.lock().await.clone(),
             sandbox_config: self.config.agent.sandbox.clone(),
             config_path: None,
         };

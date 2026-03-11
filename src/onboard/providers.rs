@@ -6,6 +6,8 @@ pub struct ProviderChoice {
     pub api_key: Option<String>,
     pub base_url: Option<String>,
     pub claude_command: Option<String>,
+    pub cli_allowed_tools: Vec<String>,
+    pub cli_permission_mode: Option<String>,
 }
 
 pub struct ModelChoice {
@@ -107,6 +109,8 @@ fn configure_keyed_provider(provider: &str, env_var: &str) -> Result<ProviderCho
         api_key: Some(api_key),
         base_url: None,
         claude_command: None,
+        cli_allowed_tools: vec![],
+        cli_permission_mode: None,
     })
 }
 
@@ -136,6 +140,8 @@ fn configure_keyed_provider_with_url(
         api_key: Some(api_key),
         base_url: Some(base_url.to_string()),
         claude_command: None,
+        cli_allowed_tools: vec![],
+        cli_permission_mode: None,
     })
 }
 
@@ -168,6 +174,8 @@ fn configure_keyed_provider_with_custom_url(
         api_key: Some(api_key),
         base_url: Some(base_url),
         claude_command: None,
+        cli_allowed_tools: vec![],
+        cli_permission_mode: None,
     })
 }
 
@@ -182,6 +190,8 @@ fn configure_ollama() -> Result<ProviderChoice> {
         api_key: None,
         base_url: Some(base_url),
         claude_command: None,
+        cli_allowed_tools: vec![],
+        cli_permission_mode: None,
     })
 }
 
@@ -206,6 +216,8 @@ fn configure_custom() -> Result<ProviderChoice> {
         api_key,
         base_url: Some(base_url),
         claude_command: None,
+        cli_allowed_tools: vec![],
+        cli_permission_mode: None,
     })
 }
 
@@ -253,11 +265,38 @@ fn configure_claude_code() -> Result<ProviderChoice> {
         None
     };
 
+    // Permission level for CLI tool access
+    let perm_options = &[
+        "Full access (default, guardian monitors for dangerous ops)",
+        "Restricted (whitelist specific tools via --allowedTools)",
+    ];
+    let perm_choice = Select::new()
+        .with_prompt("CLI permission level")
+        .items(perm_options)
+        .default(0)
+        .interact()?;
+
+    let (cli_allowed_tools, cli_permission_mode) = match perm_choice {
+        1 => {
+            println!("  Restricting CLI to read-only tools. Edit cli_allowed_tools in config to customize.");
+            (
+                vec![
+                    "Read".into(), "Glob".into(), "Grep".into(),
+                    "WebSearch".into(), "WebFetch".into(), "mcp__*".into(),
+                ],
+                Some("plan".to_string()),
+            )
+        }
+        _ => (vec![], None),
+    };
+
     Ok(ProviderChoice {
         provider: "claude-code".to_string(),
         api_key,
         base_url: None,
         claude_command: Some(command),
+        cli_allowed_tools,
+        cli_permission_mode,
     })
 }
 

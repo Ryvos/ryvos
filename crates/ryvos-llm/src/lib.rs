@@ -33,11 +33,25 @@ pub fn create_client(config: &ModelConfig) -> Box<dyn LlmClient> {
         "bedrock" | "aws-bedrock" | "aws" => Box::new(BedrockClient::new()),
         "cohere" => Box::new(CohereClient::new()),
         "claude-code" | "claude-cli" | "claude-sub" => Box::new(ClaudeCodeClient::new()),
+        // NOTE: For security pattern matching, use create_client_with_security() instead.
         // Everything else uses the OpenAI-compatible client.
         // For known presets, apply default base_url and extra headers
         // via the config's extra_headers and base_url fields (set during
         // config loading or init).
         _ => Box::new(OpenAiClient::new()),
+    }
+}
+
+/// Create an LLM client with security pattern matching for claude-code.
+pub fn create_client_with_security(
+    config: &ModelConfig,
+    dangerous_patterns: &[ryvos_core::security::DangerousPattern],
+) -> Box<dyn LlmClient> {
+    match config.provider.as_str() {
+        "claude-code" | "claude-cli" | "claude-sub" => {
+            Box::new(ClaudeCodeClient::with_patterns(dangerous_patterns))
+        }
+        _ => create_client(config),
     }
 }
 

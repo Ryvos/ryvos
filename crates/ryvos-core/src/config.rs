@@ -441,6 +441,15 @@ pub struct ModelConfig {
     /// Path to claude CLI binary (for claude-code provider).
     #[serde(default)]
     pub claude_command: Option<String>,
+    /// Allowed tools for Claude CLI subprocess (for claude-code provider).
+    /// When set, replaces --dangerously-skip-permissions with --allowedTools.
+    /// Example: ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
+    #[serde(default)]
+    pub cli_allowed_tools: Vec<String>,
+    /// Permission mode for Claude CLI subprocess (default: "plan" for read-only).
+    /// Options: "default", "plan", "dontAsk", "bypassPermissions"
+    #[serde(default)]
+    pub cli_permission_mode: Option<String>,
     /// Runtime-only: CLI session ID for --resume (not serialized to config).
     #[serde(skip)]
     pub cli_session_id: Option<String>,
@@ -1151,5 +1160,31 @@ dm_policy = "open"
         assert_eq!(slack.bot_token, "xoxb-slack");
         assert_eq!(slack.app_token, "xapp-slack");
         assert_eq!(slack.dm_policy, DmPolicy::Open);
+    }
+
+    #[test]
+    fn test_cli_allowed_tools_defaults_empty() {
+        let toml_str = r#"
+[model]
+model_id = "claude-sonnet-4-20250514"
+provider = "claude-code"
+"#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.model.cli_allowed_tools.is_empty());
+        assert!(config.model.cli_permission_mode.is_none());
+    }
+
+    #[test]
+    fn test_cli_allowed_tools_from_toml() {
+        let toml_str = r#"
+[model]
+model_id = "claude-sonnet-4-20250514"
+provider = "claude-code"
+cli_allowed_tools = ["Read", "Glob", "Grep"]
+cli_permission_mode = "dontAsk"
+"#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.model.cli_allowed_tools, vec!["Read", "Glob", "Grep"]);
+        assert_eq!(config.model.cli_permission_mode.as_deref(), Some("dontAsk"));
     }
 }

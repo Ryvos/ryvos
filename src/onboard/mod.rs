@@ -236,6 +236,8 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         aws_region: None,
         extra_headers: Default::default(),
         claude_command,
+        cli_allowed_tools: vec![],
+        cli_permission_mode: None,
         cli_session_id: None,
     };
 
@@ -562,6 +564,8 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         aws_region: None,
         extra_headers: Default::default(),
         claude_command: provider.claude_command,
+        cli_allowed_tools: provider.cli_allowed_tools,
+        cli_permission_mode: provider.cli_permission_mode,
         cli_session_id: None,
     };
     ryvos_llm::apply_preset_defaults(&mut model_config);

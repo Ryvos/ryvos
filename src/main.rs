@@ -294,7 +294,8 @@ async fn main() -> anyhow::Result<()> {
     let event_bus = Arc::new(EventBus::default());
 
     // Build LLM client with retry and fallback chain
-    let primary_llm = ryvos_llm::create_client(&config.model);
+    let primary_llm =
+        ryvos_llm::create_client_with_security(&config.model, &config.security.dangerous_patterns);
     let llm: Arc<dyn ryvos_core::traits::LlmClient> =
         if !config.fallback_models.is_empty() || config.model.retry.is_some() {
             let retry_config = config
@@ -516,6 +517,20 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let runtime = Arc::new(runtime_inner);
+
+    // Wire agent spawner: give runtime a self-reference for sub-agent tools
+    {
+        let spawner_ref = runtime.clone() as Arc<dyn ryvos_core::types::AgentSpawner>;
+        *runtime.spawner.lock().await = Some(spawner_ref);
+    }
+
+    info!(
+        guardian = config.agent.guardian.enabled,
+        journal = journal.is_some(),
+        cost_tracking = cost_store.is_some(),
+        agent_spawner = true,
+        "Ryvos subsystems initialized"
+    );
 
     match cli.command {
         Some(Commands::Doctor) => {
@@ -1813,6 +1828,8 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
         aws_region: None,
         extra_headers: Default::default(),
         claude_command: None,
+        cli_allowed_tools: vec![],
+        cli_permission_mode: None,
         cli_session_id: None,
     };
     ryvos_llm::apply_preset_defaults(&mut model);
