@@ -101,21 +101,34 @@ impl LlmClient for ClaudeCodeClient {
                 "--verbose".to_string(),
             ];
 
-            // Security: if cli_allowed_tools is explicitly configured, use --allowedTools
-            // to restrict the CLI. Otherwise use --dangerously-skip-permissions for
-            // headless operation (security handled by guardian + stream interception).
+            // Security: use --permission-mode dontAsk for headless operation.
+            // If cli_allowed_tools is explicitly configured, pass --allowedTools.
+            // Otherwise use a safe default set that allows Bash but scopes it to
+            // non-destructive commands via --disallowedTools.
+            // NEVER use --dangerously-skip-permissions — it bypasses all checks
+            // and our stream interception loses the race against tool execution.
+            let perm_mode = config.cli_permission_mode.as_deref().unwrap_or("dontAsk");
+            args.push("--permission-mode".to_string());
+            args.push(perm_mode.to_string());
+
             if !config.cli_allowed_tools.is_empty() {
                 args.push("--allowedTools".to_string());
                 for tool in &config.cli_allowed_tools {
                     args.push(tool.clone());
                 }
-                // Permission mode when using allowedTools
-                let perm_mode = config.cli_permission_mode.as_deref().unwrap_or("plan");
-                args.push("--permission-mode".to_string());
-                args.push(perm_mode.to_string());
-            } else {
-                args.push("--dangerously-skip-permissions".to_string());
             }
+
+            // Block destructive bash patterns at the CLI level
+            args.push("--disallowedTools".to_string());
+            args.push("Bash(rm -rf:*)".to_string());
+            args.push("--disallowedTools".to_string());
+            args.push("Bash(rm -r:*)".to_string());
+            args.push("--disallowedTools".to_string());
+            args.push("Bash(chmod 777:*)".to_string());
+            args.push("--disallowedTools".to_string());
+            args.push("Bash(mkfs:*)".to_string());
+            args.push("--disallowedTools".to_string());
+            args.push("Bash(dd if=:*)".to_string());
 
             // Model override
             if config.model_id != "default" && !config.model_id.is_empty() {
@@ -473,41 +486,55 @@ mod tests {
             "stream-json".to_string(),
             "--verbose".to_string(),
         ];
+
+        let perm_mode = config.cli_permission_mode.as_deref().unwrap_or("dontAsk");
+        args.push("--permission-mode".to_string());
+        args.push(perm_mode.to_string());
+
         if !config.cli_allowed_tools.is_empty() {
             args.push("--allowedTools".to_string());
             for tool in &config.cli_allowed_tools {
                 args.push(tool.clone());
             }
-            let perm_mode = config.cli_permission_mode.as_deref().unwrap_or("plan");
-            args.push("--permission-mode".to_string());
-            args.push(perm_mode.to_string());
-        } else {
-            args.push("--dangerously-skip-permissions".to_string());
         }
+
+        // Block destructive bash patterns
+        args.push("--disallowedTools".to_string());
+        args.push("Bash(rm -rf:*)".to_string());
+        args.push("--disallowedTools".to_string());
+        args.push("Bash(rm -r:*)".to_string());
+        args.push("--disallowedTools".to_string());
+        args.push("Bash(chmod 777:*)".to_string());
+        args.push("--disallowedTools".to_string());
+        args.push("Bash(mkfs:*)".to_string());
+        args.push("--disallowedTools".to_string());
+        args.push("Bash(dd if=:*)".to_string());
+
         args
     }
 
-    /// Default (no cli_allowed_tools) uses --dangerously-skip-permissions for headless mode.
+    /// Default uses --permission-mode dontAsk (headless) with --disallowedTools.
     #[test]
-    fn default_uses_dangerously_skip_permissions() {
+    fn default_uses_permission_mode_dont_ask() {
         let config = test_config();
         let args = build_args(&config);
-        assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
-        assert!(!args.contains(&"--allowedTools".to_string()));
+        assert!(!args.contains(&"--dangerously-skip-permissions".to_string()));
+        assert!(args.contains(&"--permission-mode".to_string()));
+        assert!(args.contains(&"dontAsk".to_string()));
+        assert!(args.contains(&"--disallowedTools".to_string()));
+        assert!(args.contains(&"Bash(rm -rf:*)".to_string()));
     }
 
-    /// When cli_allowed_tools is set, uses --allowedTools instead.
+    /// When cli_allowed_tools is set, uses --allowedTools.
     #[test]
-    fn explicit_allowed_tools_replaces_skip_permissions() {
+    fn explicit_allowed_tools() {
         let mut config = test_config();
         config.cli_allowed_tools = vec!["Read".into(), "Glob".into()];
         let args = build_args(&config);
-        assert!(!args.contains(&"--dangerously-skip-permissions".to_string()));
         assert!(args.contains(&"--allowedTools".to_string()));
         assert!(args.contains(&"Read".to_string()));
         assert!(args.contains(&"Glob".to_string()));
         assert!(args.contains(&"--permission-mode".to_string()));
-        assert!(args.contains(&"plan".to_string()));
     }
 
     /// Custom permission mode is respected.
@@ -515,8 +542,8 @@ mod tests {
     fn custom_permission_mode() {
         let mut config = test_config();
         config.cli_allowed_tools = vec!["Bash".into()];
-        config.cli_permission_mode = Some("dontAsk".into());
+        config.cli_permission_mode = Some("plan".into());
         let args = build_args(&config);
-        assert!(args.contains(&"dontAsk".to_string()));
+        assert!(args.contains(&"plan".to_string()));
     }
 }
