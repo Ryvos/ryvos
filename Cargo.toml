@@ -14,7 +14,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.2"
+version = "0.4.4"
 edition = "2021"
 license = "MIT"
 rust-version = "1.75"
@@ -123,6 +123,7 @@ dialoguer.workspace = true
 uuid.workspace = true
 cron.workspace = true
 tui-banner = "0.1.4"
+reqwest.workspace = true
 
 [dev-dependencies]
 tempfile = "3"

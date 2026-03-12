@@ -77,8 +77,9 @@ impl Guardian {
         let deque_capacity = threshold * 2;
         let mut recent_tools: VecDeque<ToolCallRecord> = VecDeque::with_capacity(deque_capacity);
 
-        // Stall detection
+        // Stall detection — only active during agent runs
         let mut last_progress = Instant::now();
+        let mut run_active = false;
 
         // Token budget monitoring
         let mut total_tokens: u64 = 0;
@@ -118,7 +119,12 @@ impl Guardian {
                 event = rx.recv() => {
                     let Ok(event) = event else { break };
                     match event {
+                        AgentEvent::RunStarted { .. } => {
+                            run_active = true;
+                            last_progress = Instant::now();
+                        }
                         AgentEvent::ToolStart { ref name, ref input } => {
+                            run_active = true;
                             let fingerprint = {
                                 let s = serde_json::to_string(input).unwrap_or_default();
                                 s.chars().take(200).collect::<String>()
@@ -304,6 +310,7 @@ impl Guardian {
                         }
                         AgentEvent::RunComplete { .. } | AgentEvent::RunError { .. } => {
                             // Reset state for next run
+                            run_active = false;
                             recent_tools.clear();
                             last_progress = Instant::now();
                             total_tokens = 0;
@@ -315,7 +322,7 @@ impl Guardian {
                     }
                 }
                 _ = tokio::time::sleep(stall_remaining) => {
-                    if last_progress.elapsed() >= stall_timeout {
+                    if run_active && last_progress.elapsed() >= stall_timeout {
                         let elapsed = last_progress.elapsed().as_secs();
                         warn!(
                             elapsed_secs = elapsed,
@@ -458,7 +465,15 @@ mod tests {
 
         let (guardian, mut hint_rx) = Guardian::new(config, event_bus.clone(), cancel.clone());
         let session_id = SessionId::new();
-        let handle = tokio::spawn(guardian.run(session_id));
+        let handle = tokio::spawn(guardian.run(session_id.clone()));
+
+        // Let the Guardian's event loop start and subscribe
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Signal that a run is active — stall detection only fires during runs
+        event_bus.publish(AgentEvent::RunStarted {
+            session_id: session_id.clone(),
+        });
 
         // Wait for stall to trigger
         let action = tokio::time::timeout(std::time::Duration::from_secs(3), hint_rx.recv())
@@ -472,6 +487,36 @@ mod tests {
             }
             GuardianAction::CancelRun(_) => panic!("expected InjectHint, got CancelRun"),
         }
+
+        cancel.cancel();
+        handle.await.ok();
+    }
+
+    #[tokio::test]
+    async fn no_stall_when_idle() {
+        let event_bus = Arc::new(EventBus::default());
+        let cancel = CancellationToken::new();
+        let config = GuardianConfig {
+            enabled: true,
+            doom_loop_threshold: 3,
+            stall_timeout_secs: 1, // 1 second
+            token_budget: 0,
+            token_warn_pct: 80,
+        };
+
+        let (guardian, mut hint_rx) = Guardian::new(config, event_bus.clone(), cancel.clone());
+        let session_id = SessionId::new();
+        let handle = tokio::spawn(guardian.run(session_id));
+
+        // Do NOT publish RunStarted — daemon idle mode
+        // Wait longer than stall_timeout
+        let result =
+            tokio::time::timeout(std::time::Duration::from_secs(3), hint_rx.recv()).await;
+
+        assert!(
+            result.is_err(),
+            "should not receive stall hint when no run is active"
+        );
 
         cancel.cancel();
         handle.await.ok();

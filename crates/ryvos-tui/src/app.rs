@@ -221,8 +221,18 @@ impl App {
                     text,
                 });
             }
-            AgentEvent::HeartbeatFired { .. } => {}
-            AgentEvent::HeartbeatOk { .. } => {}
+            AgentEvent::HeartbeatFired { timestamp } => {
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!("[Heartbeat] Checking workspace at {}", timestamp.format("%H:%M:%S UTC")),
+                });
+            }
+            AgentEvent::HeartbeatOk { response_chars, .. } => {
+                self.messages.push(DisplayMessage {
+                    role: MessageRole::System,
+                    text: format!("[Heartbeat] All clear ({} chars)", response_chars),
+                });
+            }
             AgentEvent::HeartbeatAlert { message, .. } => {
                 self.messages.push(DisplayMessage {
                     role: MessageRole::System,

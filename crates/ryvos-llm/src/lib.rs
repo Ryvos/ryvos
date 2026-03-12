@@ -9,6 +9,7 @@ pub use providers::anthropic::AnthropicClient;
 pub use providers::azure::AzureClient;
 pub use providers::bedrock::BedrockClient;
 pub use providers::claude_code::ClaudeCodeClient;
+pub use providers::copilot::CopilotClient;
 pub use providers::cohere::CohereClient;
 pub use providers::gemini::GeminiClient;
 pub use providers::openai::OpenAiClient;
@@ -16,12 +17,14 @@ pub use retry::RetryingClient;
 
 /// Create an LLM client based on the provider name.
 ///
-/// Supports 16 providers:
+/// Supports 17 providers:
 /// - `anthropic` / `claude` — Anthropic Messages API
 /// - `gemini` — Google Gemini native API
 /// - `azure` — Azure OpenAI (api-key header, deployment URL)
 /// - `bedrock` — AWS Bedrock (stub, v0.3.0)
 /// - `cohere` — Cohere v2 Chat API
+/// - `claude-code` — Claude Code CLI subprocess
+/// - `copilot` / `github-copilot` — GitHub Copilot CLI subprocess
 /// - `openai` — OpenAI (default fallback)
 /// - 10 preset providers (OpenAI-compatible): ollama, groq, openrouter,
 ///   together, fireworks, cerebras, xai, mistral, perplexity, deepseek
@@ -33,6 +36,7 @@ pub fn create_client(config: &ModelConfig) -> Box<dyn LlmClient> {
         "bedrock" | "aws-bedrock" | "aws" => Box::new(BedrockClient::new()),
         "cohere" => Box::new(CohereClient::new()),
         "claude-code" | "claude-cli" | "claude-sub" => Box::new(ClaudeCodeClient::new()),
+        "copilot" | "github-copilot" | "copilot-cli" => Box::new(CopilotClient::new()),
         // NOTE: For security pattern matching, use create_client_with_security() instead.
         // Everything else uses the OpenAI-compatible client.
         // For known presets, apply default base_url and extra headers
@@ -42,7 +46,7 @@ pub fn create_client(config: &ModelConfig) -> Box<dyn LlmClient> {
     }
 }
 
-/// Create an LLM client with security pattern matching for claude-code.
+/// Create an LLM client with security pattern matching for CLI-based providers.
 pub fn create_client_with_security(
     config: &ModelConfig,
     dangerous_patterns: &[ryvos_core::security::DangerousPattern],
@@ -50,6 +54,9 @@ pub fn create_client_with_security(
     match config.provider.as_str() {
         "claude-code" | "claude-cli" | "claude-sub" => {
             Box::new(ClaudeCodeClient::with_patterns(dangerous_patterns))
+        }
+        "copilot" | "github-copilot" | "copilot-cli" => {
+            Box::new(CopilotClient::with_patterns(dangerous_patterns))
         }
         _ => create_client(config),
     }

@@ -238,6 +238,7 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         claude_command,
         cli_allowed_tools: vec![],
         cli_permission_mode: None,
+        copilot_command: None,
         cli_session_id: None,
     };
 
@@ -569,6 +570,7 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         claude_command: provider.claude_command,
         cli_allowed_tools: provider.cli_allowed_tools,
         cli_permission_mode: provider.cli_permission_mode,
+        copilot_command: None,
         cli_session_id: None,
     };
     ryvos_llm::apply_preset_defaults(&mut model_config);

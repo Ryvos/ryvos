@@ -120,6 +120,12 @@ enum Commands {
     },
     /// Personalize your agent with a soul interview
     Soul,
+    /// Update ryvos to the latest release
+    Update {
+        /// Skip confirmation prompt
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -232,6 +238,11 @@ async fn main() -> anyhow::Result<()> {
             no_channels,
         };
         return onboard::run_onboarding(&dest, options).await;
+    }
+
+    // Handle self-update before config loading
+    if let Some(Commands::Update { yes }) = &cli.command {
+        return self_update(*yes).await;
     }
 
     // Handle soul interview before config loading
@@ -807,6 +818,7 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Mcp { .. }) => unreachable!("handled before config load"),
         Some(Commands::Skill { .. }) => unreachable!("handled before config load"),
         Some(Commands::Soul) => unreachable!("handled before config load"),
+        Some(Commands::Update { .. }) => unreachable!("handled before config load"),
         Some(Commands::Repl) | None => {
             run_repl(
                 &runtime,
@@ -1856,6 +1868,7 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
         claude_command: None,
         cli_allowed_tools: vec![],
         cli_permission_mode: None,
+        copilot_command: None,
         cli_session_id: None,
     };
     ryvos_llm::apply_preset_defaults(&mut model);
@@ -1882,6 +1895,144 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
 
 fn dirs_home() -> Option<PathBuf> {
     std::env::var("HOME").ok().map(PathBuf::from)
+}
+
+/// Self-update: download the latest release from GitHub and replace the current binary.
+async fn self_update(skip_confirm: bool) -> anyhow::Result<()> {
+    const REPO: &str = "Ryvos/ryvos";
+    let current_version = env!("CARGO_PKG_VERSION");
+
+    println!("Ryvos self-updater");
+    println!("  Current version: v{}", current_version);
+    println!("  Checking for updates...");
+
+    // Fetch latest release metadata from GitHub API
+    let client = reqwest::Client::builder()
+        .user_agent("ryvos-updater")
+        .build()?;
+
+    let api_url = format!("https://api.github.com/repos/{}/releases/latest", REPO);
+    let resp = client.get(&api_url).send().await?;
+
+    if !resp.status().is_success() {
+        anyhow::bail!(
+            "Failed to check for updates (HTTP {}). Check your network connection.",
+            resp.status()
+        );
+    }
+
+    let release: serde_json::Value = resp.json().await?;
+    let latest_tag = release["tag_name"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Could not parse latest release tag"))?;
+    let latest_version = latest_tag.trim_start_matches('v');
+
+    println!("  Latest version:  {}", latest_tag);
+
+    if latest_version == current_version {
+        println!("\n  Already up to date!");
+        return Ok(());
+    }
+
+    // Determine the correct artifact name for this platform
+    let artifact_name = detect_artifact_name()?;
+
+    // Find the download URL for our artifact
+    let assets = release["assets"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("No assets found in release"))?;
+
+    let asset = assets
+        .iter()
+        .find(|a| a["name"].as_str() == Some(artifact_name))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No binary found for this platform ({}) in release {}",
+                artifact_name,
+                latest_tag
+            )
+        })?;
+
+    let download_url = asset["browser_download_url"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Could not get download URL"))?;
+
+    let size_bytes = asset["size"].as_u64().unwrap_or(0);
+    let size_mb = size_bytes as f64 / 1_048_576.0;
+
+    println!("\n  Update available: v{} -> {}", current_version, latest_tag);
+    println!("  Artifact: {} ({:.1} MB)", artifact_name, size_mb);
+
+    if !skip_confirm {
+        print!("\n  Proceed with update? [Y/n] ");
+        io::stdout().flush()?;
+        let mut answer = String::new();
+        io::stdin().lock().read_line(&mut answer)?;
+        let answer = answer.trim().to_lowercase();
+        if answer == "n" || answer == "no" {
+            println!("  Update cancelled.");
+            return Ok(());
+        }
+    }
+
+    println!("  Downloading {}...", latest_tag);
+
+    let binary_data = client.get(download_url).send().await?.bytes().await?;
+
+    // Get the path to the current executable
+    let current_exe = std::env::current_exe()?;
+    let current_exe = current_exe.canonicalize()?;
+
+    // Write to a temp file next to the binary, then atomic rename
+    let tmp_path = current_exe.with_extension("update-tmp");
+
+    std::fs::write(&tmp_path, &binary_data)?;
+
+    // Set executable permissions on Unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o755))?;
+    }
+
+    // Rename old binary to .bak, then rename new to target
+    let bak_path = current_exe.with_extension("bak");
+    if bak_path.exists() {
+        std::fs::remove_file(&bak_path).ok();
+    }
+    std::fs::rename(&current_exe, &bak_path)?;
+
+    if let Err(e) = std::fs::rename(&tmp_path, &current_exe) {
+        // Rollback: restore backup
+        std::fs::rename(&bak_path, &current_exe).ok();
+        anyhow::bail!("Failed to install update: {}. Rolled back to previous version.", e);
+    }
+
+    // Clean up backup
+    std::fs::remove_file(&bak_path).ok();
+
+    println!("\n  Updated to {}!", latest_tag);
+    println!("  Restart any running ryvos daemons to use the new version.");
+
+    Ok(())
+}
+
+/// Detect the GitHub release artifact name for the current platform.
+fn detect_artifact_name() -> anyhow::Result<&'static str> {
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+
+    match (os, arch) {
+        ("linux", "x86_64") => Ok("ryvos-linux-x86_64"),
+        ("linux", "aarch64") => Ok("ryvos-linux-aarch64"),
+        ("macos", "x86_64") => Ok("ryvos-macos-x86_64"),
+        ("macos", "aarch64") => Ok("ryvos-macos-aarch64"),
+        ("windows", "x86_64") => Ok("ryvos-windows-x86_64.exe"),
+        _ => anyhow::bail!(
+            "Unsupported platform: {}-{}. Download manually from https://github.com/Ryvos/ryvos/releases",
+            os, arch
+        ),
+    }
 }
 
 fn truncate(s: &str, max: usize) -> &str {

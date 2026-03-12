@@ -341,6 +341,7 @@ mod tests {
             claude_command: None,
             cli_allowed_tools: vec![],
             cli_permission_mode: None,
+            copilot_command: None,
             cli_session_id: None,
         }
     }

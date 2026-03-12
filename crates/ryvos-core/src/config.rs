@@ -450,6 +450,9 @@ pub struct ModelConfig {
     /// Options: "default", "plan", "dontAsk", "bypassPermissions"
     #[serde(default)]
     pub cli_permission_mode: Option<String>,
+    /// Path to copilot CLI binary (for copilot provider).
+    #[serde(default)]
+    pub copilot_command: Option<String>,
     /// Runtime-only: CLI session ID for --resume (not serialized to config).
     #[serde(skip)]
     pub cli_session_id: Option<String>,

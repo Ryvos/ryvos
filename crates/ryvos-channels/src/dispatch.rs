@@ -82,7 +82,7 @@ impl ChannelDispatcher {
             ryvos_core::hooks::run_hooks(&hooks.on_start, &[]).await;
         }
 
-        // Spawn a heartbeat alert router task
+        // Spawn a heartbeat event router task
         {
             let mut hb_rx = self.event_bus.subscribe();
             let adapters = self.adapters.clone();
@@ -92,19 +92,23 @@ impl ChannelDispatcher {
                     tokio::select! {
                         _ = hb_cancel.cancelled() => break,
                         event = hb_rx.recv() => {
-                            if let Ok(AgentEvent::HeartbeatAlert { session_id: _, message, target_channel }) = event {
-                                let content = MessageContent::Text(
-                                    format!("[Heartbeat Alert] {}", message),
-                                );
-                                if let Some(ref channel) = target_channel {
-                                    if let Some(adapter) = adapters.get(channel) {
-                                        adapter.broadcast(&content).await.ok();
-                                    }
-                                } else {
-                                    // Broadcast to all adapters
-                                    for adapter in adapters.values() {
-                                        adapter.broadcast(&content).await.ok();
-                                    }
+                            let (content, target_channel) = match event {
+                                Ok(AgentEvent::HeartbeatAlert { message, target_channel, .. }) => {
+                                    (MessageContent::Text(format!("[Heartbeat Alert] {}", message)), target_channel)
+                                }
+                                Ok(AgentEvent::HeartbeatOk { response_chars, .. }) => {
+                                    (MessageContent::Text(format!("[Heartbeat] All clear ({} chars)", response_chars)), None)
+                                }
+                                _ => continue,
+                            };
+
+                            if let Some(ref channel) = target_channel {
+                                if let Some(adapter) = adapters.get(channel) {
+                                    adapter.broadcast(&content).await.ok();
+                                }
+                            } else {
+                                for adapter in adapters.values() {
+                                    adapter.broadcast(&content).await.ok();
                                 }
                             }
                         }
