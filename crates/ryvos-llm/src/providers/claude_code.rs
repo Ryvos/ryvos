@@ -101,13 +101,13 @@ impl LlmClient for ClaudeCodeClient {
                 "--verbose".to_string(),
             ];
 
-            // Security: use --permission-mode dontAsk for headless operation.
-            // If cli_allowed_tools is explicitly configured, pass --allowedTools.
-            // Otherwise use a safe default set that allows Bash but scopes it to
-            // non-destructive commands via --disallowedTools.
-            // NEVER use --dangerously-skip-permissions — it bypasses all checks
-            // and our stream interception loses the race against tool execution.
-            let perm_mode = config.cli_permission_mode.as_deref().unwrap_or("dontAsk");
+            // Autonomous headless operation: bypass all permission prompts.
+            // Only destructive operations (deletion, data loss) are blocked
+            // via --disallowedTools. Everything else runs freely.
+            let perm_mode = config
+                .cli_permission_mode
+                .as_deref()
+                .unwrap_or("bypassPermissions");
             args.push("--permission-mode".to_string());
             args.push(perm_mode.to_string());
 
@@ -118,13 +118,11 @@ impl LlmClient for ClaudeCodeClient {
                 }
             }
 
-            // Block destructive bash patterns at the CLI level
+            // Only block truly destructive commands
             args.push("--disallowedTools".to_string());
             args.push("Bash(rm -rf:*)".to_string());
             args.push("--disallowedTools".to_string());
             args.push("Bash(rm -r:*)".to_string());
-            args.push("--disallowedTools".to_string());
-            args.push("Bash(chmod 777:*)".to_string());
             args.push("--disallowedTools".to_string());
             args.push("Bash(mkfs:*)".to_string());
             args.push("--disallowedTools".to_string());
@@ -487,7 +485,10 @@ mod tests {
             "--verbose".to_string(),
         ];
 
-        let perm_mode = config.cli_permission_mode.as_deref().unwrap_or("dontAsk");
+        let perm_mode = config
+            .cli_permission_mode
+            .as_deref()
+            .unwrap_or("bypassPermissions");
         args.push("--permission-mode".to_string());
         args.push(perm_mode.to_string());
 
@@ -498,13 +499,11 @@ mod tests {
             }
         }
 
-        // Block destructive bash patterns
+        // Only block truly destructive commands
         args.push("--disallowedTools".to_string());
         args.push("Bash(rm -rf:*)".to_string());
         args.push("--disallowedTools".to_string());
         args.push("Bash(rm -r:*)".to_string());
-        args.push("--disallowedTools".to_string());
-        args.push("Bash(chmod 777:*)".to_string());
         args.push("--disallowedTools".to_string());
         args.push("Bash(mkfs:*)".to_string());
         args.push("--disallowedTools".to_string());
@@ -513,16 +512,18 @@ mod tests {
         args
     }
 
-    /// Default uses --permission-mode dontAsk (headless) with --disallowedTools.
+    /// Default uses --permission-mode bypassPermissions with destructive-only blocks.
     #[test]
-    fn default_uses_permission_mode_dont_ask() {
+    fn default_uses_bypass_permissions() {
         let config = test_config();
         let args = build_args(&config);
         assert!(!args.contains(&"--dangerously-skip-permissions".to_string()));
         assert!(args.contains(&"--permission-mode".to_string()));
-        assert!(args.contains(&"dontAsk".to_string()));
+        assert!(args.contains(&"bypassPermissions".to_string()));
         assert!(args.contains(&"--disallowedTools".to_string()));
         assert!(args.contains(&"Bash(rm -rf:*)".to_string()));
+        // chmod 777 is NOT blocked — only data-destructive ops
+        assert!(!args.contains(&"Bash(chmod 777:*)".to_string()));
     }
 
     /// When cli_allowed_tools is set, uses --allowedTools.

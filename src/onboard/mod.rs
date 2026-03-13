@@ -1,11 +1,19 @@
 mod banner;
+mod budget;
 mod channels;
+mod cron;
+mod embedding;
 mod gateway;
+mod health_check;
+mod heartbeat;
 mod hooks;
+mod mcp_servers;
 mod providers;
+mod security;
 mod service;
 mod skills;
 mod web_search;
+mod whatsapp;
 
 use std::path::Path;
 
@@ -13,7 +21,7 @@ use anyhow::Result;
 use dialoguer::{Confirm, Input, Select};
 use ryvos_core::config::{
     AgentConfig, AppConfig, ChannelsConfig, DiscordConfig, DmPolicy, GatewayConfig, McpConfig,
-    ModelConfig, TelegramConfig, WizardMetadata,
+    ModelConfig, SecurityConfig, TelegramConfig, WizardMetadata,
 };
 
 pub enum OnboardingMode {
@@ -504,7 +512,106 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         OnboardingMode::QuickStart => AgentConfig::default(),
     };
 
-    // 8. Gateway config (Manual only)
+    // ── Phase 5: Channels (Telegram, Discord, Slack, WhatsApp) ──
+    println!();
+    let channels_config = channels::configure(&mode)?;
+
+    // ── Phase 6: MCP servers (web search + general integrations) ──
+    println!();
+    let web_search_mcp = web_search::configure()?;
+    println!();
+    let general_mcp = mcp_servers::configure()?;
+
+    // Merge web search + general MCP servers
+    let mcp = {
+        let mut servers = general_mcp;
+        if let Some((name, server_config)) = web_search_mcp {
+            servers.insert(name, server_config);
+        }
+        if servers.is_empty() {
+            None
+        } else {
+            Some(McpConfig { servers })
+        }
+    };
+
+    // ── Phase 7: Heartbeat + Cron + Budget ──
+    println!();
+    let heartbeat_config = match mode {
+        OnboardingMode::QuickStart => {
+            if Confirm::new()
+                .with_prompt("Enable heartbeat monitoring? (periodic health checks)")
+                .default(false)
+                .interact()?
+            {
+                heartbeat::configure()?
+            } else {
+                None
+            }
+        }
+        OnboardingMode::Manual => heartbeat::configure()?,
+    };
+
+    println!();
+    let cron_config = match mode {
+        OnboardingMode::QuickStart => {
+            if Confirm::new()
+                .with_prompt("Add scheduled tasks (cron jobs)?")
+                .default(false)
+                .interact()?
+            {
+                cron::configure()?
+            } else {
+                None
+            }
+        }
+        OnboardingMode::Manual => cron::configure()?,
+    };
+
+    println!();
+    let budget_config = match mode {
+        OnboardingMode::QuickStart => {
+            if Confirm::new()
+                .with_prompt("Set a monthly budget limit?")
+                .default(false)
+                .interact()?
+            {
+                budget::configure()?
+            } else {
+                None
+            }
+        }
+        OnboardingMode::Manual => budget::configure()?,
+    };
+
+    // ── Phase 8: Embedding + Security ──
+    println!();
+    let embedding_config = match mode {
+        OnboardingMode::QuickStart => {
+            if Confirm::new()
+                .with_prompt("Enable semantic memory (embeddings)?")
+                .default(false)
+                .interact()?
+            {
+                embedding::configure()?
+            } else {
+                None
+            }
+        }
+        OnboardingMode::Manual => embedding::configure()?,
+    };
+
+    println!();
+    let security_config = match mode {
+        OnboardingMode::QuickStart => SecurityConfig::default(),
+        OnboardingMode::Manual => security::configure()?,
+    };
+
+    // ── Phase 9: Skills + Gateway + Hooks + Service ──
+    println!();
+    let workspace_path = resolve_workspace(&agent_config.workspace);
+    let registry_config = skills::configure(&workspace_path)?;
+
     let gateway_config = match mode {
         OnboardingMode::Manual => {
             println!();
@@ -517,16 +624,6 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         }
     };
 
-    // 9. Channel setup
-    println!();
-    let channels_config = channels::configure(&mode)?;
-
-    // 10. Skills (create sample skill)
-    println!();
-    let workspace_path = resolve_workspace(&agent_config.workspace);
-    skills::configure(&workspace_path)?;
-
-    // 11. Hooks (Manual only)
     let hooks_config = match mode {
         OnboardingMode::Manual => {
             println!();
@@ -535,22 +632,10 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         OnboardingMode::QuickStart => None,
     };
 
-    // 12. Web search MCP
-    println!();
-    let web_search_mcp = web_search::configure()?;
-
-    // 13. Build and write config
+    // ── Build and write config ──
     let wizard_meta = WizardMetadata {
         last_run_at: Some(chrono::Utc::now().to_rfc3339()),
         last_run_version: Some(env!("CARGO_PKG_VERSION").to_string()),
-    };
-
-    let mcp = if let Some((name, server_config)) = web_search_mcp {
-        let mut servers = std::collections::HashMap::new();
-        servers.insert(name, server_config);
-        Some(McpConfig { servers })
-    } else {
-        None
     };
 
     let mut model_config = ModelConfig {
@@ -584,14 +669,14 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         mcp,
         hooks: hooks_config,
         wizard: Some(wizard_meta),
-        cron: None,
-        heartbeat: None,
+        cron: cron_config,
+        heartbeat: heartbeat_config,
         web_search: None,
-        security: Default::default(),
-        embedding: None,
+        security: security_config,
+        embedding: embedding_config,
         daily_logs: None,
-        registry: None,
-        budget: None,
+        registry: registry_config,
+        budget: budget_config,
     };
 
     if let Some(parent) = config_path.parent() {
@@ -603,10 +688,12 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
     println!();
     println!("  Config written to: {}", config_path.display());
 
-    // 13a. Create workspace templates (BOOT.md, TOOLS.md, MEMORY.md, etc.)
+    // Create workspace templates (BOOT.md, TOOLS.md, MEMORY.md, etc.)
     create_workspace_templates(&resolve_workspace(&config.agent.workspace))?;
 
-    // 13b. Soul interview
+    // ── Phase 10: Health check + Soul interview + Launch ──
+    health_check::run(&config);
+
     println!();
     let do_soul = Confirm::new()
         .with_prompt("Personalize your agent? (5 quick questions)")
@@ -616,11 +703,11 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         run_soul_interview(&resolve_workspace(&config.agent.workspace))?;
     }
 
-    // 14. Service install (systemd/launchd)
+    // Service install (systemd/launchd)
     println!();
     service::install(config_path, &mode, false).await?;
 
-    // 15. Shell completions
+    // Shell completions
     println!();
     let install_completions = Confirm::new()
         .with_prompt("Install shell completion?")
@@ -631,7 +718,7 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         install_shell_completion();
     }
 
-    // 16. Launch prompt
+    // Launch prompt
     println!();
     let launch_options = &["Launch TUI (recommended)", "Start REPL", "Do this later"];
     let launch_choice = Select::new()
@@ -640,13 +727,13 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         .default(0)
         .interact()?;
 
-    // 17. Closing notes
+    // Closing notes
     println!();
     println!("  Setup complete!");
     println!();
     println!("  Security reminders:");
     println!("  - Keep API keys secret. Config uses ${{ENV_VAR}} references where possible.");
-    println!("  - Review allowed_users for Telegram to restrict access.");
+    println!("  - Review allowed_users for channels to restrict access.");
     println!("  - The agent can execute shell commands — use responsibly.");
     println!();
     println!("  Useful commands:");

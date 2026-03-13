@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dialoguer::{Confirm, Input, Select};
+use dialoguer::{Confirm, Input, MultiSelect, Select};
 use ryvos_core::config::{ChannelsConfig, DiscordConfig, DmPolicy, SlackConfig, TelegramConfig};
 
 use super::OnboardingMode;
@@ -8,35 +8,39 @@ pub fn configure(mode: &OnboardingMode) -> Result<ChannelsConfig> {
     let mut telegram = None;
     let mut discord = None;
     let mut slack = None;
+    let mut whatsapp = None;
 
     match mode {
         OnboardingMode::QuickStart => {
-            let options = &["Telegram", "Discord", "Slack", "Skip"];
-            let choice = Select::new()
-                .with_prompt("Configure a chat channel?")
+            let options = &["Telegram", "Discord", "Slack", "WhatsApp"];
+            let selections = MultiSelect::new()
+                .with_prompt("Configure chat channels (space to toggle, enter to confirm)")
                 .items(options)
-                .default(3)
                 .interact()?;
 
-            match choice {
-                0 => telegram = Some(configure_telegram()?),
-                1 => discord = Some(configure_discord()?),
-                2 => slack = Some(configure_slack()?),
-                _ => {}
+            for idx in selections {
+                match idx {
+                    0 => telegram = Some(configure_telegram()?),
+                    1 => discord = Some(configure_discord()?),
+                    2 => slack = Some(configure_slack()?),
+                    3 => whatsapp = Some(super::whatsapp::configure_whatsapp()?),
+                    _ => {}
+                }
             }
         }
         OnboardingMode::Manual => loop {
-            let options = &["Telegram", "Discord", "Slack", "Finished"];
+            let options = &["Telegram", "Discord", "Slack", "WhatsApp", "Finished"];
             let choice = Select::new()
                 .with_prompt("Add a channel")
                 .items(options)
-                .default(3)
+                .default(4)
                 .interact()?;
 
             match choice {
                 0 => telegram = Some(configure_telegram()?),
                 1 => discord = Some(configure_discord()?),
                 2 => slack = Some(configure_slack()?),
+                3 => whatsapp = Some(super::whatsapp::configure_whatsapp()?),
                 _ => break,
             }
         },
@@ -46,11 +50,11 @@ pub fn configure(mode: &OnboardingMode) -> Result<ChannelsConfig> {
         telegram,
         discord,
         slack,
-        whatsapp: None,
+        whatsapp,
     })
 }
 
-fn prompt_dm_policy() -> Result<DmPolicy> {
+pub fn prompt_dm_policy() -> Result<DmPolicy> {
     let options = &[
         "Allowlist (recommended \u{2014} only listed user IDs)",
         "Open (any user can message the bot)",
@@ -70,7 +74,7 @@ fn prompt_dm_policy() -> Result<DmPolicy> {
     })
 }
 
-fn prompt_token_or_env(label: &str, env_var: &str) -> Result<String> {
+pub fn prompt_token_or_env(label: &str, env_var: &str) -> Result<String> {
     if let Ok(_existing) = std::env::var(env_var) {
         let use_existing = Confirm::new()
             .with_prompt(format!("Found {} env var. Use it?", env_var))
