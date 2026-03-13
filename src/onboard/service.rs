@@ -99,13 +99,14 @@ async fn install_systemd(
     let unit = format!(
         r#"[Unit]
 Description=Ryvos AI Agent Daemon
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 ExecStart={binary_path} --config {config_display} daemon
-Restart=on-failure
-RestartSec=5
+Restart=always
+RestartSec=10
 Environment=RUST_LOG=ryvos=info
 
 [Install]
