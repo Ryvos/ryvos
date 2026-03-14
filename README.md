@@ -1,17 +1,19 @@
 <div align="center">
 
-<img src="docs/logo.png" alt="Ryvos" width="120">
+<img src="docs/logo.png" alt="Ryvos — Open-Source AI Agent Runtime" width="120">
 
 # Ryvos
 
-### Your autonomous AI assistant — secure, fast, and always on.
+### Open-source AI agent runtime built in Rust. Self-hosted. 15–30 MB RAM. 14 LLM providers.
 
+[![GitHub Stars](https://img.shields.io/github/stars/Ryvos/ryvos?style=flat&color=yellow)](https://github.com/Ryvos/ryvos/stargazers)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust 1.75+](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
 [![Release](https://img.shields.io/github/v/release/Ryvos/ryvos?color=F07030)](https://github.com/Ryvos/ryvos/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/Ryvos/ryvos/ci.yml?label=CI)](https://github.com/Ryvos/ryvos/actions)
+[![Platform: Linux macOS](https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey.svg)](#quick-start)
 
-**Goal-Driven Agents · Multi-Provider LLM · DAG Workflows · MCP-Native · Sandboxed by Default · Single Binary**
+**Goal-Driven Agents · 14 LLM Providers · 62 Tools · DAG Workflows · MCP-Native · 5-Tier Security · Single Binary**
 
 [Quick Start](#quick-start) · [Why Ryvos](#why-ryvos) · [Features](#features) · [Architecture](#architecture) · [Security](#security-model) · [Roadmap](#roadmap)
 
@@ -19,44 +21,44 @@
 
 ---
 
-## What is Ryvos?
-
-Ryvos is an open-source, autonomous personal AI assistant you run on your own hardware. It connects to 14 LLM providers (Anthropic, OpenAI, Gemini, Azure, Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek), executes tasks through 62 sandboxed tools, and reaches you on the channels you already use — Telegram, Discord, Slack, Webhooks — plus a built-in Web UI and terminal interface.
-
-Written in Rust. Ships as a single binary. Uses 15–30 MB of RAM.
-
 ```bash
-cargo install --path .
-ryvos init          # Pick your LLM provider, paste an API key
-ryvos               # Start talking to your assistant
+# One-line install (Linux / macOS)
+curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
+ryvos init    # pick your LLM provider, paste an API key
+ryvos         # start your AI coding assistant
 ```
 
 ---
 
 ## Why Ryvos?
 
-Autonomous AI assistants are exploding — but the current generation is built on TypeScript and Python runtimes that were never designed for always-on, autonomous operation:
+Most AI coding assistants are built on TypeScript or Python runtimes that were never designed for autonomous, always-on operation. They're heavy, insecure, and fragile to deploy.
 
-- **No security model** — community skills run arbitrary code with full system access.
-- **No goal awareness** — agents run until max_turns, not until the task is done.
-- **High resource usage** — 200-500MB RAM idle, garbage collection pauses, slow cold starts.
-- **Fragile deployment** — requires Node.js ≥22, npm ecosystem, container orchestration.
+Ryvos is a complete reimagination — built in Rust from scratch as a true **autonomous AI agent runtime**:
 
-Ryvos is built from scratch in Rust with a different set of priorities:
-
-| | Typical AI assistants | Ryvos |
+| | Typical AI assistants | **Ryvos** |
 |---|---|---|
-| **Language** | TypeScript / Python | Rust |
-| **Memory** | 200–500 MB | 15–30 MB |
-| **Execution model** | Run until max_turns | Goal-driven with Judge verdict |
-| **Tool security** | None (arbitrary code) | 5-tier classification + Docker sandboxing |
-| **Dangerous command detection** | None | 9 built-in patterns (rm -rf, DROP TABLE, curl\|bash, etc.) |
-| **Deployment** | npm/pip + runtime + Docker | Single static binary |
-| **MCP support** | Plugin/community | Native (stdio + SSE/Streamable HTTP) |
-| **Parallel tool execution** | Rare | Built-in |
-| **Multi-agent workflows** | Separate orchestration layer | Built-in DAG engine + orchestrator |
-| **Channel adapters** | Separate projects | Built-in (Telegram, Discord, Slack) |
-| **HTTP Gateway** | Separate project | Built-in with Web UI + RBAC |
+| **Language** | TypeScript / Python | **Rust** |
+| **Memory (idle)** | 200–500 MB | **15–30 MB** |
+| **Execution model** | Run until max_turns | **Goal-driven with Judge verdict** |
+| **Tool security** | None (arbitrary code) | **5-tier + Docker sandboxing** |
+| **Dangerous command detection** | None | **9 built-in patterns (rm -rf, DROP TABLE, curl\|bash…)** |
+| **Deployment** | npm/pip + runtime + Docker | **Single static binary** |
+| **MCP support** | Plugin/community | **Native (stdio + SSE/Streamable HTTP)** |
+| **Parallel tool execution** | Rare | **Built-in** |
+| **Multi-agent workflows** | Separate orchestration layer | **Built-in DAG engine + orchestrator** |
+| **Channel adapters** | Separate projects | **Built-in (Telegram, Discord, Slack)** |
+| **HTTP Gateway** | Separate project | **Built-in with Web UI + RBAC** |
+
+If you've used Claude Code, Aider, or Cursor and wanted something lighter, self-hosted, or with a proper security model — Ryvos is built for you.
+
+---
+
+## What is Ryvos?
+
+Ryvos is an open-source, autonomous AI coding assistant and agent runtime you run on your own hardware. It connects to **14 LLM providers** (Anthropic, OpenAI, Gemini, Azure, Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek), executes tasks through **62 sandboxed tools**, and reaches you on the channels you already use — Telegram, Discord, Slack, Webhooks — plus a built-in Web UI and terminal interface.
+
+Written in **Rust**. Ships as a **single binary**. Uses **15–30 MB of RAM**.
 
 ---
 
@@ -68,10 +70,10 @@ Ryvos is built from scratch in Rust with a different set of priorities:
 - **Two-level Judge** — Level 0 (deterministic fast-check) + LLM ConversationJudge that evaluates full conversation context
 - **Verdicts** — `Accept(confidence)`, `Retry(reason, hint)`, `Escalate(reason)`, or `Continue` — the agent keeps going until the goal is met or turns run out
 
-### Autonomous Agent
+### Autonomous AI Agent
 - **ReAct agent loop** with tool use, reflexion, and streaming responses
 - **Parallel tool execution** — multiple tools run concurrently when independent
-- **Multi-provider LLM** — 14 providers: Anthropic, OpenAI, Gemini, Azure, Cohere, Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek
+- **14 LLM providers** — Anthropic, OpenAI, Gemini, Azure, Cohere, Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek
 - **Session persistence** — SQLite-backed conversation history and memory across restarts
 - **Sub-agent spawning** — delegate tasks to child agents with stricter security
 - **Lifecycle hooks** — trigger shell commands on start, message, tool call, response, turn complete, tool error, session start/end
@@ -87,7 +89,7 @@ Ryvos is built from scratch in Rust with a different set of priorities:
 - **Multi-agent orchestrator** — capability-based routing with `Parallel`, `Relay`, and `Broadcast` dispatch modes
 
 ### Multi-Channel Inbox
-- **Telegram, Discord, Slack** — talk to your assistant on the platforms you already use
+- **Telegram, Discord, Slack** — talk to your AI assistant on the platforms you already use
 - **Per-channel DM policies** — allowlist, open, or disabled access control per channel
 - **HTTP/WebSocket Gateway** — Axum-based server with embedded Web UI for browser access
 - **Terminal UI** — full ratatui-based TUI with adaptive banner and streaming output
@@ -112,9 +114,9 @@ Ryvos is built from scratch in Rust with a different set of priorities:
 - **Goal evaluation events** — stream `GoalEvaluated` and `JudgeVerdict` events to TUI, gateway, or custom subscribers
 - **Token usage tracking** — per-turn and per-run input/output token counts
 
-### Tools & Extensibility
+### Tools & Extensibility (62 Built-in Tools)
 - **62 built-in tools** — shell, file I/O, git, code analysis, network/HTTP, system, data transform, scheduling, database, sessions, memory, notifications
-- **MCP-native** — connect to Model Context Protocol servers (stdio + SSE/Streamable HTTP transports)
+- **MCP-native** — connect to any Model Context Protocol server (stdio + SSE/Streamable HTTP transports)
 - **Drop-in skills** — Lua/Rhai scripts in `~/.ryvos/skills/` with manifest-declared schemas and sandbox requirements
 - **Tool registry** — built-in tools + custom tools via MCP or skills
 - **Role-based API keys** — Viewer, Operator, Admin roles for gateway access
@@ -129,22 +131,21 @@ Ryvos is built from scratch in Rust with a different set of priorities:
 ### Install
 
 ```bash
-# Build from source (requires Rust 1.75+)
-cargo install --path .
-```
-
-<details>
-<summary>Other install methods</summary>
-
-```bash
-# One-line install (Linux / macOS)
+# One-line install (Linux / macOS) — recommended
 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
 
 # Pin a specific version
-RYVOS_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
+RYVOS_VERSION=v0.5.0 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
 
 # Custom install directory
 RYVOS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
+```
+
+<details>
+<summary>Build from source (Rust 1.75+)</summary>
+
+```bash
+cargo install --path .
 ```
 </details>
 
@@ -162,14 +163,14 @@ RYVOS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/Ry
 # Interactive setup — pick a provider, configure security, install service
 ryvos init
 
-# Non-interactive setup with defaults
+# Non-interactive setup (defaults to Ollama / qwen2.5:7b for local inference)
 ryvos init -y --provider ollama --model-id qwen2.5:7b
 
-# Start talking to your assistant
+# Start your AI coding assistant
 ryvos
 
-# Or ask a quick question
-ryvos run "What meetings do I have tomorrow?"
+# Ask a quick question and exit
+ryvos run "Summarize the last 5 git commits in this repo"
 
 # Launch the terminal UI
 ryvos tui
@@ -177,7 +178,7 @@ ryvos tui
 # Start the Web UI + HTTP/WebSocket gateway
 ryvos serve
 
-# Always-on assistant: Telegram + Discord + Slack + gateway
+# Always-on: Telegram + Discord + Slack + gateway in one process
 ryvos daemon --gateway
 
 # Check system health
@@ -194,14 +195,9 @@ rm -rf ~/.ryvos   # optional: remove config and data
 ### Shell Completions
 
 ```bash
-# bash
-ryvos completions bash > ~/.local/share/bash-completion/completions/ryvos
-
-# zsh
-ryvos completions zsh > ~/.zfunc/_ryvos
-
-# fish
-ryvos completions fish > ~/.config/fish/completions/ryvos.fish
+ryvos completions bash > ~/.local/share/bash-completion/completions/ryvos  # bash
+ryvos completions zsh > ~/.zfunc/_ryvos                                    # zsh
+ryvos completions fish > ~/.config/fish/completions/ryvos.fish             # fish
 ```
 
 ### Commands
@@ -228,7 +224,7 @@ ryvos completions fish > ~/.config/fish/completions/ryvos.fish
 
 ## Architecture
 
-Ryvos is a Cargo workspace with 10 crates. Together they form a complete autonomous assistant — goal-driven LLM reasoning, DAG workflow orchestration, tool execution, security enforcement, persistent memory, multi-channel inbox, and observability — all in one binary.
+Ryvos is a Cargo workspace with 10 crates. Together they form a complete autonomous AI agent runtime — goal-driven LLM reasoning, DAG workflow orchestration, tool execution, security enforcement, persistent memory, multi-channel inbox, and observability — all in one binary.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -254,7 +250,7 @@ Ryvos is a Cargo workspace with 10 crates. Together they form a complete autonom
 | Crate | Purpose |
 |-------|---------|
 | `ryvos-core` | Config, error types, scoped event bus, security policy, goal system, traits |
-| `ryvos-llm` | LLM client abstraction with streaming support (Anthropic, OpenAI, any compatible) |
+| `ryvos-llm` | LLM client abstraction with streaming support (14 providers) |
 | `ryvos-tools` | Tool registry, 62 built-in tools across 11 categories |
 | `ryvos-agent` | ReAct loop, SecurityGate, ApprovalBroker, Guardian watchdog, Judge, GoalEvaluator, OutputValidator, CheckpointStore, RunLogger, CronScheduler, GraphExecutor, MultiAgentOrchestrator |
 | `ryvos-memory` | SQLite-backed session and history storage |
@@ -357,7 +353,7 @@ provider = "anthropic"
 model_id = "claude-sonnet-4-20250514"
 api_key = "${ANTHROPIC_API_KEY}"
 
-# Ollama example:
+# Local / self-hosted (no API key required):
 # provider = "ollama"
 # model_id = "qwen2.5:7b"
 # base_url = "http://localhost:11434/v1/chat/completions"
