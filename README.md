@@ -120,9 +120,7 @@ Written in **Rust**. Ships as a **single binary**. Uses **15–30 MB of RAM**.
 - **Drop-in skills** — Lua/Rhai scripts in `~/.ryvos/skills/` with manifest-declared schemas and sandbox requirements
 - **Tool registry** — built-in tools + custom tools via MCP or skills
 - **Role-based API keys** — Viewer, Operator, Admin roles for gateway access
-- **Phase-aware context compaction** — messages tagged by phase (planning, execution); protected messages survive compaction; phase-grouped summarization
-- **Three-layer prompt composition** — Identity (SOUL.md) → Narrative (summaries, agents) → Focus (current goal + constraints)
-- **Soul interview** — `ryvos soul` runs a 5-question personality interview that generates SOUL.md, shaping how the agent communicates, its tone, proactivity, and operator context
+- **Soul interview** — `ryvos soul` runs a 5-question personality interview that generates SOUL.md, shaping agent tone, proactivity, and operator context
 
 ---
 
@@ -268,8 +266,6 @@ Security is enforced at the **SecurityGate middleware** — every tool call pass
 
 ### Tool Tier System
 
-Every tool declares a security tier. The SecurityGate compares the effective tier against your policy to decide: **Allow**, **Deny**, or **NeedsApproval**.
-
 | Tier | Risk Level | Example | Default Policy |
 |------|-----------|---------|----------------|
 | T0 | Safe | Read file, list directory | Auto-approve |
@@ -288,8 +284,6 @@ mkfs      dd             >/dev/*       curl|bash    wget|sh
 ```
 
 ### Docker Sandboxing
-
-Shell commands can optionally run inside an isolated Docker container:
 
 ```toml
 [agent.sandbox]
@@ -311,7 +305,7 @@ deny_above = "t3"            # t4 blocked outright (default)
 approval_timeout_secs = 60   # Unapproved requests timeout
 ```
 
-The gate is **fail-closed** — if a tool call's arguments can't be parsed, it escalates to T4 and denies execution rather than silently allowing it.
+The gate is **fail-closed** — if a tool call's arguments can't be parsed, it escalates to T4 and denies rather than silently allowing.
 
 ### Sub-Agent Restrictions
 
@@ -321,28 +315,21 @@ Agents that spawn child agents automatically apply a **stricter policy** — pre
 
 ## Configuration
 
-Configuration lives in `~/.ryvos/config.toml` (created by `ryvos init`). You can also place a `ryvos.toml` in the current directory. Environment variables expand with `${VAR}` syntax.
+Configuration lives in `~/.ryvos/config.toml` (created by `ryvos init`). You can also place a `ryvos.toml` in the current directory.
 
 ```toml
 [agent]
 max_turns = 25
-max_duration_secs = 600
 parallel_tools = true
-enable_summarization = true
-
-# Optional: goal-driven self-evaluation after each run
 enable_self_eval = true
 
-# Optional: checkpoint / resume crashed runs
 [agent.checkpoint]
 enabled = true
 
-# Optional: JSONL runtime logging
 [agent.log]
 enabled = true
 log_dir = "~/.ryvos/logs"
 
-# Optional: Guardian watchdog
 [agent.guardian]
 stall_timeout_secs = 60
 doom_loop_threshold = 5
@@ -356,7 +343,6 @@ api_key = "${ANTHROPIC_API_KEY}"
 # Local / self-hosted (no API key required):
 # provider = "ollama"
 # model_id = "qwen2.5:7b"
-# base_url = "http://localhost:11434/v1/chat/completions"
 
 [security]
 auto_approve_up_to = "t1"
@@ -420,6 +406,13 @@ transport = { type = "stdio", command = "npx", args = ["-y", "@modelcontextproto
 ## Contributing
 
 We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## Get Help
+
+- [GitHub Issues](https://github.com/Ryvos/ryvos/issues) — bug reports and feature requests
+- [GitHub Discussions](https://github.com/Ryvos/ryvos/discussions) — questions and community
 
 ---
 
