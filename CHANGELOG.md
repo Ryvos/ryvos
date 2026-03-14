@@ -2,6 +2,61 @@
 
 All notable changes to Ryvos will be documented in this file.
 
+## [0.5.0] — 2026-03-13
+
+### Browser Automation (5 new tools, 67 total)
+- `browser_navigate` (T3) — Navigate to a URL
+- `browser_screenshot` (T3) — Screenshot the current page
+- `browser_click` (T3) — Click an element by CSS selector
+- `browser_type` (T3) — Type text into an input field
+- `browser_extract` (T3) — Extract text content from the page
+- Powered by chromiumoxide (Chromium DevTools Protocol)
+
+### WhatsApp Cloud API Channel (8 channels total)
+- New channel adapter: `[channels.whatsapp]`
+- Meta Business webhook integration with automatic verification
+- Interactive approval buttons for tool calls
+- E.164 phone number format, 4096-char auto-split
+- DM policy (allowlist/open/disabled)
+
+### 19 LLM Providers (+3)
+- **AWS Bedrock** — full SigV4 authentication
+- **Claude Code** — CLI delegation with subscription billing
+- **GitHub Copilot** — CLI delegation with Copilot license
+
+### Budget System
+- `[budget]` config section: `monthly_budget_cents`, `warn_pct`, `hard_stop_pct`
+- Per-model pricing overrides via `[budget.pricing."provider/model"]`
+- Guardian monitors token usage; publishes `BudgetWarning` / `BudgetExceeded` events
+- Budget events routed to configured channels
+
+### Semantic Memory (Embeddings)
+- `[embedding]` config section: `provider`, `model`, `dimensions`
+- Supports OpenAI, Ollama, and custom (OpenAI-compatible) providers
+- Hybrid BM25 + vector cosine similarity ranking for `memory_search`
+- Daily logs auto-embedded on write
+
+### Director Orchestration (enabled by default)
+- Director now enabled by default for all installations
+- Goal-driven multi-agent OODA loop: Generate → Execute → Evaluate → Evolve
+- Auto-evolving execution graphs on semantic failure
+- Configurable via `[agent.director]`: `max_evolution_cycles`, `failure_threshold`, `model`
+
+### 10-Phase Onboarding
+- `ryvos init` walks through: provider, model, security, channels, sandbox, guardian, heartbeat, budget, embedding, summary
+
+### 6 Bundled Skills
+- web-scraper, code-review, git-summary, docker-deploy, db-migrate, api-test
+
+### Webhook Enhancements
+- `metadata` and `callback_url` fields in webhook payloads
+- `CronJobComplete` event with response routing to channels
+
+### New Dependencies
+- sha2 (replaces DefaultHasher for skills registry integrity)
+- chromiumoxide (browser automation)
+- base64
+
 ## [0.2.2] — 2026-02-27
 
 ### Soul Interview

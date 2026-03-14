@@ -237,7 +237,7 @@ impl Default for AgentConfig {
             checkpoint: None,
             model_overrides: HashMap::new(),
             disable_memory_flush: None,
-            director: None,
+            director: Some(DirectorConfig::default()),
         }
     }
 }
@@ -273,8 +273,8 @@ fn default_checkpoint_enabled() -> bool {
 /// Director orchestration configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DirectorConfig {
-    /// Enable Director orchestration (default: false).
-    #[serde(default)]
+    /// Enable Director orchestration (default: true).
+    #[serde(default = "default_director_enabled")]
     pub enabled: bool,
     /// Maximum evolution cycles before giving up (default: 3).
     #[serde(default = "default_max_evolution_cycles")]
@@ -287,6 +287,9 @@ pub struct DirectorConfig {
     pub model: Option<ModelConfig>,
 }
 
+fn default_director_enabled() -> bool {
+    true
+}
 fn default_max_evolution_cycles() -> u32 {
     3
 }
@@ -297,7 +300,7 @@ fn default_failure_threshold() -> usize {
 impl Default for DirectorConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             max_evolution_cycles: default_max_evolution_cycles(),
             failure_threshold: default_failure_threshold(),
             model: None,
@@ -1097,7 +1100,10 @@ token = "my-token"
 model_id = "claude-sonnet-4-20250514"
 "#;
         let config: AppConfig = toml::from_str(toml_str).unwrap();
-        assert!(config.agent.director.is_none());
+        let director = config.agent.director.unwrap();
+        assert!(director.enabled);
+        assert_eq!(director.max_evolution_cycles, 3);
+        assert_eq!(director.failure_threshold, 3);
     }
 
     #[test]
