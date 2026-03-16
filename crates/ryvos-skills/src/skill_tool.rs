@@ -155,6 +155,7 @@ mod tests {
             agent_spawner: None,
             sandbox_config: None,
             config_path: None,
+            viking_client: None,
         }
     }
 

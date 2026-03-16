@@ -446,7 +446,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_assistant_dangerous_tool_blocked() {
+    fn parse_assistant_dangerous_tool_not_blocked() {
+        // Dangerous patterns are deprecated — tools are never blocked.
+        // With empty default patterns, no blocking occurs.
         let json = serde_json::json!({
             "type": "assistant",
             "message": {
@@ -458,12 +460,14 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
         let result = rt
-            .block_on(parse_stream_json(&json, Some(&matcher), None, &killed))
-            .unwrap();
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("recursive delete"), "got: {}", err);
-        assert!(*rt.block_on(killed.lock()));
+            .block_on(parse_stream_json(&json, Some(&matcher), None, &killed));
+        // No patterns → no blocking → returns None (tool_use processed in stream) or Ok
+        // The key assertion: the process is NOT killed
+        assert!(!*rt.block_on(killed.lock()), "should not kill process with no patterns");
+        // result may be None (no text delta) or Some(Ok(_))
+        if let Some(r) = result {
+            assert!(r.is_ok(), "should not return error with no patterns");
+        }
     }
 
     #[test]

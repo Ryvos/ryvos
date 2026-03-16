@@ -305,6 +305,8 @@ async fn main() -> anyhow::Result<()> {
     let event_bus = Arc::new(EventBus::default());
 
     // Build LLM client with retry and fallback chain
+    // Note: dangerous_patterns are deprecated (no longer block tools), but still passed
+    // to CLI-based providers for informational logging.
     let primary_llm =
         ryvos_llm::create_client_with_security(&config.model, &config.security.dangerous_patterns);
     let llm: Arc<dyn ryvos_core::traits::LlmClient> =
@@ -390,19 +392,46 @@ async fn main() -> anyhow::Result<()> {
 
     let tools = Arc::new(tokio::sync::RwLock::new(tools));
 
-    // Build security gate
+    // Build security gate (passthrough — no blocking, self-learning safety)
     let policy = config.security.to_policy();
     let broker = Arc::new(ApprovalBroker::new(event_bus.clone()));
-    let gate = Arc::new(SecurityGate::new(
+    let mut gate_inner = SecurityGate::new(
         policy,
         tools.clone(),
         broker.clone(),
         event_bus.clone(),
-    ));
+    );
+
+    // Initialize safety memory (self-learning from past incidents)
+    let safety_db_path = workspace.join("safety.db");
+    match ryvos_agent::SafetyMemory::open(&safety_db_path) {
+        Ok(memory) => {
+            let memory = Arc::new(memory);
+            gate_inner.set_safety_memory(memory);
+            info!("Safety memory initialized (self-learning security)");
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to initialize safety memory");
+        }
+    }
+
+    // Initialize audit trail (post-hoc accountability)
+    let audit_db_path = workspace.join("audit.db");
+    match ryvos_agent::AuditTrail::open(&audit_db_path) {
+        Ok(trail) => {
+            gate_inner.set_audit_trail(Arc::new(trail));
+            info!("Audit trail initialized");
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to initialize audit trail");
+        }
+    }
+
+    let gate = Arc::new(gate_inner);
 
     info!(
-        auto_approve = %config.security.auto_approve_up_to,
-        "Security gate initialized"
+        pause_before = ?config.security.pause_before,
+        "Security gate initialized (constitutional self-learning, no blocking)"
     );
 
     // Spawn MCP event listener for dynamic tool refresh
@@ -535,10 +564,30 @@ async fn main() -> anyhow::Result<()> {
         *runtime.spawner.lock().await = Some(spawner_ref);
     }
 
+    // Initialize OpenViking client if configured
+    let viking_client: Option<Arc<ryvos_memory::VikingClient>> =
+        if let Some(ref ov_config) = config.openviking {
+            if ov_config.enabled {
+                let client = ryvos_memory::VikingClient::new(&ov_config.base_url, &ov_config.user_id);
+                if client.health().await {
+                    info!(url = %ov_config.base_url, "OpenViking connected");
+                    Some(Arc::new(client))
+                } else {
+                    warn!(url = %ov_config.base_url, "OpenViking unreachable — running without sustained context");
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
     info!(
         guardian = config.agent.guardian.enabled,
         journal = journal.is_some(),
         cost_tracking = cost_store.is_some(),
+        viking = viking_client.is_some(),
         agent_spawner = true,
         "Ryvos subsystems initialized"
     );
@@ -1890,6 +1939,11 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
         daily_logs: None,
         registry: None,
         budget: None,
+        openviking: None,
+        google: None,
+        notion: None,
+        jira: None,
+        linear: None,
     })
 }
 

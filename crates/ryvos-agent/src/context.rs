@@ -161,6 +161,23 @@ impl ContextBuilder {
         self
     }
 
+    /// Layer 2.5 (Recall): Inject Viking sustained context summaries.
+    /// Only present when Viking is available.
+    pub fn with_recall_layer(mut self, viking_context: &str) -> Self {
+        if !viking_context.is_empty() {
+            self.parts.push(viking_context.to_string());
+        }
+        self
+    }
+
+    /// Inject safety lessons from past experience.
+    pub fn with_safety_context(mut self, safety_context: &str) -> Self {
+        if !safety_context.is_empty() {
+            self.parts.push(safety_context.to_string());
+        }
+        self
+    }
+
     /// Build the final system message.
     pub fn build(self) -> ChatMessage {
         let system_prompt = self.parts.join("\n\n---\n\n");
@@ -189,6 +206,34 @@ const DEFAULT_SYSTEM_PROMPT: &str = r#"You are an AI agent running inside the Ry
 3. Check memory before answering. Read ~/.ryvos/MEMORY.md at conversation start.
 4. Be concise. Keep responses focused. Don't over-explain.
 5. Use tools proactively. You have Bash, Read, Write, Edit, Glob, Grep, WebFetch, WebSearch.
+
+## Safety Constitution
+
+You are a capable, trusted agent. You have access to all tools with no restrictions.
+With this power comes responsibility. Before executing any action with side effects,
+briefly reason through these principles:
+
+1. PRESERVATION: Will this action preserve the user's data and work? Could it cause
+   irreversible loss? If so, create a backup or checkpoint first.
+
+2. INTENT MATCH: Does this action serve the user's stated goal? If the connection
+   is unclear, explain your reasoning before proceeding.
+
+3. PROPORTIONALITY: Is this the gentlest way to achieve the goal? Prefer read over
+   write, copy over move, targeted delete over recursive delete.
+
+4. TRANSPARENCY: For actions with side effects, state what you're about to do and
+   why in one sentence before doing it.
+
+5. BOUNDARIES: Stay within the workspace unless the user explicitly asks you to go
+   elsewhere. If you need to access system files, explain why.
+
+6. SECRETS: Never display, log, or transmit credentials, keys, or tokens you encounter.
+
+7. LEARNING: If a previous action in this or a past session caused problems, apply
+   that lesson. Check your safety memory before repeating similar actions.
+
+You are never blocked from using a tool. Trust your judgment, but show your reasoning.
 "#;
 
 /// Resolve a system prompt spec.
@@ -215,6 +260,15 @@ pub fn resolve_system_prompt(spec: &str, workspace: &Path) -> String {
     }
 }
 
+/// Additional context from Viking and safety memory for injection.
+#[derive(Default)]
+pub struct ExtendedContext {
+    /// Viking sustained context (Layer 2.5 Recall).
+    pub viking_context: String,
+    /// Safety lessons from past experience.
+    pub safety_context: String,
+}
+
 /// Build the default context for an agent run using the three-layer onion model.
 ///
 /// When `system_prompt_override` is `Some`, appends it via `with_instructions()`
@@ -223,6 +277,15 @@ pub fn build_default_context(
     workspace: &Path,
     system_prompt_override: Option<&str>,
 ) -> ChatMessage {
+    build_default_context_extended(workspace, system_prompt_override, &ExtendedContext::default())
+}
+
+/// Build the default context with optional Viking + safety layers.
+pub fn build_default_context_extended(
+    workspace: &Path,
+    system_prompt_override: Option<&str>,
+    extended: &ExtendedContext,
+) -> ChatMessage {
     let mut builder = ContextBuilder::new()
         .with_base_prompt(DEFAULT_SYSTEM_PROMPT)
         // Layer 1: Identity
@@ -230,7 +293,11 @@ pub fn build_default_context(
         // Layer 2: Narrative
         .with_narrative_layer(workspace)
         // Layer 2b: Daily logs (last 3 days)
-        .with_daily_logs(workspace, 3);
+        .with_daily_logs(workspace, 3)
+        // Layer 2.5: Recall (Viking sustained context)
+        .with_recall_layer(&extended.viking_context)
+        // Safety lessons
+        .with_safety_context(&extended.safety_context);
 
     // Layer 3: Focus (instructions only — no goal in default context)
     if let Some(instructions) = system_prompt_override {
@@ -249,6 +316,16 @@ pub fn build_goal_context(
     system_prompt_override: Option<&str>,
     goal: Option<&Goal>,
 ) -> ChatMessage {
+    build_goal_context_extended(workspace, system_prompt_override, goal, &ExtendedContext::default())
+}
+
+/// Build goal context with optional Viking + safety layers.
+pub fn build_goal_context_extended(
+    workspace: &Path,
+    system_prompt_override: Option<&str>,
+    goal: Option<&Goal>,
+    extended: &ExtendedContext,
+) -> ChatMessage {
     let mut builder = ContextBuilder::new()
         .with_base_prompt(DEFAULT_SYSTEM_PROMPT)
         // Layer 1: Identity
@@ -256,7 +333,11 @@ pub fn build_goal_context(
         // Layer 2: Narrative
         .with_narrative_layer(workspace)
         // Layer 2b: Daily logs (last 3 days)
-        .with_daily_logs(workspace, 3);
+        .with_daily_logs(workspace, 3)
+        // Layer 2.5: Recall (Viking sustained context)
+        .with_recall_layer(&extended.viking_context)
+        // Safety lessons
+        .with_safety_context(&extended.safety_context);
 
     // Layer 3: Focus
     builder = builder.with_focus_layer(goal);

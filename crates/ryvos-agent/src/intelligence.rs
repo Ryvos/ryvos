@@ -231,6 +231,10 @@ pub fn memory_flush_prompt() -> ChatMessage {
                    - User preferences → ~/.ryvos/memory/preferences.md\n\
                    - Session summary → ~/.ryvos/MEMORY.md (Recent section)\n\
                    - Activity log → ~/.ryvos/memory/YYYY-MM-DD.md\n\
+                   If Viking memory is available, also persist:\n\
+                   - Long-term facts → viking://user/entities/\n\
+                   - Preferences → viking://user/preferences/\n\
+                   - Patterns learned → viking://agent/patterns/\n\
                    Save anything you'll need after compaction. When done, respond with exactly: FLUSH_COMPLETE"
                 .to_string(),
         }],

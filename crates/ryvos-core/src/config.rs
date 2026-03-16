@@ -171,6 +171,21 @@ pub struct AppConfig {
     pub registry: Option<RegistryConfig>,
     #[serde(default)]
     pub budget: Option<BudgetConfig>,
+    /// OpenViking hierarchical memory configuration.
+    #[serde(default)]
+    pub openviking: Option<OpenVikingConfig>,
+    /// Google Workspace integration.
+    #[serde(default)]
+    pub google: Option<GoogleConfig>,
+    /// Notion integration.
+    #[serde(default)]
+    pub notion: Option<NotionConfig>,
+    /// Jira integration.
+    #[serde(default)]
+    pub jira: Option<JiraConfig>,
+    /// Linear integration.
+    #[serde(default)]
+    pub linear: Option<LinearConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -892,29 +907,38 @@ pub struct WhatsAppConfig {
     pub allowed_users: Vec<String>,
 }
 
-/// Security configuration.
+/// Security configuration — self-learning safety model.
+///
+/// No tools are ever blocked. Safety comes from constitutional self-governance,
+/// safety memory (Reflexion), and post-hoc accountability via audit trail.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityConfig {
+    /// **Deprecated.** Retained for config backward compat. No effect.
     #[serde(default = "default_security_auto_approve")]
     pub auto_approve_up_to: SecurityTier,
-    #[serde(default = "default_security_deny_above")]
+    /// **Deprecated.** Retained for config backward compat. No effect.
+    #[serde(default)]
     pub deny_above: Option<SecurityTier>,
+    /// Timeout in seconds for soft checkpoint acknowledgment.
     #[serde(default = "default_security_timeout")]
     pub approval_timeout_secs: u64,
+    /// Per-tool tier overrides. Retained for config compat.
     #[serde(default)]
     pub tool_overrides: HashMap<String, SecurityTier>,
-    #[serde(default = "SecurityPolicy::default_patterns")]
+    /// **Deprecated.** Regex patterns no longer block tools.
+    #[serde(default)]
     pub dangerous_patterns: Vec<DangerousPattern>,
+    /// Sub-agent policy overrides. Retained for config compat.
     #[serde(default)]
     pub sub_agent_policy: Option<SubAgentPolicyConfig>,
+    /// Optional soft checkpoints: tools listed here pause to explain
+    /// reasoning before executing. The agent is NEVER blocked.
+    #[serde(default)]
+    pub pause_before: Vec<String>,
 }
 
 fn default_security_auto_approve() -> SecurityTier {
     SecurityTier::T1
-}
-
-fn default_security_deny_above() -> Option<SecurityTier> {
-    Some(SecurityTier::T3)
 }
 
 fn default_security_timeout() -> u64 {
@@ -925,11 +949,12 @@ impl Default for SecurityConfig {
     fn default() -> Self {
         Self {
             auto_approve_up_to: SecurityTier::T1,
-            deny_above: Some(SecurityTier::T3),
+            deny_above: None, // Nothing denied
             approval_timeout_secs: 60,
             tool_overrides: HashMap::new(),
-            dangerous_patterns: SecurityPolicy::default_patterns(),
+            dangerous_patterns: vec![],
             sub_agent_policy: None,
+            pause_before: vec![],
         }
     }
 }
@@ -943,31 +968,22 @@ impl SecurityConfig {
             approval_timeout_secs: self.approval_timeout_secs,
             tool_overrides: self.tool_overrides.clone(),
             dangerous_patterns: self.dangerous_patterns.clone(),
+            pause_before: self.pause_before.clone(),
         }
     }
 
-    /// Build a restricted SecurityPolicy for sub-agents.
+    /// Build a SecurityPolicy for sub-agents (same as parent — no restrictions).
     pub fn sub_agent_policy(&self) -> SecurityPolicy {
-        if let Some(ref sub) = self.sub_agent_policy {
-            SecurityPolicy {
-                auto_approve_up_to: sub.auto_approve_up_to,
-                deny_above: sub.deny_above,
-                approval_timeout_secs: self.approval_timeout_secs,
-                tool_overrides: self.tool_overrides.clone(),
-                dangerous_patterns: self.dangerous_patterns.clone(),
-            }
-        } else {
-            self.to_policy()
-        }
+        self.to_policy()
     }
 }
 
-/// Sub-agent security policy overrides.
+/// Sub-agent security policy overrides. Retained for config backward compat.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubAgentPolicyConfig {
     #[serde(default = "default_sub_agent_auto_approve")]
     pub auto_approve_up_to: SecurityTier,
-    #[serde(default = "default_sub_agent_deny_above")]
+    #[serde(default)]
     pub deny_above: Option<SecurityTier>,
 }
 
@@ -975,8 +991,96 @@ fn default_sub_agent_auto_approve() -> SecurityTier {
     SecurityTier::T0
 }
 
-fn default_sub_agent_deny_above() -> Option<SecurityTier> {
-    Some(SecurityTier::T2)
+/// OpenViking configuration for hierarchical memory.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenVikingConfig {
+    /// Enable OpenViking integration (default: false).
+    #[serde(default)]
+    pub enabled: bool,
+    /// Base URL for the OpenViking service.
+    #[serde(default = "default_viking_url")]
+    pub base_url: String,
+    /// User ID for Viking (default: "ryvos-default").
+    #[serde(default = "default_viking_user")]
+    pub user_id: String,
+    /// Auto-extract memories after sessions (default: true).
+    #[serde(default = "default_auto_iterate")]
+    pub auto_iterate: bool,
+}
+
+fn default_viking_url() -> String {
+    "http://localhost:1933".to_string()
+}
+fn default_viking_user() -> String {
+    "ryvos-default".to_string()
+}
+fn default_auto_iterate() -> bool {
+    true
+}
+
+impl Default for OpenVikingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: default_viking_url(),
+            user_id: default_viking_user(),
+            auto_iterate: true,
+        }
+    }
+}
+
+/// Google Workspace integration configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoogleConfig {
+    /// Path to OAuth client_secret.json file.
+    pub client_secret_path: String,
+    /// Path to stored OAuth tokens.
+    #[serde(default = "default_google_tokens_path")]
+    pub tokens_path: String,
+    /// Enable Gmail tools.
+    #[serde(default = "default_true")]
+    pub gmail: bool,
+    /// Enable Calendar tools.
+    #[serde(default = "default_true")]
+    pub calendar: bool,
+    /// Enable Drive tools.
+    #[serde(default = "default_true")]
+    pub drive: bool,
+    /// Enable Contacts tools.
+    #[serde(default)]
+    pub contacts: bool,
+}
+
+fn default_google_tokens_path() -> String {
+    "~/.ryvos/credentials/google/tokens.json".to_string()
+}
+fn default_true() -> bool {
+    true
+}
+
+/// Notion integration configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotionConfig {
+    /// Notion API key (ntn_...).
+    pub api_key: String,
+}
+
+/// Jira integration configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JiraConfig {
+    /// Atlassian instance URL (e.g., "https://myorg.atlassian.net").
+    pub base_url: String,
+    /// User email for Jira API auth.
+    pub email: String,
+    /// API token from id.atlassian.com.
+    pub api_token: String,
+}
+
+/// Linear integration configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinearConfig {
+    /// Linear API key from linear.app/settings/api.
+    pub api_key: String,
 }
 
 impl AppConfig {

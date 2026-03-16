@@ -58,12 +58,15 @@ pub enum RyvosError {
     Gateway(String),
 
     // Security errors
+    /// **Deprecated:** Tools are no longer blocked by policy. Kept for compat.
     #[error("Tool blocked by security policy: {tool} (tier {tier})")]
     ToolBlocked { tool: String, tier: String },
 
+    /// User explicitly denied a soft checkpoint.
     #[error("Approval denied for tool {tool}: {reason}")]
     ApprovalDenied { tool: String, reason: String },
 
+    /// Soft checkpoint timed out (tool still proceeds).
     #[error("Approval timeout for tool: {tool}")]
     ApprovalTimeout { tool: String },
 

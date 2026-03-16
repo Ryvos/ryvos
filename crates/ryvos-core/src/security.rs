@@ -5,6 +5,11 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// Security tier for tool classification.
+///
+/// **Deprecated:** The tier-based blocking system has been replaced by
+/// constitutional self-learning safety. Tiers are retained for backward
+/// compatibility with tool trait signatures and config files, but they
+/// no longer gate execution. All tools execute freely.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SecurityTier {
@@ -42,36 +47,38 @@ impl std::str::FromStr for SecurityTier {
     }
 }
 
-/// Decision from the security gate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GateDecision {
-    Allow,
-    NeedsApproval,
-    Deny,
-}
-
-/// Security policy governing tool execution.
+/// Security policy — now a passthrough configuration.
+///
+/// The old blocking/approval logic is removed. This struct is retained
+/// for config compatibility. The `pause_before` field replaces the old
+/// approval flow with optional soft checkpoints.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityPolicy {
-    /// Tools at or below this tier are auto-approved.
+    /// **Deprecated.** Retained for config compat. No effect.
     #[serde(default = "default_auto_approve")]
     pub auto_approve_up_to: SecurityTier,
 
-    /// Tools above this tier are denied outright.
+    /// **Deprecated.** Retained for config compat. No effect.
     #[serde(default)]
     pub deny_above: Option<SecurityTier>,
 
-    /// Timeout in seconds for human approval.
+    /// Timeout in seconds for soft checkpoint acknowledgment.
     #[serde(default = "default_approval_timeout")]
     pub approval_timeout_secs: u64,
 
-    /// Per-tool tier overrides.
+    /// Per-tool tier overrides. Retained for config compat.
     #[serde(default)]
     pub tool_overrides: HashMap<String, SecurityTier>,
 
-    /// Patterns that escalate commands to T4.
-    #[serde(default = "SecurityPolicy::default_patterns")]
+    /// **Deprecated.** Regex patterns no longer block tools.
+    #[serde(default)]
     pub dangerous_patterns: Vec<DangerousPattern>,
+
+    /// Optional soft checkpoints: tools listed here will pause to explain
+    /// reasoning before executing. The agent is NEVER blocked — it just
+    /// waits for user acknowledgment. Empty = no pauses.
+    #[serde(default)]
+    pub pause_before: Vec<String>,
 }
 
 fn default_auto_approve() -> SecurityTier {
@@ -86,67 +93,36 @@ impl Default for SecurityPolicy {
     fn default() -> Self {
         Self {
             auto_approve_up_to: SecurityTier::T1,
-            deny_above: Some(SecurityTier::T3),
+            deny_above: None, // No denying by default
             approval_timeout_secs: 60,
             tool_overrides: HashMap::new(),
-            dangerous_patterns: Self::default_patterns(),
+            dangerous_patterns: vec![],
+            pause_before: vec![],
         }
     }
 }
 
 impl SecurityPolicy {
-    /// Built-in dangerous command patterns — only destructive deletion/dropping.
+    /// Kept for backward compat with configs that specify patterns.
     pub fn default_patterns() -> Vec<DangerousPattern> {
-        vec![
-            DangerousPattern {
-                pattern: r"rm\s+(-\w*)?r".to_string(),
-                label: "recursive delete".to_string(),
-            },
-            DangerousPattern {
-                pattern: r"(?i)DROP\s+(TABLE|DATABASE|SCHEMA|INDEX)".to_string(),
-                label: "SQL drop".to_string(),
-            },
-            DangerousPattern {
-                pattern: r"(?i)DELETE\s+FROM\s+\S+\s*;".to_string(),
-                label: "unfiltered SQL delete".to_string(),
-            },
-            DangerousPattern {
-                pattern: r"(?i)TRUNCATE\s+TABLE".to_string(),
-                label: "SQL truncate".to_string(),
-            },
-        ]
+        vec![]
     }
 
-    /// Decide what to do for a given effective tier and tool name.
-    pub fn decide(&self, tier: SecurityTier, tool_name: &str) -> GateDecision {
-        // Check per-tool overrides first (they override the base tier for policy decision)
-        let effective_tier = self.tool_overrides.get(tool_name).copied().unwrap_or(tier);
-
-        // Deny if above deny threshold
-        if let Some(deny_above) = self.deny_above {
-            if effective_tier > deny_above {
-                return GateDecision::Deny;
-            }
-        }
-
-        // Auto-approve if at or below threshold
-        if effective_tier <= self.auto_approve_up_to {
-            return GateDecision::Allow;
-        }
-
-        // Otherwise needs approval
-        GateDecision::NeedsApproval
+    /// Check if a tool should pause for user acknowledgment.
+    pub fn should_pause(&self, tool_name: &str) -> bool {
+        self.pause_before.iter().any(|t| t == tool_name)
     }
 }
 
-/// A pattern that marks a command as dangerous (T4).
+/// A pattern that was formerly used to escalate commands to T4.
+/// Retained for config backward compatibility. No longer enforced.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DangerousPattern {
     pub pattern: String,
     pub label: String,
 }
 
-/// A pending approval request.
+/// A pending approval request — now used only for optional soft checkpoints.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApprovalRequest {
     pub id: String,
@@ -164,13 +140,12 @@ pub enum ApprovalDecision {
     Denied { reason: String },
 }
 
-/// Compiled regex cache for dangerous command detection.
+/// **Deprecated.** Retained for backward compat. No longer enforced.
 pub struct DangerousPatternMatcher {
     patterns: Vec<(regex::Regex, String)>,
 }
 
 impl DangerousPatternMatcher {
-    /// Compile patterns into regex cache. Invalid patterns are skipped with a warning.
     pub fn new(patterns: &[DangerousPattern]) -> Self {
         let compiled = patterns
             .iter()
@@ -190,6 +165,7 @@ impl DangerousPatternMatcher {
     }
 
     /// Check if a command matches any dangerous pattern. Returns the label if matched.
+    /// **Note:** This is informational only. It does NOT block execution.
     pub fn is_dangerous(&self, command: &str) -> Option<&str> {
         for (re, label) in &self.patterns {
             if re.is_match(command) {
@@ -197,6 +173,82 @@ impl DangerousPatternMatcher {
             }
         }
         None
+    }
+}
+
+/// Whether a tool has side effects (used for safety reasoning).
+pub fn tool_has_side_effects(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        "bash"
+            | "write"
+            | "edit"
+            | "file_delete"
+            | "file_move"
+            | "file_copy"
+            | "dir_create"
+            | "git_commit"
+            | "git_clone"
+            | "git_branch"
+            | "http_request"
+            | "http_download"
+            | "web_fetch"
+            | "spawn_agent"
+            | "memory_write"
+            | "memory_delete"
+            | "daily_log_write"
+            | "notification_send"
+            | "sqlite_query"
+            | "archive_create"
+            | "archive_extract"
+            | "process_kill"
+            | "apply_patch"
+            | "code_format"
+            | "cron_add"
+            | "cron_remove"
+            | "session_send"
+            | "session_spawn"
+            | "viking_write"
+    )
+}
+
+/// Summarize tool input for display in audit logs and soft checkpoints.
+pub fn summarize_input(tool_name: &str, input: &serde_json::Value) -> String {
+    match tool_name {
+        "bash" => input
+            .get("command")
+            .and_then(|v| v.as_str())
+            .unwrap_or("<unknown command>")
+            .to_string(),
+        "write" | "edit" => input
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("<unknown file>")
+            .to_string(),
+        "web_search" => input
+            .get("query")
+            .and_then(|v| v.as_str())
+            .unwrap_or("<unknown query>")
+            .to_string(),
+        "spawn_agent" => input
+            .get("prompt")
+            .and_then(|v| v.as_str())
+            .map(|s| {
+                if s.len() > 80 {
+                    format!("{}...", &s[..80])
+                } else {
+                    s.to_string()
+                }
+            })
+            .unwrap_or_else(|| "<unknown prompt>".to_string()),
+        _ => {
+            let s = serde_json::to_string(input).unwrap_or_default();
+            if s.len() > 120 {
+                format!("{}...", &s[..120])
+            } else {
+                s
+            }
+        }
     }
 }
 
@@ -226,122 +278,32 @@ mod tests {
     }
 
     #[test]
-    fn policy_decide_auto_approve() {
-        let policy = SecurityPolicy::default(); // auto_approve_up_to: T1
-        assert_eq!(policy.decide(SecurityTier::T0, "read"), GateDecision::Allow);
-        assert_eq!(
-            policy.decide(SecurityTier::T1, "write"),
-            GateDecision::Allow
-        );
-    }
-
-    #[test]
-    fn policy_decide_needs_approval() {
+    fn default_policy_no_blocking() {
         let policy = SecurityPolicy::default();
-        assert_eq!(
-            policy.decide(SecurityTier::T2, "bash"),
-            GateDecision::NeedsApproval
-        );
-        assert_eq!(
-            policy.decide(SecurityTier::T3, "web_search"),
-            GateDecision::NeedsApproval
-        );
+        assert_eq!(policy.deny_above, None); // Nothing denied
+        assert!(policy.dangerous_patterns.is_empty()); // No patterns
+        assert!(policy.pause_before.is_empty()); // No pauses
     }
 
     #[test]
-    fn policy_decide_deny() {
+    fn should_pause() {
         let policy = SecurityPolicy {
-            deny_above: Some(SecurityTier::T3),
+            pause_before: vec!["bash".to_string(), "file_delete".to_string()],
             ..Default::default()
         };
-        assert_eq!(policy.decide(SecurityTier::T4, "bash"), GateDecision::Deny);
-        assert_eq!(
-            policy.decide(SecurityTier::T3, "web_search"),
-            GateDecision::NeedsApproval
-        );
+        assert!(policy.should_pause("bash"));
+        assert!(policy.should_pause("file_delete"));
+        assert!(!policy.should_pause("read"));
     }
 
     #[test]
-    fn policy_tool_override() {
-        let mut policy = SecurityPolicy::default();
-        policy
-            .tool_overrides
-            .insert("web_search".to_string(), SecurityTier::T1);
-        // web_search normally T3, but overridden to T1 => auto-approve
-        assert_eq!(
-            policy.decide(SecurityTier::T3, "web_search"),
-            GateDecision::Allow
-        );
-    }
-
-    #[test]
-    fn default_policy() {
-        let policy = SecurityPolicy::default();
-        assert_eq!(policy.auto_approve_up_to, SecurityTier::T1);
-        assert_eq!(policy.deny_above, Some(SecurityTier::T3));
-        assert_eq!(policy.approval_timeout_secs, 60);
-        assert!(policy.tool_overrides.is_empty());
-        assert_eq!(policy.dangerous_patterns.len(), 4);
-    }
-
-    #[test]
-    fn pattern_matcher_all_defaults() {
-        let patterns = SecurityPolicy::default_patterns();
-        let matcher = DangerousPatternMatcher::new(&patterns);
-
-        // Should match — deletion patterns
-        assert_eq!(
-            matcher.is_dangerous("rm -rf /tmp/data"),
-            Some("recursive delete")
-        );
-        assert_eq!(matcher.is_dangerous("DROP TABLE users;"), Some("SQL drop"));
-        assert_eq!(
-            matcher.is_dangerous("DROP DATABASE prod;"),
-            Some("SQL drop")
-        );
-        assert_eq!(
-            matcher.is_dangerous("DELETE FROM users;"),
-            Some("unfiltered SQL delete")
-        );
-        assert_eq!(
-            matcher.is_dangerous("TRUNCATE TABLE logs;"),
-            Some("SQL truncate")
-        );
-    }
-
-    #[test]
-    fn pattern_matcher_non_matches() {
-        let patterns = SecurityPolicy::default_patterns();
-        let matcher = DangerousPatternMatcher::new(&patterns);
-
-        // Safe commands — should NOT match
-        assert!(matcher.is_dangerous("ls -la").is_none());
-        assert!(matcher.is_dangerous("git push origin main").is_none());
-        assert!(matcher.is_dangerous("git push origin main --force").is_none());
-        assert!(matcher.is_dangerous("git reset --hard HEAD~3").is_none());
-        assert!(matcher.is_dangerous("git status").is_none());
-        assert!(matcher.is_dangerous("cat /etc/passwd").is_none());
-        assert!(matcher.is_dangerous("echo hello").is_none());
-        assert!(matcher.is_dangerous("chmod 644 file.txt").is_none());
-        assert!(matcher.is_dangerous("chmod 777 /var/www").is_none());
-        assert!(matcher.is_dangerous("dd if=/dev/zero of=/dev/sda").is_none());
-        assert!(matcher.is_dangerous("echo test > /dev/null").is_none());
-        assert!(matcher.is_dangerous("curl https://example.com | bash").is_none());
-        assert!(matcher.is_dangerous("mkfs.ext4 /dev/sda1").is_none());
-        // Filtered DELETE (has WHERE) should not match
-        assert!(matcher
-            .is_dangerous("DELETE FROM users WHERE id = 5;")
-            .is_none());
-    }
-
-    #[test]
-    fn pattern_matcher_case_insensitive_sql() {
-        let patterns = SecurityPolicy::default_patterns();
-        let matcher = DangerousPatternMatcher::new(&patterns);
-        assert!(matcher.is_dangerous("drop table users").is_some());
-        assert!(matcher.is_dangerous("DROP TABLE users").is_some());
-        assert!(matcher.is_dangerous("truncate table logs").is_some());
-        assert!(matcher.is_dangerous("delete from users;").is_some());
+    fn tool_side_effects() {
+        assert!(tool_has_side_effects("bash"));
+        assert!(tool_has_side_effects("write"));
+        assert!(tool_has_side_effects("file_delete"));
+        assert!(!tool_has_side_effects("read"));
+        assert!(!tool_has_side_effects("glob"));
+        assert!(!tool_has_side_effects("grep"));
     }
 
     #[test]
@@ -351,5 +313,17 @@ mod tests {
         assert_eq!(json, "\"t2\"");
         let parsed: SecurityTier = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, tier);
+    }
+
+    #[test]
+    fn summarize_input_bash() {
+        let input = serde_json::json!({"command": "ls -la"});
+        assert_eq!(summarize_input("bash", &input), "ls -la");
+    }
+
+    #[test]
+    fn summarize_input_write() {
+        let input = serde_json::json!({"file_path": "/tmp/test.txt"});
+        assert_eq!(summarize_input("write", &input), "/tmp/test.txt");
     }
 }

@@ -270,6 +270,11 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         daily_logs: None,
         registry: None,
         budget: None,
+        openviking: None,
+        google: None,
+        notion: None,
+        jira: None,
+        linear: None,
     };
 
     if let Some(parent) = config_path.parent() {
@@ -677,6 +682,11 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         daily_logs: None,
         registry: registry_config,
         budget: budget_config,
+        openviking: None,
+        google: None,
+        notion: None,
+        jira: None,
+        linear: None,
     };
 
     if let Some(parent) = config_path.parent() {

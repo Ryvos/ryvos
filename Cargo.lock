@@ -2604,6 +2604,7 @@ version = "0.5.0"
 dependencies = [
  "chrono",
  "futures",
+ "rand 0.8.5",
  "reqwest 0.12.28",
  "ryvos-agent",
  "ryvos-core",
@@ -2741,6 +2742,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.28",
  "ryvos-core",
+ "ryvos-memory",
  "serde",
  "serde_json",
  "similar",

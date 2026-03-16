@@ -72,5 +72,6 @@ pub fn configure() -> Result<SecurityConfig> {
         tool_overrides: Default::default(),
         dangerous_patterns,
         sub_agent_policy: None,
+        pause_before: vec![],
     })
 }
