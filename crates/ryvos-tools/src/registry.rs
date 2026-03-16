@@ -164,6 +164,36 @@ impl ToolRegistry {
         // ── Browser Automation (5) ──────────────────────────────
         crate::builtin::browser::register_browser_tools(&mut registry);
 
+        // ── Viking Memory (4) — tools check for Viking at execution time ──
+        registry.register(crate::builtin::viking::VikingSearchTool);
+        registry.register(crate::builtin::viking::VikingReadTool);
+        registry.register(crate::builtin::viking::VikingWriteTool);
+        registry.register(crate::builtin::viking::VikingListTool);
+
+        // ── Google Workspace (6) ────────────────────────────────
+        registry.register(crate::builtin::google::GmailInboxTool);
+        registry.register(crate::builtin::google::GmailReadTool);
+        registry.register(crate::builtin::google::GmailSendTool);
+        registry.register(crate::builtin::google::CalendarListTool);
+        registry.register(crate::builtin::google::CalendarCreateTool);
+        registry.register(crate::builtin::google::DriveSearchTool);
+
+        // ── Notion (4) ─────────────────────────────────────────
+        registry.register(crate::builtin::notion::NotionSearchTool);
+        registry.register(crate::builtin::notion::NotionReadPageTool);
+        registry.register(crate::builtin::notion::NotionCreatePageTool);
+        registry.register(crate::builtin::notion::NotionQueryDatabaseTool);
+
+        // ── Jira (3) ───────────────────────────────────────────
+        registry.register(crate::builtin::jira::JiraSearchTool);
+        registry.register(crate::builtin::jira::JiraCreateIssueTool);
+        registry.register(crate::builtin::jira::JiraUpdateIssueTool);
+
+        // ── Linear (3) ─────────────────────────────────────────
+        registry.register(crate::builtin::linear::LinearSearchTool);
+        registry.register(crate::builtin::linear::LinearCreateIssueTool);
+        registry.register(crate::builtin::linear::LinearListProjectsTool);
+
         registry
     }
 }

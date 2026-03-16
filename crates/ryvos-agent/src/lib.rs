@@ -1,5 +1,6 @@
 pub mod agent_loop;
 pub mod approval;
+pub mod audit;
 pub mod checkpoint;
 pub mod context;
 pub mod director;
@@ -15,11 +16,13 @@ pub mod orchestrator;
 pub mod output_validator;
 pub mod prime;
 pub mod run_log;
+pub mod safety_memory;
 pub mod scheduler;
 pub mod session;
 
 pub use agent_loop::AgentRuntime;
 pub use approval::ApprovalBroker;
+pub use audit::AuditTrail;
 pub use checkpoint::CheckpointStore;
 pub use director::Director;
 pub use evaluator::GoalEvaluator;
@@ -35,6 +38,7 @@ pub use orchestrator::{AgentCapability, MultiAgentOrchestrator, OrchestratorBuil
 pub use output_validator::{OutputCleaner, OutputValidator};
 pub use prime::PrimeOrchestrator;
 pub use run_log::RunLogger;
+pub use safety_memory::SafetyMemory;
 pub use scheduler::CronScheduler;
 pub use session::SessionManager;
 

@@ -555,7 +555,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_message_dangerous_blocked() {
+    fn parse_message_dangerous_not_blocked() {
+        // Dangerous patterns are deprecated — tools are never blocked.
         let json = serde_json::json!({
             "type": "assistant.message",
             "data": {
@@ -565,17 +566,19 @@ mod tests {
                 ]
             }
         });
+        // With empty default patterns, no blocking occurs
         let patterns = ryvos_core::security::SecurityPolicy::default_patterns();
         let matcher = DangerousPatternMatcher::new(&patterns);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
         let result = rt
-            .block_on(parse_copilot_event(&json, Some(&matcher), None, &killed))
-            .unwrap();
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("recursive delete"), "got: {}", err);
-        assert!(*rt.block_on(killed.lock()));
+            .block_on(parse_copilot_event(&json, Some(&matcher), None, &killed));
+        // No patterns → no blocking → process is NOT killed
+        assert!(!*rt.block_on(killed.lock()), "should not kill process with no patterns");
+        // result may be None or Some(Ok(_))
+        if let Some(r) = result {
+            assert!(r.is_ok(), "should not return error with no patterns");
+        }
     }
 
     #[test]

@@ -286,6 +286,7 @@ impl AgentRuntime {
                     agent_spawner: None,
                     sandbox_config: self.config.agent.sandbox.clone(),
                     config_path: None,
+                    viking_client: None,
                 };
                 if let Ok(mut stream) = self
                     .llm
@@ -361,6 +362,7 @@ impl AgentRuntime {
             agent_spawner: self.spawner.lock().await.clone(),
             sandbox_config: self.config.agent.sandbox.clone(),
             config_path: None,
+            viking_client: None,
         };
 
         let mut total_input_tokens = 0u64;

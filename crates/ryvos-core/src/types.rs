@@ -256,6 +256,8 @@ pub struct ToolContext {
     pub sandbox_config: Option<crate::config::SandboxConfig>,
     /// Path to the ryvos config file (for cron/config tools to read/modify).
     pub config_path: Option<std::path::PathBuf>,
+    /// OpenViking client for hierarchical memory tools (None if not configured).
+    pub viking_client: Option<Arc<dyn std::any::Any + Send + Sync>>,
 }
 
 impl std::fmt::Debug for ToolContext {
@@ -267,6 +269,7 @@ impl std::fmt::Debug for ToolContext {
             .field("agent_spawner", &self.agent_spawner.is_some())
             .field("sandbox_config", &self.sandbox_config)
             .field("config_path", &self.config_path)
+            .field("viking_client", &self.viking_client.is_some())
             .finish()
     }
 }

@@ -403,6 +403,18 @@ transport = { type = "stdio", command = "npx", args = ["-y", "@modelcontextproto
 
 ---
 
+## Acknowledgments & Inspirations
+
+Ryvos stands on the shoulders of great projects:
+
+- [Claude Code](https://claude.ai/code) — Developer-first CLI patterns and ReAct loop design
+- [Aider](https://github.com/paul-gauthier/aider) — Lightweight coding assistant philosophy
+- [Aden Hive](https://github.com/aden-hive/hive) — Goal-driven graph execution and evolution loops
+- [OpenClaw](https://github.com/openclaw/openclaw) — Channel adapter architecture and skills marketplace model
+- [OpenViking](https://github.com/volcengine/OpenViking) — Hierarchical context database with L0/L1/L2 tiered loading
+- [Paperclip](https://github.com/paperclipai/paperclip) — Multi-agent fleet orchestration patterns
+- [Model Context Protocol](https://modelcontextprotocol.io) — Open standard for LLM tool integration
+
 ## Contributing
 
 We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
