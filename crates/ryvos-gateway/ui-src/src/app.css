@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  min-height: 100vh;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+
+/* Code blocks */
+pre { background: #0d1117; border-radius: 8px; padding: 1rem; overflow-x: auto; }
+code { font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; }
+
+/* Streaming cursor animation */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: #818cf8;
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  border-radius: 1px;
+}
