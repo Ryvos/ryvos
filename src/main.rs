@@ -1,5 +1,6 @@
 mod doctor;
 mod onboard;
+mod viking_server;
 
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
@@ -96,6 +97,15 @@ enum Commands {
     },
     /// Migrate SQLite memories into OpenViking hierarchical structure
     MigrateMemory,
+    /// Start the Viking memory server (Rust-native, port 1933)
+    VikingServer {
+        /// Bind address (default: 127.0.0.1:1933)
+        #[arg(long, default_value = "127.0.0.1:1933")]
+        bind: String,
+        /// Path to Viking database (default: ~/.ryvos/viking.db)
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
     /// Run system health checks
     Doctor,
     /// Show tool health statistics
@@ -253,6 +263,17 @@ async fn main() -> anyhow::Result<()> {
             .map(|h| h.join(".ryvos"))
             .unwrap_or_else(|| PathBuf::from(".ryvos"));
         return onboard::run_soul_interview(&workspace);
+    }
+
+    // Handle Viking server before config loading (standalone mode)
+    if let Some(Commands::VikingServer { bind, db }) = &cli.command {
+        let workspace = dirs_home()
+            .map(|h| h.join(".ryvos"))
+            .unwrap_or_else(|| PathBuf::from(".ryvos"));
+        let db_path = db.clone().unwrap_or_else(|| workspace.join("viking.db"));
+        return viking_server::run_standalone(bind, &db_path)
+            .await
+            .map_err(Into::into);
     }
 
     // Handle MCP CLI subcommands before config loading
@@ -786,6 +807,23 @@ async fn main() -> anyhow::Result<()> {
                 cancel_clone.cancel();
             });
 
+            // Auto-start Viking server if configured with localhost
+            if let Some(ref ov_config) = config.openviking {
+                if ov_config.enabled && ov_config.base_url.contains("localhost") {
+                    let bind = ov_config
+                        .base_url
+                        .trim_start_matches("http://")
+                        .trim_start_matches("https://")
+                        .to_string();
+                    let db_path = workspace.join("viking.db");
+                    let viking_cancel = cancel.clone();
+                    viking_server::spawn_background(bind, db_path, viking_cancel);
+                    // Give the server a moment to bind
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    info!("Viking server auto-started in daemon mode");
+                }
+            }
+
             // Create persistent session meta store
             let data_dir = workspace.join("data");
             std::fs::create_dir_all(&data_dir).ok();
@@ -924,6 +962,7 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Skill { .. }) => unreachable!("handled before config load"),
         Some(Commands::Soul) => unreachable!("handled before config load"),
         Some(Commands::Update { .. }) => unreachable!("handled before config load"),
+        Some(Commands::VikingServer { .. }) => unreachable!("handled before config load"),
         Some(Commands::Repl) | None => {
             run_repl(
                 &runtime,
