@@ -179,56 +179,47 @@ async fn parse_copilot_event(
             Some(Ok(StreamDelta::ThinkingDelta(content.to_string())))
         }
         "assistant.message" => {
-            // Inspect toolRequests for dangerous commands
-            if let Some(matcher) = matcher {
-                let tool_requests = json
-                    .get("data")
-                    .and_then(|d| d.get("toolRequests"))
-                    .and_then(|t| t.as_array());
+            // Extract ALL tool requests for audit trail / safety memory logging.
+            // CLI providers execute tools internally — we can't block, but we CAN log.
+            let tool_requests = json
+                .get("data")
+                .and_then(|d| d.get("toolRequests"))
+                .and_then(|t| t.as_array());
 
-                if let Some(requests) = tool_requests {
-                    for req in requests {
-                        let tool_name = req["toolName"].as_str().unwrap_or("");
-                        if tool_name == "Bash"
-                            || tool_name == "bash"
-                            || tool_name.starts_with("shell")
-                        {
-                            let input = req.get("input").and_then(|i| {
-                                i["command"]
-                                    .as_str()
-                                    .or_else(|| i["cmd"].as_str())
-                                    .or_else(|| i.as_str())
-                            });
-                            if let Some(cmd) = input {
-                                if let Some(label) = matcher.is_dangerous(cmd) {
-                                    warn!(
-                                        tool = tool_name,
-                                        command = cmd,
-                                        pattern = label,
-                                        "SECURITY: Killing copilot CLI — dangerous command detected"
-                                    );
-                                    // Kill the child process
-                                    let mut k = killed.lock().await;
-                                    if !*k {
-                                        *k = true;
-                                        if let Some(pid) = child_id {
-                                            let _ = std::process::Command::new("kill")
-                                                .args(["-9", &pid.to_string()])
-                                                .output();
-                                        }
-                                    }
-                                    return Some(Err(RyvosError::SecurityViolation(format!(
-                                        "Blocked dangerous command ({}): {}",
-                                        label,
-                                        &cmd[..cmd.len().min(100)]
-                                    ))));
-                                }
+            if let Some(requests) = tool_requests {
+                for req in requests {
+                    let tool_name = req["toolName"].as_str().unwrap_or("unknown");
+                    let input_summary = if tool_name == "Bash" || tool_name == "bash" || tool_name.starts_with("shell") {
+                        req.get("input")
+                            .and_then(|i| i["command"].as_str().or_else(|| i["cmd"].as_str()))
+                            .unwrap_or("")
+                            .to_string()
+                    } else {
+                        let s = serde_json::to_string(req.get("input").unwrap_or(&serde_json::Value::Null)).unwrap_or_default();
+                        if s.len() > 120 { format!("{}...", &s[..120]) } else { s }
+                    };
+
+                    // Informational pattern check (no blocking)
+                    if let Some(matcher) = matcher {
+                        if tool_name == "Bash" || tool_name == "bash" || tool_name.starts_with("shell") {
+                            if let Some(label) = matcher.is_dangerous(&input_summary) {
+                                warn!(
+                                    tool = tool_name,
+                                    command = %input_summary,
+                                    pattern = label,
+                                    "Copilot CLI executed potentially dangerous command (logged, not blocked)"
+                                );
                             }
                         }
                     }
+
+                    // Emit CliToolExecuted so agent_loop can log to AuditTrail
+                    return Some(Ok(StreamDelta::CliToolExecuted {
+                        tool_name: tool_name.to_string(),
+                        input_summary,
+                    }));
                 }
             }
-            // Don't re-emit text — already streamed via deltas
             None
         }
         "result" => {
@@ -536,7 +527,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_message_safe_tools() {
+    fn parse_message_tool_emits_cli_executed() {
         let json = serde_json::json!({
             "type": "assistant.message",
             "data": {
@@ -550,8 +541,11 @@ mod tests {
         let matcher = DangerousPatternMatcher::new(&patterns);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
+        // All tool requests now emit CliToolExecuted for audit logging
         let result = rt.block_on(parse_copilot_event(&json, Some(&matcher), None, &killed));
-        assert!(result.is_none());
+        assert!(result.is_some());
+        let delta = result.unwrap().unwrap();
+        assert!(matches!(delta, StreamDelta::CliToolExecuted { .. }));
     }
 
     #[test]

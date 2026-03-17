@@ -460,6 +460,42 @@ impl AgentRuntime {
                         *self.last_message_id.lock().unwrap() = Some(id.clone());
                         model_config.cli_session_id = Some(id);
                     }
+                    StreamDelta::CliToolExecuted { tool_name, input_summary } => {
+                        // CLI providers (claude-code, copilot) execute tools internally.
+                        // We can't block them, but we log to AuditTrail + SafetyMemory
+                        // for post-hoc accountability — global security across all providers.
+                        info!(
+                            tool = %tool_name,
+                            input = %input_summary.chars().take(80).collect::<String>(),
+                            "CLI tool executed (audit logged)"
+                        );
+                        self.event_bus.publish(AgentEvent::ToolStart {
+                            name: tool_name.clone(),
+                            input: serde_json::json!({ "summary": input_summary }),
+                        });
+                        self.event_bus.publish(AgentEvent::ToolEnd {
+                            name: tool_name.clone(),
+                            result: ToolResult::success("[executed by CLI provider]"),
+                        });
+                        // Log to gate's audit trail if available
+                        if let Some(ref gate) = self.gate {
+                            if let Some(trail) = gate.audit_trail() {
+                                let entry = crate::audit::AuditEntry {
+                                    timestamp: chrono::Utc::now(),
+                                    session_id: session_id.to_string(),
+                                    tool_name: tool_name.clone(),
+                                    input_summary: input_summary.clone(),
+                                    output_summary: "[CLI provider — executed internally]".to_string(),
+                                    safety_reasoning: None,
+                                    outcome: crate::safety_memory::SafetyOutcome::Harmless,
+                                    lessons_available: vec![],
+                                };
+                                if let Err(e) = trail.log_tool_call(&entry).await {
+                                    debug!(error = %e, "Failed to log CLI tool to audit trail");
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

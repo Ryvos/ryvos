@@ -213,6 +213,14 @@ pub enum StreamDelta {
 
     /// Message ID from the API.
     MessageId(String),
+
+    /// Tool executed by a CLI provider (claude-code, copilot).
+    /// These tools run inside the CLI subprocess — Ryvos can't block them
+    /// but CAN log them for audit trail and safety memory.
+    CliToolExecuted {
+        tool_name: String,
+        input_summary: String,
+    },
 }
 
 /// Result of a tool execution.

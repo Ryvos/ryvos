@@ -262,58 +262,49 @@ async fn parse_stream_json(
             None
         }
         "assistant" => {
-            // Check tool_use blocks for dangerous commands BEFORE the CLI executes them.
-            if let Some(matcher) = matcher {
-                let content = json
-                    .get("message")
-                    .and_then(|m| m.get("content"))
-                    .or_else(|| json.get("content"));
+            // Extract ALL tool_use blocks for audit trail / safety memory logging.
+            // CLI providers execute tools internally — we can't block, but we CAN log.
+            let content = json
+                .get("message")
+                .and_then(|m| m.get("content"))
+                .or_else(|| json.get("content"));
 
-                if let Some(blocks) = content.and_then(|c| c.as_array()) {
-                    for block in blocks {
-                        if block["type"].as_str() == Some("tool_use") {
-                            let tool_name = block["name"].as_str().unwrap_or("");
-                            // For Bash/shell tools, check the command input
-                            if tool_name == "Bash" || tool_name == "bash" {
-                                let input = block.get("input").and_then(|i| {
-                                    i["command"]
-                                        .as_str()
-                                        .or_else(|| i["cmd"].as_str())
-                                        .or_else(|| i.as_str())
-                                });
-                                if let Some(cmd) = input {
-                                    if let Some(label) = matcher.is_dangerous(cmd) {
-                                        warn!(
-                                            tool = tool_name,
-                                            command = cmd,
-                                            pattern = label,
-                                            "SECURITY: Killing claude CLI — dangerous command detected"
-                                        );
-                                        // Kill the child process
-                                        let mut k = killed.lock().await;
-                                        if !*k {
-                                            *k = true;
-                                            if let Some(pid) = child_id {
-                                                let _ = std::process::Command::new("kill")
-                                                    .args(["-9", &pid.to_string()])
-                                                    .output();
-                                            }
-                                        }
-                                        return Some(Err(RyvosError::SecurityViolation(
-                                            format!(
-                                                "Blocked dangerous command ({}): {}",
-                                                label,
-                                                &cmd[..cmd.len().min(100)]
-                                            ),
-                                        )));
-                                    }
+            if let Some(blocks) = content.and_then(|c| c.as_array()) {
+                for block in blocks {
+                    if block["type"].as_str() == Some("tool_use") {
+                        let tool_name = block["name"].as_str().unwrap_or("unknown");
+                        let input_summary = if tool_name == "Bash" || tool_name == "bash" {
+                            block.get("input")
+                                .and_then(|i| i["command"].as_str().or_else(|| i["cmd"].as_str()))
+                                .unwrap_or("")
+                                .to_string()
+                        } else {
+                            let input_str = serde_json::to_string(block.get("input").unwrap_or(&serde_json::Value::Null)).unwrap_or_default();
+                            if input_str.len() > 120 { format!("{}...", &input_str[..120]) } else { input_str }
+                        };
+
+                        // Informational pattern check (no blocking)
+                        if let Some(matcher) = matcher {
+                            if (tool_name == "Bash" || tool_name == "bash") {
+                                if let Some(label) = matcher.is_dangerous(&input_summary) {
+                                    warn!(
+                                        tool = tool_name,
+                                        command = %input_summary,
+                                        pattern = label,
+                                        "CLI provider executed potentially dangerous command (logged, not blocked)"
+                                    );
                                 }
                             }
                         }
+
+                        // Emit CliToolExecuted so agent_loop can log to AuditTrail
+                        return Some(Ok(StreamDelta::CliToolExecuted {
+                            tool_name: tool_name.to_string(),
+                            input_summary,
+                        }));
                     }
                 }
             }
-            // Don't emit any deltas from assistant events — we use result.result
             None
         }
         "result" => {
@@ -429,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_assistant_safe_tool_ignored() {
+    fn parse_assistant_tool_emits_cli_executed() {
         let json = serde_json::json!({
             "type": "assistant",
             "message": {
@@ -440,9 +431,11 @@ mod tests {
         let matcher = DangerousPatternMatcher::new(&patterns);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
-        // Safe command — should be ignored (returns None)
+        // All tool_use blocks now emit CliToolExecuted for audit logging
         let result = rt.block_on(parse_stream_json(&json, Some(&matcher), None, &killed));
-        assert!(result.is_none());
+        assert!(result.is_some());
+        let delta = result.unwrap().unwrap();
+        assert!(matches!(delta, StreamDelta::CliToolExecuted { .. }));
     }
 
     #[test]
