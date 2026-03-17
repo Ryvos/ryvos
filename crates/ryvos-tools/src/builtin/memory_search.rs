@@ -78,10 +78,26 @@ impl Tool for MemorySearchTool {
 
             let results = store.search(query, limit).await?;
 
-            Ok(ToolResult::success(if results.is_empty() {
+            // Merge Viking results if available (unified search)
+            let mut viking_results = String::new();
+            if let Some(ref vc) = ctx.viking_client {
+                if let Some(viking) = vc.downcast_ref::<std::sync::Arc<ryvos_memory::VikingClient>>() {
+                    if let Ok(vr) = viking.search(query, None, limit.min(5)).await {
+                        if !vr.is_empty() {
+                            let formatted: Vec<String> = vr.iter().map(|r| {
+                                format!("[Viking {:.2}] {}: {}", r.relevance_score, r.path,
+                                    r.content.chars().take(200).collect::<String>())
+                            }).collect();
+                            viking_results = format!("\n\n--- Viking Results ---\n{}", formatted.join("\n---\n"));
+                        }
+                    }
+                }
+            }
+
+            Ok(ToolResult::success(if results.is_empty() && viking_results.is_empty() {
                 "No results found.".into()
             } else {
-                format_results(&results)
+                format!("{}{}", format_results(&results), viking_results)
             }))
         })
     }

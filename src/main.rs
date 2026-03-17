@@ -94,6 +94,8 @@ enum Commands {
         #[arg(long)]
         no_channels: bool,
     },
+    /// Migrate SQLite memories into OpenViking hierarchical structure
+    MigrateMemory,
     /// Run system health checks
     Doctor,
     /// Show tool health statistics
@@ -593,6 +595,60 @@ async fn main() -> anyhow::Result<()> {
     );
 
     match cli.command {
+        Some(Commands::MigrateMemory) => {
+            println!("Ryvos Memory Migration (SQLite → Viking)");
+            println!("=========================================");
+            if let Some(ref ov_config) = config.openviking {
+                if ov_config.enabled {
+                    let viking = ryvos_memory::VikingClient::new(&ov_config.base_url, &ov_config.user_id);
+                    if !viking.health().await {
+                        eprintln!("Error: OpenViking is not reachable at {}", ov_config.base_url);
+                        eprintln!("Start the OpenViking service first, then retry.");
+                        return Ok(());
+                    }
+                    println!("Connected to Viking at {}", ov_config.base_url);
+
+                    // Search SQLite FTS5 for all memory entries and bulk-import
+                    use ryvos_core::traits::SessionStore;
+                    let results = store.search("*", 10000).await.unwrap_or_default();
+
+                    let mut migrated = 0u64;
+                    let mut failed = 0u64;
+                    for r in &results {
+                        if r.content.is_empty() || r.content.len() < 20 {
+                            continue;
+                        }
+                        let ts = r.timestamp.format("%Y%m%d-%H%M%S").to_string();
+                        let category = if r.content.contains("prefer") || r.content.contains("like") || r.content.contains("don't") {
+                            "user/preferences"
+                        } else if r.content.contains("learned") || r.content.contains("pattern") || r.content.contains("always") {
+                            "agent/patterns"
+                        } else {
+                            "agent/events"
+                        };
+                        let path = format!("viking://{}/{}", category, ts);
+                        match viking.write_memory(&path, &r.content, None).await {
+                            Ok(()) => migrated += 1,
+                            Err(_) => failed += 1,
+                        }
+                    }
+                    println!();
+                    println!("Migration complete:");
+                    println!("  Migrated: {} entries", migrated);
+                    if failed > 0 {
+                        println!("  Failed:   {} entries", failed);
+                    }
+                    println!("  Originals preserved in SQLite (non-destructive).");
+                } else {
+                    eprintln!("Error: OpenViking is not enabled in your config.");
+                    eprintln!("Add to your config.toml:\n\n[openviking]\nenabled = true\nbase_url = \"http://localhost:1933\"");
+                }
+            } else {
+                eprintln!("Error: No [openviking] section in config.");
+                eprintln!("Add to your config.toml:\n\n[openviking]\nenabled = true\nbase_url = \"http://localhost:1933\"");
+            }
+            return Ok(());
+        }
         Some(Commands::Doctor) => {
             println!("Ryvos Doctor");
             println!("============");
