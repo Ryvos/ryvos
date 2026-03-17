@@ -24,3 +24,4 @@ tower-http.workspace = true
 rust-embed.workspace = true
 mime_guess.workspace = true
 chrono.workspace = true
+toml.workspace = true

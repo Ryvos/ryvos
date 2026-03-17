@@ -423,3 +423,253 @@ async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
     .await;
     debug!("WebSocket client disconnected");
 }
+
+// ── Audit Trail API ─────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct AuditQuery {
+    #[serde(default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub tool: Option<String>,
+    #[serde(default = "default_audit_limit")]
+    pub limit: usize,
+}
+
+fn default_audit_limit() -> usize {
+    50
+}
+
+// GET /api/audit — paginated audit entries
+pub async fn audit_entries(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<AuditQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let trail = state.audit_trail.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let entries = if let Some(ref tool) = q.tool {
+        trail.entries_by_tool(tool, q.limit).await.unwrap_or_default()
+    } else if let Some(ref sid) = q.session_id {
+        trail.recent_entries(sid, q.limit).await.unwrap_or_default()
+    } else {
+        trail.recent_entries("", q.limit).await.unwrap_or_default()
+    };
+    Ok(Json(serde_json::json!({ "entries": entries })))
+}
+
+// GET /api/audit/stats — summary stats
+pub async fn audit_stats(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let trail = state.audit_trail.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let total = trail.total_entries().await.unwrap_or(0);
+    Ok(Json(serde_json::json!({ "total_entries": total })))
+}
+
+// ── Viking Memory Browser API ───────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct VikingListQuery {
+    #[serde(default = "default_viking_path")]
+    pub path: String,
+}
+
+fn default_viking_path() -> String {
+    "viking://".to_string()
+}
+
+#[derive(Deserialize)]
+pub struct VikingReadQuery {
+    pub path: String,
+    #[serde(default = "default_viking_level")]
+    pub level: String,
+}
+
+fn default_viking_level() -> String {
+    "L1".to_string()
+}
+
+#[derive(Deserialize)]
+pub struct VikingSearchQuery {
+    pub query: String,
+    #[serde(default)]
+    pub directory: Option<String>,
+    #[serde(default = "default_viking_search_limit")]
+    pub limit: usize,
+}
+
+fn default_viking_search_limit() -> usize {
+    10
+}
+
+// GET /api/viking/list — directory listing
+pub async fn viking_list(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<VikingListQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let viking = state.viking_client.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    match viking.list_directory(&q.path).await {
+        Ok(entries) => Ok(Json(serde_json::json!(entries))),
+        Err(e) => Ok(Json(serde_json::json!({ "error": e }))),
+    }
+}
+
+// GET /api/viking/read — read a path
+pub async fn viking_read(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<VikingReadQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let viking = state.viking_client.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let level = match q.level.as_str() {
+        "L0" => ryvos_memory::viking::ContextLevel::L0,
+        "L2" => ryvos_memory::viking::ContextLevel::L2,
+        _ => ryvos_memory::viking::ContextLevel::L1,
+    };
+    match viking.read_memory(&q.path, level).await {
+        Ok(result) => Ok(Json(serde_json::json!(result))),
+        Err(e) => Ok(Json(serde_json::json!({ "error": e }))),
+    }
+}
+
+// GET /api/viking/search — search memories
+pub async fn viking_search(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<VikingSearchQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let viking = state.viking_client.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    match viking.search(&q.query, q.directory.as_deref(), q.limit).await {
+        Ok(results) => Ok(Json(serde_json::json!(results))),
+        Err(e) => Ok(Json(serde_json::json!({ "error": e }))),
+    }
+}
+
+// ── Config Editor API ───────────────────────────────────────────
+
+// GET /api/config — read current config (Admin only)
+pub async fn get_config(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if auth_result.role != ryvos_core::config::ApiKeyRole::Admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let path = state.config_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    match tokio::fs::read_to_string(path).await {
+        Ok(content) => Ok(Json(serde_json::json!({
+            "path": path.display().to_string(),
+            "content": content,
+        }))),
+        Err(e) => Ok(Json(serde_json::json!({ "error": e.to_string() }))),
+    }
+}
+
+// PUT /api/config — write config (Admin only)
+pub async fn put_config(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if auth_result.role != ryvos_core::config::ApiKeyRole::Admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let path = state.config_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let content = body["content"]
+        .as_str()
+        .ok_or(StatusCode::BAD_REQUEST)?;
+
+    // Validate TOML before writing
+    if toml::from_str::<ryvos_core::config::AppConfig>(content).is_err() {
+        return Ok(Json(serde_json::json!({ "error": "Invalid TOML config" })));
+    }
+
+    match tokio::fs::write(path, content).await {
+        Ok(()) => Ok(Json(serde_json::json!({ "ok": true }))),
+        Err(e) => Ok(Json(serde_json::json!({ "error": e.to_string() }))),
+    }
+}
+
+// ── Channel Status API ──────────────────────────────────────────
+
+// GET /api/channels — list configured channels
+pub async fn channels_status(
+    Authenticated(auth_result): Authenticated,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    // Return basic channel status — the dispatcher tracks active adapters
+    Ok(Json(serde_json::json!({
+        "channels": ["telegram", "discord", "slack", "whatsapp"],
+        "note": "Use the Web UI to see live connection status"
+    })))
+}
+
+// ── Approvals REST API ──────────────────────────────────────────
+
+// GET /api/approvals — list pending approvals
+pub async fn list_approvals(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let pending = state.broker.pending_requests().await;
+    Ok(Json(serde_json::json!({ "approvals": pending })))
+}
+
+// POST /api/approvals/:id/approve
+pub async fn approve_request(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_operator_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let found = state
+        .broker
+        .respond(&id, ryvos_core::security::ApprovalDecision::Approved)
+        .await;
+    Ok(Json(serde_json::json!({ "approved": found })))
+}
+
+// POST /api/approvals/:id/deny
+pub async fn deny_request(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_operator_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let found = state
+        .broker
+        .respond(
+            &id,
+            ryvos_core::security::ApprovalDecision::Denied {
+                reason: "Denied via Web UI".to_string(),
+            },
+        )
+        .await;
+    Ok(Json(serde_json::json!({ "denied": found })))
+}

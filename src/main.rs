@@ -440,15 +440,18 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize audit trail (post-hoc accountability)
     let audit_db_path = workspace.join("audit.db");
-    match ryvos_agent::AuditTrail::open(&audit_db_path) {
+    let audit_trail: Option<Arc<ryvos_agent::AuditTrail>> = match ryvos_agent::AuditTrail::open(&audit_db_path) {
         Ok(trail) => {
-            gate_inner.set_audit_trail(Arc::new(trail));
+            let trail = Arc::new(trail);
+            gate_inner.set_audit_trail(trail.clone());
             info!("Audit trail initialized");
+            Some(trail)
         }
         Err(e) => {
             error!(error = %e, "Failed to initialize audit trail");
+            None
         }
-    }
+    };
 
     let gate = Arc::new(gate_inner);
 
@@ -776,6 +779,15 @@ async fn main() -> anyhow::Result<()> {
                 server.set_cost_store(cs.clone(), config.budget.clone());
             }
 
+            // Wire audit trail, Viking client, and config path for Web UI
+            if let Some(ref trail) = audit_trail {
+                server.set_audit_trail(trail.clone());
+            }
+            if let Some(ref vc) = viking_client {
+                server.set_viking_client(vc.clone());
+            }
+            server.set_config_path(cli.config.clone());
+
             if let Some(ref wa_config) = config.channels.whatsapp {
                 let wa_adapter = ryvos_channels::WhatsAppAdapter::new(
                     wa_config.clone(),
@@ -899,6 +911,15 @@ async fn main() -> anyhow::Result<()> {
                 if let Some(ref cs) = cost_store {
                     server.set_cost_store(cs.clone(), config.budget.clone());
                 }
+
+                // Wire audit trail, Viking client, and config path for Web UI
+                if let Some(ref trail) = audit_trail {
+                    server.set_audit_trail(trail.clone());
+                }
+                if let Some(ref vc) = viking_client {
+                    server.set_viking_client(vc.clone());
+                }
+                server.set_config_path(cli.config.clone());
 
                 // Wire WhatsApp webhook handle into gateway if configured
                 if let Some(ref wa_config) = config.channels.whatsapp {
