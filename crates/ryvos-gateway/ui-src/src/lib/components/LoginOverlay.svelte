@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import logoUrl from '../../assets/logo.png';
 
   const dispatch = createEventDispatcher();
   let apiKeyValue = '';
@@ -14,18 +15,14 @@
 </script>
 
 <div class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-10 w-[380px] text-center shadow-2xl shadow-indigo-500/5">
+  <div class="bg-[#1A1A1A] border border-[rgba(255,255,255,0.08)] rounded-2xl p-10 w-[380px] text-center shadow-2xl shadow-[#F07030]/5">
     <!-- Logo -->
     <div class="mb-5">
-      <svg class="mx-auto drop-shadow-[0_4px_12px_rgba(129,140,248,0.3)]" width="48" height="48" viewBox="0 0 48 48" fill="none">
-        <rect width="48" height="48" rx="12" fill="url(#lg)"/>
-        <path d="M14 24l6 6 14-14" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-        <defs><linearGradient id="lg" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs>
-      </svg>
+      <img src={logoUrl} alt="Ryvos" class="mx-auto w-14 h-14 rounded-md drop-shadow-[0_4px_12px_rgba(240,112,48,0.3)]" />
     </div>
 
-    <h2 class="text-xl font-bold text-gray-100 tracking-tight mb-1">Welcome to Ryvos</h2>
-    <p class="text-gray-500 text-sm mb-6">Enter your API key to access the dashboard</p>
+    <h2 class="text-xl font-bold text-[#E8E4E0] tracking-tight mb-1">Welcome to Ryvos</h2>
+    <p class="text-[#A09890] text-sm mb-6">Enter your API key to access the dashboard</p>
 
     <div class="mb-3">
       <input
@@ -33,24 +30,24 @@
         bind:value={apiKeyValue}
         on:keydown={handleKeydown}
         placeholder="rk_..."
-        class="w-full px-4 py-3 bg-gray-950 border border-gray-800 rounded-lg text-gray-100 font-mono text-sm
+        class="w-full px-4 py-3 bg-[#0F0F0F] border border-[rgba(255,255,255,0.08)] rounded-lg text-[#E8E4E0] font-mono text-sm
                outline-none transition-all duration-200
-               focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20
-               placeholder:text-gray-600 placeholder:font-mono"
+               focus:border-[#F07030] focus:ring-2 focus:ring-[#F07030]/20
+               placeholder:text-[#555] placeholder:font-mono"
       />
     </div>
 
     <button
       on:click={handleSubmit}
-      class="w-full py-3 bg-gradient-to-br from-indigo-400 to-indigo-600 text-white rounded-lg
+      class="w-full py-3 bg-gradient-to-br from-[#F07030] to-[#E06020] text-white rounded-lg
              font-semibold text-sm flex items-center justify-center gap-2
-             transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/30
+             transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#F07030]/30
              active:translate-y-0"
     >
       <span>Connect</span>
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10m-4-4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
 
-    <p class="text-xs text-gray-600 mt-4">Leave blank if no auth is configured</p>
+    <p class="text-xs text-[#555] mt-4">Leave blank if no auth is configured</p>
   </div>
 </div>

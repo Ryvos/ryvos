@@ -192,7 +192,15 @@ pub async fn runs(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let cost_store = state.cost_store.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let Some(cost_store) = state.cost_store.as_ref() else {
+        return Ok(Json(serde_json::json!({
+            "runs": [],
+            "total": 0,
+            "offset": q.offset,
+            "limit": q.limit,
+            "note": "Budget tracking not configured. Add [budget] to config.toml to enable."
+        })));
+    };
     let (runs, total) = cost_store
         .run_history(q.limit, q.offset)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -215,7 +223,16 @@ pub async fn costs(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let cost_store = state.cost_store.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let Some(cost_store) = state.cost_store.as_ref() else {
+        return Ok(Json(serde_json::json!({
+            "summary": { "total_cost_cents": 0, "total_input_tokens": 0, "total_output_tokens": 0, "total_events": 0 },
+            "breakdown": [],
+            "from": "",
+            "to": "",
+            "group_by": q.group_by,
+            "note": "Budget tracking not configured. Add [budget] to config.toml to enable."
+        })));
+    };
 
     let from = q
         .from
@@ -609,18 +626,33 @@ pub async fn put_config(
 
 // ── Channel Status API ──────────────────────────────────────────
 
-// GET /api/channels — list configured channels
+// GET /api/channels — list configured channels with status
 pub async fn channels_status(
     Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     if !auth::has_viewer_access(&auth_result.role) {
         return Err(StatusCode::FORBIDDEN);
     }
-    // Return basic channel status — the dispatcher tracks active adapters
-    Ok(Json(serde_json::json!({
-        "channels": ["telegram", "discord", "slack", "whatsapp"],
-        "note": "Use the Web UI to see live connection status"
-    })))
+
+    let mut channels = Vec::new();
+
+    // Check each known channel type against configured state
+    let has_whatsapp = state.whatsapp_handle.is_some();
+    let session_list = state.session_mgr.list();
+
+    let has_telegram = session_list.iter().any(|s| s.starts_with("telegram:"));
+    let has_discord = session_list.iter().any(|s| s.starts_with("discord:"));
+    let has_slack = session_list.iter().any(|s| s.starts_with("slack:"));
+
+    channels.push(serde_json::json!({ "name": "Telegram", "type": "telegram", "status": if has_telegram { "active" } else { "not_configured" } }));
+    channels.push(serde_json::json!({ "name": "Discord", "type": "discord", "status": if has_discord { "active" } else { "not_configured" } }));
+    channels.push(serde_json::json!({ "name": "Slack", "type": "slack", "status": if has_slack { "active" } else { "not_configured" } }));
+    channels.push(serde_json::json!({ "name": "WhatsApp", "type": "whatsapp", "status": if has_whatsapp { "configured" } else { "not_configured" } }));
+    channels.push(serde_json::json!({ "name": "Web UI", "type": "webui", "status": "active" }));
+    channels.push(serde_json::json!({ "name": "Gateway", "type": "gateway", "status": "active" }));
+
+    Ok(Json(serde_json::json!({ "channels": channels })))
 }
 
 // ── Approvals REST API ──────────────────────────────────────────

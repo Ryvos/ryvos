@@ -4,19 +4,19 @@
   export let type = 'default';
 </script>
 
-<div class="bg-gray-900 border border-gray-800 rounded-xl p-5 transition-all duration-200
-            hover:border-gray-700 hover:-translate-y-0.5 hover:shadow-sm relative overflow-hidden group">
+<div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-5 transition-all duration-200
+            hover:border-[rgba(255,255,255,0.15)] hover:-translate-y-0.5 hover:shadow-sm relative overflow-hidden group">
   <!-- Top accent line -->
-  <div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-indigo-400 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+  <div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#F07030] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
 
   <!-- Icon -->
   <div class="w-9 h-9 rounded-md flex items-center justify-center mb-3
-    {type === 'runs' ? 'bg-indigo-400/10 text-indigo-400' :
+    {type === 'runs' ? 'bg-[#F07030]/10 text-[#F07030]' :
      type === 'sessions' ? 'bg-emerald-400/10 text-emerald-400' :
-     type === 'spend' ? 'bg-amber-400/10 text-amber-400' :
-     type === 'budget' ? 'bg-purple-400/10 text-purple-400' :
+     type === 'spend' ? 'bg-[#F0A040]/10 text-[#F0A040]' :
+     type === 'budget' ? 'bg-[#F03080]/10 text-[#F03080]' :
      type === 'uptime' ? 'bg-emerald-400/10 text-emerald-400' :
-     'bg-gray-800 text-gray-400'}">
+     'bg-[#2A2A2A] text-[#A09890]'}">
     {#if type === 'runs'}
       <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
     {:else if type === 'sessions'}
@@ -32,6 +32,6 @@
     {/if}
   </div>
 
-  <div class="text-3xl font-bold text-gray-100 tracking-tight leading-tight">{value}</div>
-  <div class="text-xs font-medium text-gray-500 mt-1.5 uppercase tracking-wider">{label}</div>
+  <div class="text-3xl font-bold text-[#E8E4E0] tracking-tight leading-tight">{value}</div>
+  <div class="text-xs font-medium text-[#A09890] mt-1.5 uppercase tracking-wider">{label}</div>
 </div>

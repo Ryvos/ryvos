@@ -27,7 +27,8 @@ pub async fn handle_connection(
     let ws_tx = Arc::new(Mutex::new(ws_tx));
 
     // Track which sessions this connection is subscribed to
-    let subscribed_sessions: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    // Auto-subscribe to "*" so system events (heartbeat, cron, budget) are always forwarded
+    let subscribed_sessions: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec!["*".to_string()]));
 
     // Subscribe to event bus and forward events
     let mut event_rx = event_bus.subscribe();

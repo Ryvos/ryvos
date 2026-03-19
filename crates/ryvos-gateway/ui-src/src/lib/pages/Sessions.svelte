@@ -24,47 +24,47 @@
 
 <div>
   <div class="mb-7">
-    <h2 class="text-2xl font-bold tracking-tight text-gray-100">Sessions</h2>
-    <p class="text-gray-500 text-sm mt-1">Active conversation sessions</p>
+    <h2 class="text-2xl font-bold tracking-tight text-[#E8E4E0]">Sessions</h2>
+    <p class="text-[#A09890] text-sm mt-1">Active conversation sessions</p>
   </div>
 
   {#if loading}
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-      <p class="text-gray-500 text-sm animate-pulse">Loading sessions...</p>
+    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-8 text-center">
+      <p class="text-[#A09890] text-sm animate-pulse">Loading sessions...</p>
     </div>
   {:else if error}
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-      <p class="text-gray-500 text-sm">Failed to load sessions</p>
+    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-8 text-center">
+      <p class="text-[#A09890] text-sm">Failed to load sessions</p>
     </div>
   {:else if sessionList.length === 0}
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-      <p class="text-gray-500 text-sm">No active sessions</p>
+    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-12 text-center">
+      <p class="text-[#A09890] text-sm">No active sessions</p>
     </div>
   {:else}
-    <div class="border border-gray-800 rounded-xl overflow-hidden">
+    <div class="border border-[rgba(255,255,255,0.08)] rounded-xl overflow-hidden">
       <table class="w-full text-sm">
         <thead>
           <tr>
-            <th class="px-4 py-3 bg-gray-900/80 text-left text-[0.7rem] font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-800">
+            <th class="px-4 py-3 bg-[#222222]/80 text-left text-[0.7rem] font-semibold text-[#A09890] uppercase tracking-wider border-b border-[rgba(255,255,255,0.08)]">
               Session ID
             </th>
-            <th class="px-4 py-3 bg-gray-900/80 text-left text-[0.7rem] font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-800">
+            <th class="px-4 py-3 bg-[#222222]/80 text-left text-[0.7rem] font-semibold text-[#A09890] uppercase tracking-wider border-b border-[rgba(255,255,255,0.08)]">
               Actions
             </th>
           </tr>
         </thead>
         <tbody>
           {#each sessionList as session}
-            <tr class="hover:bg-gray-800/40 transition-colors duration-150">
-              <td class="px-4 py-3 border-b border-gray-800/50 font-mono text-xs text-gray-300">
+            <tr class="hover:bg-[#2A2A2A]/40 transition-colors duration-150">
+              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] font-mono text-xs text-[#E8E4E0]">
                 {truncate(session, 50)}
               </td>
-              <td class="px-4 py-3 border-b border-gray-800/50">
+              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)]">
                 <a
                   href="#/chat/{encodeURIComponent(session)}"
-                  class="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-md
-                         text-xs text-gray-300 font-medium hover:bg-gray-700 hover:text-indigo-400
-                         hover:border-indigo-400 transition-all duration-200"
+                  class="inline-flex items-center gap-1 px-3 py-1.5 bg-[#2A2A2A] border border-[rgba(255,255,255,0.12)] rounded-md
+                         text-xs text-[#E8E4E0] font-medium hover:bg-[#2A2A2A] hover:text-[#F07030]
+                         hover:border-[#F07030] transition-all duration-200"
                 >
                   Open Chat
                 </a>

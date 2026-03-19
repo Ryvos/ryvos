@@ -44,22 +44,22 @@
 
 <div>
   <div class="mb-7">
-    <h2 class="text-2xl font-bold tracking-tight text-gray-100">Configuration</h2>
-    <p class="text-gray-500 text-sm mt-1">Edit your Ryvos config.toml</p>
+    <h2 class="text-2xl font-bold tracking-tight text-[#E8E4E0]">Configuration</h2>
+    <p class="text-[#A09890] text-sm mt-1">Edit your Ryvos config.toml</p>
   </div>
 
   {#if loading}
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-      <p class="text-gray-500 text-sm animate-pulse">Loading configuration...</p>
+    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-8 text-center">
+      <p class="text-[#A09890] text-sm animate-pulse">Loading configuration...</p>
     </div>
   {:else if error}
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-      <p class="text-gray-500 text-sm">Configuration endpoint not available</p>
+    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-12 text-center">
+      <p class="text-[#A09890] text-sm">Configuration endpoint not available</p>
     </div>
   {:else}
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-5">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-sm font-semibold text-gray-100">config.toml</h3>
+        <h3 class="text-sm font-semibold text-[#E8E4E0]">config.toml</h3>
         <div class="flex items-center gap-3">
           {#if saveMessage}
             <span class="text-xs {saveMessage.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}">
@@ -72,9 +72,9 @@
           <button
             on:click={saveConfig}
             disabled={saving || !hasChanges}
-            class="px-4 py-1.5 bg-gradient-to-br from-indigo-400 to-indigo-600 text-white rounded-md
+            class="px-4 py-1.5 bg-gradient-to-br from-[#F07030] to-[#E06020] text-white rounded-md
                    text-xs font-semibold transition-all duration-200
-                   hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5
+                   hover:shadow-lg hover:shadow-[#F07030]/30 hover:-translate-y-0.5
                    disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
           >
             {saving ? 'Saving...' : 'Save'}
@@ -84,10 +84,10 @@
       <textarea
         bind:value={configContent}
         spellcheck="false"
-        class="w-full h-[500px] px-4 py-3 bg-gray-950 border border-gray-800 rounded-lg
-               text-gray-200 font-mono text-sm leading-relaxed resize-y
+        class="w-full h-[500px] px-4 py-3 bg-[#0F0F0F] border border-[rgba(255,255,255,0.08)] rounded-lg
+               text-[#E8E4E0] font-mono text-sm leading-relaxed resize-y
                outline-none transition-all duration-200
-               focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20"
+               focus:border-[#F07030] focus:ring-2 focus:ring-[#F07030]/20"
       ></textarea>
     </div>
   {/if}

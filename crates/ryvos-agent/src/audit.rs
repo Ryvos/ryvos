@@ -97,25 +97,38 @@ impl AuditTrail {
         Ok(())
     }
 
-    /// Query recent audit entries for a session.
+    /// Query recent audit entries, optionally filtered by session.
     pub async fn recent_entries(
         &self,
         session_id: &str,
         limit: usize,
     ) -> Result<Vec<AuditEntry>, String> {
         let conn = self.conn.lock().await;
-        let mut stmt = conn
-            .prepare(
+
+        // When session_id is empty, query all entries (no WHERE filter)
+        let (query, params): (&str, Vec<Box<dyn rusqlite::types::ToSql>>) = if session_id.is_empty() {
+            (
                 "SELECT timestamp, session_id, tool_name, input_summary, output_summary, safety_reasoning, outcome, lessons_available
-             FROM audit_log
-             WHERE session_id = ?1
-             ORDER BY timestamp DESC
-             LIMIT ?2",
+                 FROM audit_log
+                 ORDER BY timestamp DESC
+                 LIMIT ?1",
+                vec![Box::new(limit as i64)],
             )
-            .map_err(|e| e.to_string())?;
+        } else {
+            (
+                "SELECT timestamp, session_id, tool_name, input_summary, output_summary, safety_reasoning, outcome, lessons_available
+                 FROM audit_log
+                 WHERE session_id = ?1
+                 ORDER BY timestamp DESC
+                 LIMIT ?2",
+                vec![Box::new(session_id.to_string()), Box::new(limit as i64)],
+            )
+        };
+
+        let mut stmt = conn.prepare(query).map_err(|e| e.to_string())?;
 
         let entries = stmt
-            .query_map(rusqlite::params![session_id, limit as i64], |row| {
+            .query_map(rusqlite::params_from_iter(params.iter()), |row| {
                 let ts_str: String = row.get(0)?;
                 let timestamp = DateTime::parse_from_rfc3339(&ts_str)
                     .map(|dt| dt.with_timezone(&Utc))

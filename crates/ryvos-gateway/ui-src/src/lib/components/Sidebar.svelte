@@ -2,23 +2,25 @@
   import { connectionStatus, disconnect } from '../ws.js';
   import { clearApiKey } from '../api.js';
   import { authenticated } from '../stores.js';
+  import logoUrl from '../../assets/logo.png';
 
-  export let currentRoute = 'dashboard';
+  export let currentRoute = 'chat';
+  export let open = true;
 
   let status = 'disconnected';
   connectionStatus.subscribe(v => status = v);
 
   const navItems = [
-    { route: 'dashboard',  label: 'Dashboard',      icon: 'grid' },
     { route: 'chat',       label: 'Chat',            icon: 'message' },
+    { route: 'dashboard',  label: 'Dashboard',       icon: 'grid' },
     { route: 'sessions',   label: 'Sessions',        icon: 'layers' },
     { route: 'runs',       label: 'Runs',            icon: 'activity' },
     { route: 'costs',      label: 'Costs',           icon: 'dollar' },
-    { route: 'settings',   label: 'Settings',        icon: 'settings' },
+    { route: 'channels',   label: 'Channels',        icon: 'radio' },
     { route: 'audit',      label: 'Audit Trail',     icon: 'shield' },
     { route: 'viking',     label: 'Viking Browser',  icon: 'database' },
     { route: 'config',     label: 'Config',          icon: 'file' },
-    { route: 'channels',   label: 'Channels',        icon: 'radio' },
+    { route: 'settings',   label: 'Settings',        icon: 'settings' },
   ];
 
   function handleLogout() {
@@ -29,21 +31,30 @@
 
   function isActive(route) {
     if (route === currentRoute) return true;
-    if (route === 'sessions' && currentRoute === 'chat') return true;
+    if (route === 'chat' && currentRoute === 'sessions') return true;
     return false;
+  }
+
+  function handleNavClick() {
+    // Close sidebar on mobile after navigation
+    if (window.innerWidth < 768) {
+      open = false;
+    }
   }
 </script>
 
-<aside class="w-60 bg-gray-900 border-r border-gray-800 flex flex-col h-screen shrink-0">
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<aside
+  class="w-60 bg-[#1A1A1A] border-r border-[rgba(255,255,255,0.08)] flex flex-col h-screen shrink-0
+    fixed md:relative z-50 transition-transform duration-200 ease-out
+    {open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}"
+>
   <!-- Header -->
   <div class="flex items-center gap-2.5 px-5 py-4">
-    <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
-      <rect width="48" height="48" rx="12" fill="url(#slg)"/>
-      <path d="M14 24l6 6 14-14" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      <defs><linearGradient id="slg" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs>
-    </svg>
-    <span class="text-lg font-bold tracking-tight text-gray-100">Ryvos</span>
-    <span class="text-[0.65rem] font-semibold text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded-full">v0.6</span>
+    <img src={logoUrl} alt="Ryvos" class="w-7 h-7 rounded-sm" />
+    <span class="text-lg font-bold tracking-tight text-[#E8E4E0]">Ryvos</span>
+    <span class="text-[0.6rem] font-semibold text-[#F07030] bg-[#F07030]/10 px-2 py-0.5 rounded-full">v0.6</span>
   </div>
 
   <!-- Nav -->
@@ -51,10 +62,11 @@
     {#each navItems as item}
       <a
         href="#/{item.route}"
+        on:click={handleNavClick}
         class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200
           {isActive(item.route)
-            ? 'bg-indigo-400/10 text-indigo-400 font-semibold'
-            : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"
+            ? 'bg-[#F07030]/10 text-[#F07030] font-semibold border-l-2 border-l-[#F07030] -ml-[2px]'
+            : 'text-[#A09890] hover:bg-[#2A2A2A] hover:text-[#E8E4E0]'}"
       >
         {#if item.icon === 'grid'}
           <svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -83,16 +95,18 @@
   </nav>
 
   <!-- Footer -->
-  <div class="px-5 py-3 border-t border-gray-800 flex items-center justify-between">
-    <div class="flex items-center gap-2 text-xs text-gray-500">
+  <div class="px-5 py-3 border-t border-[rgba(255,255,255,0.08)] flex items-center justify-between">
+    <div class="flex items-center gap-2 text-xs text-[#A09890]">
       <span
-        class="w-1.5 h-1.5 rounded-full {status === 'connected' ? 'bg-emerald-400 shadow-[0_0_6px_theme(colors.emerald.400)]' : status === 'error' ? 'bg-red-400' : 'bg-gray-600'}"
+        class="w-2 h-2 rounded-full {status === 'connected'
+          ? 'bg-emerald-400 shadow-[0_0_8px_theme(colors.emerald.400)] animate-pulse-glow'
+          : status === 'error' ? 'bg-red-400' : 'bg-gray-600'}"
       ></span>
       <span>{status === 'connected' ? 'Connected' : status === 'error' ? 'Error' : 'Disconnected'}</span>
     </div>
     <button
       on:click={handleLogout}
-      class="text-xs text-gray-500 hover:text-red-400 hover:bg-red-400/10 px-2 py-1 rounded transition-all duration-200"
+      class="text-xs text-[#A09890] hover:text-red-400 hover:bg-red-400/10 px-2 py-1 rounded transition-all duration-200"
     >
       Disconnect
     </button>
