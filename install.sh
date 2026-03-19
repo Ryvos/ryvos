@@ -31,6 +31,12 @@ ok()    { printf "${GREEN}  ok${RESET}  %s\n" "$1"; }
 warn()  { printf "${YELLOW}warn${RESET}  %s\n" "$1"; }
 error() { printf "${RED}error${RESET} %s\n" "$1" >&2; exit 1; }
 
+# When run with sudo and no explicit install dir, install globally.
+# This avoids writing to /root/.local/bin, which is often not in the caller's PATH.
+if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ -z "${RYVOS_INSTALL_DIR:-}" ]; then
+    INSTALL_DIR="/usr/local/bin"
+fi
+
 # Detect OS
 detect_os() {
     case "$(uname -s)" in
@@ -158,11 +164,18 @@ main() {
         *)
             warn "${INSTALL_DIR} is not in your PATH"
             printf "\n  Add it to your shell profile:\n"
-            printf "    ${BOLD}export PATH=\"\$HOME/.local/bin:\$PATH\"${RESET}\n"
+            printf "    ${BOLD}export PATH=\"%s:\$PATH\"${RESET}\n" "$INSTALL_DIR"
             printf "\n  Then restart your shell or run:\n"
             printf "    ${BOLD}source ~/.bashrc${RESET}  (or ~/.zshrc)\n"
             ;;
     esac
+
+    # Helpful verification that works even before PATH is updated.
+    if ! command -v "$BINARY_NAME" >/dev/null 2>&1; then
+        warn "'${BINARY_NAME}' is not currently resolvable from PATH in this shell"
+        printf "  Try:\n"
+        printf "    ${BOLD}%s --help${RESET}\n" "$DEST"
+    fi
 
     # Done
     printf "\n${GREEN}${BOLD}  Ryvos ${VERSION} installed successfully!${RESET}\n\n"
