@@ -31,6 +31,19 @@ ok()    { printf "${GREEN}  ok${RESET}  %s\n" "$1"; }
 warn()  { printf "${YELLOW}warn${RESET}  %s\n" "$1"; }
 error() { printf "${RED}error${RESET} %s\n" "$1" >&2; exit 1; }
 
+ensure_path_in_file() {
+    file="$1"
+    line="$2"
+    if [ ! -f "$file" ]; then
+        return
+    fi
+    if grep -Fqx "$line" "$file"; then
+        return
+    fi
+    printf "\n%s\n" "$line" >> "$file"
+    ok "Updated ${file} with PATH entry"
+}
+
 # When run with sudo and no explicit install dir, install globally.
 # This avoids writing to /root/.local/bin, which is often not in the caller's PATH.
 if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ -z "${RYVOS_INSTALL_DIR:-}" ]; then
@@ -167,6 +180,17 @@ main() {
             printf "    ${BOLD}export PATH=\"%s:\$PATH\"${RESET}\n" "$INSTALL_DIR"
             printf "\n  Then restart your shell or run:\n"
             printf "    ${BOLD}source ~/.bashrc${RESET}  (or ~/.zshrc)\n"
+
+            # Auto-fix common shell profiles for user-level installs.
+            # This avoids "command not found" on fresh terminals.
+            case "$INSTALL_DIR" in
+                "$HOME"/*)
+                    PATH_LINE="export PATH=\"${INSTALL_DIR}:\$PATH\""
+                    ensure_path_in_file "$HOME/.profile" "$PATH_LINE"
+                    ensure_path_in_file "$HOME/.bashrc" "$PATH_LINE"
+                    ensure_path_in_file "$HOME/.zshrc" "$PATH_LINE"
+                    ;;
+            esac
             ;;
     esac
 
