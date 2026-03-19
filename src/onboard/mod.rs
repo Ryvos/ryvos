@@ -229,6 +229,21 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         None
     };
 
+    let copilot_command = if provider_name == "copilot" || provider_name == "github-copilot" {
+        std::env::var("RYVOS_COPILOT_COMMAND").ok().or_else(|| {
+            std::process::Command::new("which")
+                .arg("copilot")
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        })
+    } else {
+        None
+    };
+
     let mut model = ModelConfig {
         provider: provider_name,
         model_id,
@@ -246,7 +261,7 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         claude_command,
         cli_allowed_tools: vec![],
         cli_permission_mode: None,
-        copilot_command: None,
+        copilot_command,
         cli_session_id: None,
     };
 
@@ -339,6 +354,10 @@ fn resolve_non_interactive_provider(
         "claude-code" | "claude-cli" | "claude-sub" => {
             // Claude Code CLI — no API key needed for subscription billing
             Ok((api_key_flag, None))
+        }
+        "copilot" | "github-copilot" | "copilot-cli" => {
+            // Copilot CLI — subscription based, optional GH token override
+            Ok((api_key_flag.or_else(|| std::env::var("GH_TOKEN").ok()), None))
         }
         _ => {
             // Generic: use provided key or try common env var patterns
@@ -660,7 +679,7 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         claude_command: provider.claude_command,
         cli_allowed_tools: provider.cli_allowed_tools,
         cli_permission_mode: provider.cli_permission_mode,
-        copilot_command: None,
+        copilot_command: provider.copilot_command,
         cli_session_id: None,
     };
     ryvos_llm::apply_preset_defaults(&mut model_config);

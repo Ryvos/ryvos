@@ -6,6 +6,7 @@ pub struct ProviderChoice {
     pub api_key: Option<String>,
     pub base_url: Option<String>,
     pub claude_command: Option<String>,
+    pub copilot_command: Option<String>,
     pub cli_allowed_tools: Vec<String>,
     pub cli_permission_mode: Option<String>,
 }
@@ -29,6 +30,7 @@ pub fn select_provider() -> Result<ProviderChoice> {
         "Vercel AI Gateway (URL + key)",
         "OpenCode Zen (URL + key)",
         "Claude Code (CLI, no API key)",
+        "GitHub Copilot (CLI, no API key)",
         "Ollama (local, no key needed)",
         "Custom (OpenAI-compatible)",
     ];
@@ -81,8 +83,9 @@ pub fn select_provider() -> Result<ProviderChoice> {
         10 => configure_keyed_provider_with_custom_url("ai-gateway", "AI_GATEWAY_API_KEY"),
         11 => configure_keyed_provider_with_custom_url("opencode-zen", "OPENCODE_ZEN_API_KEY"),
         12 => configure_claude_code(),
-        13 => configure_ollama(),
-        14 => configure_custom(),
+        13 => configure_copilot(),
+        14 => configure_ollama(),
+        15 => configure_custom(),
         _ => unreachable!(),
     }
 }
@@ -109,6 +112,7 @@ fn configure_keyed_provider(provider: &str, env_var: &str) -> Result<ProviderCho
         api_key: Some(api_key),
         base_url: None,
         claude_command: None,
+        copilot_command: None,
         cli_allowed_tools: vec![],
         cli_permission_mode: None,
     })
@@ -140,6 +144,7 @@ fn configure_keyed_provider_with_url(
         api_key: Some(api_key),
         base_url: Some(base_url.to_string()),
         claude_command: None,
+        copilot_command: None,
         cli_allowed_tools: vec![],
         cli_permission_mode: None,
     })
@@ -174,6 +179,7 @@ fn configure_keyed_provider_with_custom_url(
         api_key: Some(api_key),
         base_url: Some(base_url),
         claude_command: None,
+        copilot_command: None,
         cli_allowed_tools: vec![],
         cli_permission_mode: None,
     })
@@ -190,6 +196,7 @@ fn configure_ollama() -> Result<ProviderChoice> {
         api_key: None,
         base_url: Some(base_url),
         claude_command: None,
+        copilot_command: None,
         cli_allowed_tools: vec![],
         cli_permission_mode: None,
     })
@@ -216,6 +223,7 @@ fn configure_custom() -> Result<ProviderChoice> {
         api_key,
         base_url: Some(base_url),
         claude_command: None,
+        copilot_command: None,
         cli_allowed_tools: vec![],
         cli_permission_mode: None,
     })
@@ -295,14 +303,60 @@ fn configure_claude_code() -> Result<ProviderChoice> {
         api_key,
         base_url: None,
         claude_command: Some(command),
+        copilot_command: None,
         cli_allowed_tools,
         cli_permission_mode,
     })
 }
 
+fn configure_copilot() -> Result<ProviderChoice> {
+    let detected = detect_binary("copilot");
+
+    match &detected {
+        Some(path) => {
+            let version = std::process::Command::new(path)
+                .arg("--version")
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .unwrap_or_default();
+            let version = version.lines().next().unwrap_or("").trim();
+            if version.is_empty() {
+                println!("  Found Copilot CLI at: {}", path);
+            } else {
+                println!("  Found Copilot CLI at: {} ({})", path, version);
+            }
+        }
+        None => {
+            println!("  \x1b[1;33mWarning:\x1b[0m Copilot CLI not found in PATH.");
+            println!("  Install with: npm i -g @github/copilot");
+        }
+    }
+
+    let default_path = detected.unwrap_or_else(|| "copilot".to_string());
+    let command: String = Input::new()
+        .with_prompt("Copilot CLI path")
+        .default(default_path)
+        .interact_text()?;
+
+    Ok(ProviderChoice {
+        provider: "copilot".to_string(),
+        api_key: None,
+        base_url: None,
+        claude_command: None,
+        copilot_command: Some(command),
+        cli_allowed_tools: vec![],
+        cli_permission_mode: Some("dontAsk".to_string()),
+    })
+}
+
 fn detect_claude_binary() -> Option<String> {
+    detect_binary("claude")
+}
+
+fn detect_binary(bin: &str) -> Option<String> {
     std::process::Command::new("which")
-        .arg("claude")
+        .arg(bin)
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -344,6 +398,10 @@ pub fn select_model(provider: &ProviderChoice) -> Result<ModelChoice> {
                 "default",
                 "Enter manually",
             ],
+            0,
+        ),
+        "copilot" => (
+            vec!["gpt-5", "gpt-5-mini", "o4-mini", "default", "Enter manually"],
             0,
         ),
         "ollama" => (
