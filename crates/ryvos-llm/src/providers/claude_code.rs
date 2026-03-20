@@ -308,14 +308,6 @@ async fn parse_stream_json(
             None
         }
         "result" => {
-            // Extract usage data if present
-            if let Some(usage) = json.get("usage") {
-                let input = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                let output = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                if input > 0 || output > 0 {
-                    return Some(Ok(StreamDelta::Usage { input_tokens: input, output_tokens: output }));
-                }
-            }
             // Final result — extract the accumulated text.
             if let Some(text) = json["result"].as_str() {
                 if !text.is_empty() {
@@ -392,8 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_result_with_usage() {
-        // When usage is present, Usage delta is emitted first
+    fn parse_result_with_text() {
         let json = serde_json::json!({
             "type": "result",
             "subtype": "success",
@@ -401,24 +392,6 @@ mod tests {
             "stop_reason": "end_turn",
             "session_id": "abc-123",
             "usage": {"input_tokens": 100, "output_tokens": 50}
-        });
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let killed = Mutex::new(false);
-        let delta = rt
-            .block_on(parse_stream_json(&json, None, None, &killed))
-            .unwrap()
-            .unwrap();
-        assert!(matches!(delta, StreamDelta::Usage { input_tokens: 100, output_tokens: 50 }));
-    }
-
-    #[test]
-    fn parse_result_with_text_no_usage() {
-        // When no usage, text is extracted
-        let json = serde_json::json!({
-            "type": "result",
-            "subtype": "success",
-            "result": "Hello! How can I help you?",
-            "stop_reason": "end_turn"
         });
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
