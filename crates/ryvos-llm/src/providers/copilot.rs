@@ -179,6 +179,21 @@ async fn parse_copilot_event(
             Some(Ok(StreamDelta::ThinkingDelta(content.to_string())))
         }
         "assistant.message" => {
+            // Check for usage data in the message
+            if let Some(usage) = json.get("data").and_then(|d| d.get("usage"))
+                .or_else(|| json.get("usage"))
+            {
+                let input = usage.get("inputTokens")
+                    .or_else(|| usage.get("input_tokens"))
+                    .and_then(|v| v.as_u64()).unwrap_or(0);
+                let output = usage.get("outputTokens")
+                    .or_else(|| usage.get("output_tokens"))
+                    .and_then(|v| v.as_u64()).unwrap_or(0);
+                if input > 0 || output > 0 {
+                    return Some(Ok(StreamDelta::Usage { input_tokens: input, output_tokens: output }));
+                }
+            }
+
             // Extract ALL tool requests for audit trail / safety memory logging.
             // CLI providers execute tools internally — we can't block, but we CAN log.
             let tool_requests = json
@@ -222,7 +237,38 @@ async fn parse_copilot_event(
             }
             None
         }
+        "assistant.turn_end" => {
+            // Turn ended — this is the completion signal for Copilot CLI.
+            // Copilot never sends a "result" event; it signals turn completion here.
+            // Kill the child process since we only need one turn per agent run.
+            if let Some(pid) = child_id {
+                let mut k = killed.lock().await;
+                if !*k {
+                    *k = true;
+                    // Send SIGTERM to the copilot process
+                    #[cfg(unix)]
+                    {
+                        let _ = std::process::Command::new("kill")
+                            .arg(pid.to_string())
+                            .output();
+                    }
+                }
+            }
+            Some(Ok(StreamDelta::Stop(StopReason::EndTurn)))
+        }
         "result" => {
+            // Extract usage data if present
+            if let Some(usage) = json.get("usage") {
+                let input = usage.get("inputTokens")
+                    .or_else(|| usage.get("input_tokens"))
+                    .and_then(|v| v.as_u64()).unwrap_or(0);
+                let output = usage.get("outputTokens")
+                    .or_else(|| usage.get("output_tokens"))
+                    .and_then(|v| v.as_u64()).unwrap_or(0);
+                if input > 0 || output > 0 {
+                    return Some(Ok(StreamDelta::Usage { input_tokens: input, output_tokens: output }));
+                }
+            }
             if let Some(session_id) = json.get("sessionId").and_then(|s| s.as_str()) {
                 return Some(Ok(StreamDelta::MessageId(session_id.to_string())));
             }
@@ -576,7 +622,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_result_session_id() {
+    fn parse_result_with_usage() {
+        // When usage is present, Usage delta is emitted first
         let json = serde_json::json!({
             "type": "result",
             "sessionId": "sess-xyz-789",
@@ -589,7 +636,39 @@ mod tests {
             .block_on(parse_copilot_event(&json, None, None, &killed))
             .unwrap()
             .unwrap();
+        assert!(matches!(delta, StreamDelta::Usage { input_tokens: 100, output_tokens: 50 }));
+    }
+
+    #[test]
+    fn parse_result_session_id_no_usage() {
+        // Without usage, session ID is extracted
+        let json = serde_json::json!({
+            "type": "result",
+            "sessionId": "sess-xyz-789",
+            "exitCode": 0
+        });
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let killed = Mutex::new(false);
+        let delta = rt
+            .block_on(parse_copilot_event(&json, None, None, &killed))
+            .unwrap()
+            .unwrap();
         assert!(matches!(delta, StreamDelta::MessageId(id) if id == "sess-xyz-789"));
+    }
+
+    #[test]
+    fn parse_turn_end_stops_stream() {
+        let json = serde_json::json!({
+            "type": "assistant.turn_end",
+            "data": { "turnId": "0" }
+        });
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let killed = Mutex::new(false);
+        let delta = rt
+            .block_on(parse_copilot_event(&json, None, None, &killed))
+            .unwrap()
+            .unwrap();
+        assert!(matches!(delta, StreamDelta::Stop(_)));
     }
 
     #[test]

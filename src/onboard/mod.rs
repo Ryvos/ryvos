@@ -724,13 +724,10 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
     health_check::run(&config);
 
     println!();
-    let do_soul = Confirm::new()
-        .with_prompt("Personalize your agent? (5 quick questions)")
-        .default(true)
-        .interact()?;
-    if do_soul {
-        run_soul_interview(&resolve_workspace(&config.agent.workspace))?;
-    }
+    println!("  \x1b[1;36mPersonalization\x1b[0m");
+    println!("  Your agent will interview you naturally on your first");
+    println!("  conversation to build its personality. Just start talking!");
+    println!("  (Run \x1b[1mryvos soul\x1b[0m later if you want the quick 5-question version instead.)");
 
     // Service install (systemd/launchd)
     println!();
