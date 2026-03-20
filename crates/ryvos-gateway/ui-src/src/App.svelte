@@ -32,7 +32,7 @@
     const hash = window.location.hash || '#/chat';
     const parts = hash.replace('#/', '').split('/');
     currentRoute = parts[0] || 'chat';
-    routeParam = parts.slice(1).join('/') || '';
+    routeParam = decodeURIComponent(parts.slice(1).join('/') || '');
   }
 
   function handleLogin(e) {

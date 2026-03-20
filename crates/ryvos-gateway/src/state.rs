@@ -7,7 +7,7 @@ use ryvos_channels::WhatsAppWebhookHandle;
 use ryvos_core::config::{BudgetConfig, GatewayConfig};
 use ryvos_core::event::EventBus;
 use ryvos_core::traits::SessionStore;
-use ryvos_memory::{CostStore, VikingClient};
+use ryvos_memory::{CostStore, SessionMetaStore, VikingClient};
 
 /// Shared application state for axum handlers.
 pub struct AppState {
@@ -24,4 +24,5 @@ pub struct AppState {
     pub audit_trail: Option<Arc<AuditTrail>>,
     pub viking_client: Option<Arc<VikingClient>>,
     pub config_path: Option<PathBuf>,
+    pub session_meta: Option<Arc<SessionMetaStore>>,
 }

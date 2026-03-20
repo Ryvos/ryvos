@@ -108,21 +108,34 @@
   async function loadSessions() {
     try {
       const data = await apiFetch('/api/sessions');
-      sessionList = data.sessions || [];
-    } catch {}
+      const raw = data.sessions || [];
+      // Handle both formats: array of strings OR array of objects with .id
+      sessionList = raw.map(s => typeof s === 'string' ? s : (s.id || s.session_key || String(s)));
+    } catch (e) {
+      console.error('Failed to load sessions:', e);
+    }
   }
 
   async function loadHistory() {
     if (!sessionId) return;
     try {
       const data = await apiFetch(`/api/sessions/${encodeURIComponent(sessionId)}/history?limit=100`);
-      messages = (data.messages || []).map(m => ({
-        role: m.role || 'assistant',
-        text: m.text || '',
-        timestamp: m.timestamp ? new Date(m.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '',
-      }));
+      const raw = data.messages || [];
+      messages = raw
+        .filter(m => m.text && m.text.trim())
+        .map(m => ({
+          role: m.role || 'assistant',
+          text: m.text || '',
+          timestamp: m.timestamp ? new Date(m.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '',
+        }));
+      if (messages.length === 0 && raw.length > 0) {
+        messages = [{ role: 'system', text: `${raw.length} messages in this session contain only tool calls or system data.`, timestamp: '' }];
+      }
       scrollToBottom();
-    } catch {}
+    } catch (e) {
+      console.error('Failed to load history:', e);
+      messages = [{ role: 'system', text: 'Failed to load chat history. Check your connection.', timestamp: '' }];
+    }
   }
 
   function handleSend() {
@@ -174,7 +187,10 @@
     unsubActivity();
   });
 
-  $: if (sessionId) loadHistory();
+  $: if (sessionId) {
+    messages = [];
+    loadHistory();
+  }
   $: scrollToBottom(), currentStreamText;
 </script>
 

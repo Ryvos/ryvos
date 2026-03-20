@@ -32,6 +32,30 @@ pub async fn list_sessions(
         return Err(StatusCode::FORBIDDEN);
     }
     let keys = state.session_mgr.list();
+
+    // If session_meta is available, return rich metadata
+    if let Some(ref meta_store) = state.session_meta {
+        let sessions: Vec<serde_json::Value> = keys
+            .iter()
+            .map(|key| {
+                let meta = meta_store.get(key).ok().flatten();
+                if let Some(m) = meta {
+                    serde_json::json!({
+                        "id": key,
+                        "session_id": m.session_id,
+                        "channel": m.channel,
+                        "last_active": m.last_active,
+                        "total_runs": m.total_runs,
+                        "total_tokens": m.total_tokens,
+                    })
+                } else {
+                    serde_json::json!({ "id": key })
+                }
+            })
+            .collect();
+        return Ok(Json(serde_json::json!({ "sessions": sessions })));
+    }
+
     Ok(Json(serde_json::json!({ "sessions": keys })))
 }
 
@@ -56,7 +80,18 @@ pub async fn session_history(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let session_id = SessionId::from_string(&id);
+    // Resolve session key → actual session_id via meta store
+    let resolved_id = if let Some(ref meta_store) = state.session_meta {
+        meta_store
+            .get(&id)
+            .ok()
+            .flatten()
+            .map(|m| m.session_id)
+            .unwrap_or_else(|| id.clone())
+    } else {
+        id.clone()
+    };
+    let session_id = SessionId::from_string(&resolved_id);
     match state.store.load_history(&session_id, q.limit).await {
         Ok(messages) => {
             let msgs: Vec<serde_json::Value> = messages

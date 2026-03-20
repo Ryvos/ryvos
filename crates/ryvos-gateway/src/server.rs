@@ -13,7 +13,7 @@ use ryvos_channels::WhatsAppWebhookHandle;
 use ryvos_core::config::{BudgetConfig, GatewayConfig};
 use ryvos_core::event::EventBus;
 use ryvos_core::traits::SessionStore;
-use ryvos_memory::{CostStore, VikingClient};
+use ryvos_memory::{CostStore, SessionMetaStore, VikingClient};
 
 use crate::routes;
 use crate::state::AppState;
@@ -34,6 +34,7 @@ pub struct GatewayServer {
     audit_trail: Option<Arc<AuditTrail>>,
     viking_client: Option<Arc<VikingClient>>,
     config_path: Option<std::path::PathBuf>,
+    session_meta: Option<Arc<SessionMetaStore>>,
 }
 
 impl GatewayServer {
@@ -59,6 +60,7 @@ impl GatewayServer {
             audit_trail: None,
             viking_client: None,
             config_path: None,
+            session_meta: None,
         }
     }
 
@@ -92,6 +94,11 @@ impl GatewayServer {
         self.config_path = Some(path);
     }
 
+    /// Set the session meta store for resolving session keys to IDs.
+    pub fn set_session_meta(&mut self, meta: Arc<SessionMetaStore>) {
+        self.session_meta = Some(meta);
+    }
+
     /// Run the gateway server until the cancellation token is triggered.
     pub async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()> {
         let state = Arc::new(AppState {
@@ -108,6 +115,7 @@ impl GatewayServer {
             audit_trail: self.audit_trail.clone(),
             viking_client: self.viking_client.clone(),
             config_path: self.config_path.clone(),
+            session_meta: self.session_meta.clone(),
         });
 
         let app = Router::new()

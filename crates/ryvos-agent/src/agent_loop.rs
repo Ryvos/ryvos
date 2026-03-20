@@ -232,6 +232,11 @@ impl AgentRuntime {
                 ryvos_llm::providers::claude_code::ClaudeCodeClient::detect_billing_type(
                     &self.config.model,
                 )
+            } else if self.config.model.provider == "copilot"
+                || self.config.model.provider == "github-copilot"
+                || self.config.model.provider == "copilot-cli"
+            {
+                BillingType::Subscription
             } else {
                 BillingType::Api
             };

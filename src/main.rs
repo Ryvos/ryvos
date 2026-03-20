@@ -920,6 +920,7 @@ async fn main() -> anyhow::Result<()> {
                     server.set_viking_client(vc.clone());
                 }
                 server.set_config_path(cli.config.clone());
+                server.set_session_meta(session_meta.clone());
 
                 // Wire WhatsApp webhook handle into gateway if configured
                 if let Some(ref wa_config) = config.channels.whatsapp {
