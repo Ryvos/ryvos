@@ -54,7 +54,7 @@
   <div class="flex items-center gap-2.5 px-5 py-4">
     <img src={logoUrl} alt="Ryvos" class="w-7 h-7 rounded-sm" />
     <span class="text-lg font-bold tracking-tight text-[#E8E4E0]">Ryvos</span>
-    <span class="text-[0.6rem] font-semibold text-[#F07030] bg-[#F07030]/10 px-2 py-0.5 rounded-full">v0.6.4</span>
+    <span class="text-[0.6rem] font-semibold text-[#F07030] bg-[#F07030]/10 px-2 py-0.5 rounded-full">v0.6.5</span>
   </div>
 
   <!-- Nav -->
