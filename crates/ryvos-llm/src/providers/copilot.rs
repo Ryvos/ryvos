@@ -112,7 +112,6 @@ fn build_args(config: &ModelConfig, prompt: &str, system_context: &str) -> Vec<S
         "--silent".to_string(),
         "--no-color".to_string(),
         "--no-ask-user".to_string(),
-        "--autopilot".to_string(),
     ];
 
     // Tool permissions
@@ -156,10 +155,16 @@ async fn parse_copilot_event(
     matcher: Option<&DangerousPatternMatcher>,
     child_id: Option<u32>,
     killed: &Mutex<bool>,
+    saw_text_delta: &Mutex<bool>,
 ) -> Option<Result<StreamDelta>> {
     let event_type = json["type"].as_str()?;
 
     match event_type {
+        "assistant.turn_start" => {
+            let mut seen = saw_text_delta.lock().await;
+            *seen = false;
+            None
+        }
         "assistant.message_delta" => {
             let content = json
                 .get("data")
@@ -167,6 +172,8 @@ async fn parse_copilot_event(
             if content.is_empty() {
                 return None;
             }
+            let mut seen = saw_text_delta.lock().await;
+            *seen = true;
             Some(Ok(StreamDelta::TextDelta(content.to_string())))
         }
         "assistant.reasoning_delta" => {
@@ -179,6 +186,27 @@ async fn parse_copilot_event(
             Some(Ok(StreamDelta::ThinkingDelta(content.to_string())))
         }
         "assistant.message" => {
+            let saw_delta = *saw_text_delta.lock().await;
+            let tool_requests = json
+                .get("data")
+                .and_then(|d| d.get("toolRequests"))
+                .and_then(|t| t.as_array());
+            let has_tool_requests = tool_requests.is_some_and(|r| !r.is_empty());
+
+            // Prefer returning a user-visible text reply when present.
+            // When toolRequests are present, Copilot may still include the final
+            // natural-language response only in assistant.message.
+            if let Some(content) = json
+                .get("data")
+                .and_then(|d| d.get("content"))
+                .and_then(|v| v.as_str())
+            {
+                let clean = strip_ansi_escapes(content).trim().to_string();
+                if !clean.is_empty() && (!saw_delta || has_tool_requests) {
+                    return Some(Ok(StreamDelta::TextDelta(clean)));
+                }
+            }
+
             // Check for usage data in the message
             if let Some(usage) = json.get("data").and_then(|d| d.get("usage"))
                 .or_else(|| json.get("usage"))
@@ -196,11 +224,6 @@ async fn parse_copilot_event(
 
             // Extract ALL tool requests for audit trail / safety memory logging.
             // CLI providers execute tools internally — we can't block, but we CAN log.
-            let tool_requests = json
-                .get("data")
-                .and_then(|d| d.get("toolRequests"))
-                .and_then(|t| t.as_array());
-
             if let Some(requests) = tool_requests {
                 for req in requests {
                     let tool_name = req["toolName"].as_str().unwrap_or("unknown");
@@ -329,6 +352,7 @@ impl LlmClient for CopilotClient {
             // Share the child PID so the stream can kill it if needed
             let child_id = child.id();
             let killed = Arc::new(Mutex::new(false));
+            let saw_text_delta = Arc::new(Mutex::new(false));
 
             // Drain stderr in background
             let stderr = child.stderr.take();
@@ -356,6 +380,7 @@ impl LlmClient for CopilotClient {
                     move |line_result: std::result::Result<String, std::io::Error>| {
                         let matcher = matcher.clone();
                         let killed = killed.clone();
+                        let saw_text_delta = saw_text_delta.clone();
 
                         async move {
                             let line: String = match line_result {
@@ -376,7 +401,14 @@ impl LlmClient for CopilotClient {
                                 Err(_) => return None,
                             };
 
-                            parse_copilot_event(&json, matcher.as_deref(), child_id, &killed).await
+                            parse_copilot_event(
+                                &json,
+                                matcher.as_deref(),
+                                child_id,
+                                &killed,
+                                &saw_text_delta,
+                            )
+                            .await
                         }
                     },
                 )
@@ -459,7 +491,6 @@ mod tests {
         assert!(args.contains(&"--silent".to_string()));
         assert!(args.contains(&"--no-color".to_string()));
         assert!(args.contains(&"--no-ask-user".to_string()));
-        assert!(args.contains(&"--autopilot".to_string()));
     }
 
     #[test]
@@ -527,8 +558,15 @@ mod tests {
         });
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
+        let saw_text_delta = Mutex::new(false);
         let delta = rt
-            .block_on(parse_copilot_event(&json, None, None, &killed))
+            .block_on(parse_copilot_event(
+                &json,
+                None,
+                None,
+                &killed,
+                &saw_text_delta,
+            ))
             .unwrap()
             .unwrap();
         assert!(matches!(delta, StreamDelta::TextDelta(t) if t == "Hello world"));
@@ -542,8 +580,15 @@ mod tests {
         });
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
+        let saw_text_delta = Mutex::new(false);
         let delta = rt
-            .block_on(parse_copilot_event(&json, None, None, &killed))
+            .block_on(parse_copilot_event(
+                &json,
+                None,
+                None,
+                &killed,
+                &saw_text_delta,
+            ))
             .unwrap()
             .unwrap();
         assert!(matches!(delta, StreamDelta::ThinkingDelta(t) if t == "Let me think..."));
@@ -564,8 +609,15 @@ mod tests {
         let matcher = DangerousPatternMatcher::new(&patterns);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
+        let saw_text_delta = Mutex::new(false);
         // All tool requests now emit CliToolExecuted for audit logging
-        let result = rt.block_on(parse_copilot_event(&json, Some(&matcher), None, &killed));
+        let result = rt.block_on(parse_copilot_event(
+            &json,
+            Some(&matcher),
+            None,
+            &killed,
+            &saw_text_delta,
+        ));
         assert!(result.is_some());
         let delta = result.unwrap().unwrap();
         assert!(matches!(delta, StreamDelta::CliToolExecuted { .. }));
@@ -588,8 +640,15 @@ mod tests {
         let matcher = DangerousPatternMatcher::new(&patterns);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
+        let saw_text_delta = Mutex::new(false);
         let result = rt
-            .block_on(parse_copilot_event(&json, Some(&matcher), None, &killed));
+            .block_on(parse_copilot_event(
+                &json,
+                Some(&matcher),
+                None,
+                &killed,
+                &saw_text_delta,
+            ));
         // No patterns → no blocking → process is NOT killed
         assert!(!*rt.block_on(killed.lock()), "should not kill process with no patterns");
         // result may be None or Some(Ok(_))
@@ -609,8 +668,15 @@ mod tests {
         });
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
+        let saw_text_delta = Mutex::new(false);
         let delta = rt
-            .block_on(parse_copilot_event(&json, None, None, &killed))
+            .block_on(parse_copilot_event(
+                &json,
+                None,
+                None,
+                &killed,
+                &saw_text_delta,
+            ))
             .unwrap()
             .unwrap();
         assert!(matches!(delta, StreamDelta::MessageId(id) if id == "sess-xyz-789"));
@@ -625,8 +691,15 @@ mod tests {
         });
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
+        let saw_text_delta = Mutex::new(false);
         assert!(rt
-            .block_on(parse_copilot_event(&json, None, None, &killed))
+            .block_on(parse_copilot_event(
+                &json,
+                None,
+                None,
+                &killed,
+                &saw_text_delta,
+            ))
             .is_none());
     }
 
@@ -639,8 +712,15 @@ mod tests {
         });
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
+        let saw_text_delta = Mutex::new(false);
         let delta = rt
-            .block_on(parse_copilot_event(&json, None, None, &killed))
+            .block_on(parse_copilot_event(
+                &json,
+                None,
+                None,
+                &killed,
+                &saw_text_delta,
+            ))
             .unwrap()
             .unwrap();
         assert!(matches!(delta, StreamDelta::MessageId(id) if id == "sess-abc-123"));
@@ -654,8 +734,15 @@ mod tests {
         });
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
+        let saw_text_delta = Mutex::new(false);
         let delta = rt
-            .block_on(parse_copilot_event(&json, None, None, &killed))
+            .block_on(parse_copilot_event(
+                &json,
+                None,
+                None,
+                &killed,
+                &saw_text_delta,
+            ))
             .unwrap()
             .unwrap();
         assert!(matches!(delta, StreamDelta::Stop(_)));
@@ -666,14 +753,65 @@ mod tests {
         let json = serde_json::json!({"type": "session.tools_updated"});
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
+        let saw_text_delta = Mutex::new(false);
         assert!(rt
-            .block_on(parse_copilot_event(&json, None, None, &killed))
+            .block_on(parse_copilot_event(
+                &json,
+                None,
+                None,
+                &killed,
+                &saw_text_delta,
+            ))
             .is_none());
 
         let json2 = serde_json::json!({"type": "assistant.turn_start"});
         assert!(rt
-            .block_on(parse_copilot_event(&json2, None, None, &killed))
+            .block_on(parse_copilot_event(
+                &json2,
+                None,
+                None,
+                &killed,
+                &saw_text_delta,
+            ))
             .is_none());
+    }
+
+    #[test]
+    fn parse_message_content_when_no_delta() {
+        let turn_start = serde_json::json!({
+            "type": "assistant.turn_start",
+            "data": { "turnId": "0" }
+        });
+        let message = serde_json::json!({
+            "type": "assistant.message",
+            "data": { "content": "Final text only", "toolRequests": [] }
+        });
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let killed = Mutex::new(false);
+        let saw_text_delta = Mutex::new(false);
+
+        assert!(rt
+            .block_on(parse_copilot_event(
+                &turn_start,
+                None,
+                None,
+                &killed,
+                &saw_text_delta,
+            ))
+            .is_none());
+
+        let delta = rt
+            .block_on(parse_copilot_event(
+                &message,
+                None,
+                None,
+                &killed,
+                &saw_text_delta,
+            ))
+            .unwrap()
+            .unwrap();
+        assert!(matches!(delta, StreamDelta::TextDelta(t) if t == "Final text only"));
     }
 
     // ── Billing type test ──
