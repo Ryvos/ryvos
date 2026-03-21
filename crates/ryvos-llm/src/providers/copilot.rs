@@ -596,10 +596,10 @@ mod tests {
 
     #[test]
     fn parse_message_tool_emits_cli_executed() {
+        // When assistant.message has no content text, tool requests emit CliToolExecuted
         let json = serde_json::json!({
             "type": "assistant.message",
             "data": {
-                "content": "I'll list the files.",
                 "toolRequests": [
                     { "toolName": "Bash", "input": { "command": "ls -la" } }
                 ]
@@ -609,8 +609,7 @@ mod tests {
         let matcher = DangerousPatternMatcher::new(&patterns);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
-        let saw_text_delta = Mutex::new(false);
-        // All tool requests now emit CliToolExecuted for audit logging
+        let saw_text_delta = Mutex::new(true);
         let result = rt.block_on(parse_copilot_event(
             &json,
             Some(&matcher),
