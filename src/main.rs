@@ -591,7 +591,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Initialize OpenViking client if configured
-    let viking_client: Option<Arc<ryvos_memory::VikingClient>> =
+    let mut viking_client: Option<Arc<ryvos_memory::VikingClient>> =
         if let Some(ref ov_config) = config.openviking {
             if ov_config.enabled {
                 let client = ryvos_memory::VikingClient::new(&ov_config.base_url, &ov_config.user_id);
@@ -831,8 +831,19 @@ async fn main() -> anyhow::Result<()> {
                     let viking_cancel = cancel.clone();
                     viking_server::spawn_background(bind, db_path, viking_cancel);
                     // Give the server a moment to bind
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                     info!("Viking server auto-started in daemon mode");
+
+                    // Retry Viking client connection now that server is up
+                    if viking_client.is_none() {
+                        let client = ryvos_memory::VikingClient::new(&ov_config.base_url, &ov_config.user_id);
+                        if client.health().await {
+                            info!(url = %ov_config.base_url, "OpenViking connected (after auto-start)");
+                            viking_client = Some(Arc::new(client));
+                        } else {
+                            warn!("OpenViking still unreachable after auto-start");
+                        }
+                    }
                 }
             }
 
