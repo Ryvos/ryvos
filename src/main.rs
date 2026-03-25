@@ -582,15 +582,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let runtime = Arc::new(runtime_inner);
-
-    // Wire agent spawner: give runtime a self-reference for sub-agent tools
-    {
-        let spawner_ref = runtime.clone() as Arc<dyn ryvos_core::types::AgentSpawner>;
-        *runtime.spawner.lock().await = Some(spawner_ref);
-    }
-
-    // Initialize OpenViking client if configured
+    // Initialize OpenViking client if configured (must happen before Arc-wrapping runtime)
     let mut viking_client: Option<Arc<ryvos_memory::VikingClient>> =
         if let Some(ref ov_config) = config.openviking {
             if ov_config.enabled {
@@ -608,6 +600,19 @@ async fn main() -> anyhow::Result<()> {
         } else {
             None
         };
+
+    // Wire Viking client into agent runtime so tools get it via ToolContext
+    if let Some(ref vc) = viking_client {
+        runtime_inner.set_viking_client(vc.clone());
+    }
+
+    let runtime = Arc::new(runtime_inner);
+
+    // Wire agent spawner: give runtime a self-reference for sub-agent tools
+    {
+        let spawner_ref = runtime.clone() as Arc<dyn ryvos_core::types::AgentSpawner>;
+        *runtime.spawner.lock().await = Some(spawner_ref);
+    }
 
     info!(
         guardian = config.agent.guardian.enabled,
