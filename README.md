@@ -4,7 +4,7 @@
 
 # Ryvos
 
-### Open-source AI agent runtime built in Rust. Self-hosted. 15–30 MB RAM. 14 LLM providers.
+### Open-source AI agent runtime built in Rust. Self-hosted. 15–30 MB RAM. 18+ LLM providers.
 
 [![GitHub Stars](https://img.shields.io/github/stars/Ryvos/ryvos?style=flat&color=yellow)](https://github.com/Ryvos/ryvos/stargazers)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -13,9 +13,11 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/Ryvos/ryvos/ci.yml?label=CI)](https://github.com/Ryvos/ryvos/actions)
 [![Platform: Linux macOS](https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey.svg)](#quick-start)
 
-**Goal-Driven Agents · 14 LLM Providers · 62 Tools · DAG Workflows · MCP-Native · 5-Tier Security · Single Binary**
+**Goal-Driven Agents · 18+ LLM Providers · 86+ Tools · DAG Workflows · MCP-Native · Constitutional AI Safety · Single Binary**
 
-[Quick Start](#quick-start) · [Why Ryvos](#why-ryvos) · [Features](#features) · [Architecture](#architecture) · [Security](#security-model) · [Roadmap](#roadmap)
+[Quick Start](#quick-start) · [Why Ryvos](#why-ryvos) · [Features](#features) · [Architecture](#architecture) · [Security](#security) · [Roadmap](#roadmap)
+
+[Website](https://ryvos.dev) · [Cloud](https://cloud.ryvos.dev) · [Docs](https://ryvos.dev/docs)
 
 </div>
 
@@ -41,13 +43,13 @@ Ryvos is a complete reimagination — built in Rust from scratch as a true **aut
 | **Language** | TypeScript / Python | **Rust** |
 | **Memory (idle)** | 200–500 MB | **15–30 MB** |
 | **Execution model** | Run until max_turns | **Goal-driven with Judge verdict** |
-| **Tool security** | None (arbitrary code) | **5-tier + Docker sandboxing** |
+| **Tool security** | None (arbitrary code) | **Constitutional AI safety + Docker sandboxing** |
 | **Dangerous command detection** | None | **9 built-in patterns (rm -rf, DROP TABLE, curl\|bash…)** |
 | **Deployment** | npm/pip + runtime + Docker | **Single static binary** |
 | **MCP support** | Plugin/community | **Native (stdio + SSE/Streamable HTTP)** |
 | **Parallel tool execution** | Rare | **Built-in** |
 | **Multi-agent workflows** | Separate orchestration layer | **Built-in DAG engine + orchestrator** |
-| **Channel adapters** | Separate projects | **Built-in (Telegram, Discord, Slack)** |
+| **Channel adapters** | Separate projects | **Built-in (Telegram, Discord, Slack, WhatsApp)** |
 | **HTTP Gateway** | Separate project | **Built-in with Web UI + RBAC** |
 
 If you've used Claude Code, Aider, or Cursor and wanted something lighter, self-hosted, or with a proper security model — Ryvos is built for you.
@@ -56,7 +58,7 @@ If you've used Claude Code, Aider, or Cursor and wanted something lighter, self-
 
 ## What is Ryvos?
 
-Ryvos is an open-source, autonomous AI coding assistant and agent runtime you run on your own hardware. It connects to **14 LLM providers** (Anthropic, OpenAI, Gemini, Azure, Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek), executes tasks through **62 sandboxed tools**, and reaches you on the channels you already use — Telegram, Discord, Slack, Webhooks — plus a built-in Web UI and terminal interface.
+Ryvos is an open-source, autonomous AI coding assistant and agent runtime you run on your own hardware. It connects to **18+ LLM providers** (Anthropic, OpenAI, Gemini, Azure, Cohere, Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek, Bedrock, Claude Code, GitHub Copilot), executes tasks through **86+ sandboxed tools**, and reaches you on the channels you already use — Telegram, Discord, Slack, WhatsApp, Webhooks — plus a built-in Web UI and terminal interface.
 
 Written in **Rust**. Ships as a **single binary**. Uses **15–30 MB of RAM**.
 
@@ -73,7 +75,7 @@ Written in **Rust**. Ships as a **single binary**. Uses **15–30 MB of RAM**.
 ### Autonomous AI Agent
 - **ReAct agent loop** with tool use, reflexion, and streaming responses
 - **Parallel tool execution** — multiple tools run concurrently when independent
-- **14 LLM providers** — Anthropic, OpenAI, Gemini, Azure, Cohere, Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek
+- **18+ LLM providers** — Anthropic, OpenAI, Gemini, Azure, Cohere, Ollama, Groq, OpenRouter, Together, Fireworks, Cerebras, xAI, Mistral, Perplexity, DeepSeek, Bedrock, Claude Code, GitHub Copilot
 - **Session persistence** — SQLite-backed conversation history and memory across restarts
 - **Sub-agent spawning** — delegate tasks to child agents with stricter security
 - **Lifecycle hooks** — trigger shell commands on start, message, tool call, response, turn complete, tool error, session start/end
@@ -89,7 +91,7 @@ Written in **Rust**. Ships as a **single binary**. Uses **15–30 MB of RAM**.
 - **Multi-agent orchestrator** — capability-based routing with `Parallel`, `Relay`, and `Broadcast` dispatch modes
 
 ### Multi-Channel Inbox
-- **Telegram, Discord, Slack** — talk to your AI assistant on the platforms you already use
+- **Telegram, Discord, Slack, WhatsApp** — talk to your AI assistant on the platforms you already use
 - **Per-channel DM policies** — allowlist, open, or disabled access control per channel
 - **HTTP/WebSocket Gateway** — Axum-based server with embedded Web UI for browser access
 - **Terminal UI** — full ratatui-based TUI with adaptive banner and streaming output
@@ -98,13 +100,14 @@ Written in **Rust**. Ships as a **single binary**. Uses **15–30 MB of RAM**.
 - **Cron scheduler** — recurring tasks with cron expressions, persistent across restarts
 - **Heartbeat** — periodic proactive agent checks with smart suppression and alert routing
 
-### Security (Built-in, Not Bolted-on)
-- **5-tier tool classification** (T0 safe → T4 critical) with automatic tier escalation
-- **Dangerous pattern detection** — regex-based detection of destructive commands before execution
+### Security (Constitutional AI Safety)
+- **Constitutional self-learning safety** — the agent reasons about every action using 7 built-in principles
+- **No tool is ever blocked** — safety comes from understanding, not prohibition
+- **Safety Memory** — the agent learns from past mistakes via SafetyMemory corrective rules
+- **Dangerous pattern detection** — 9 built-in patterns trigger explicit constitutional reasoning
 - **Docker sandboxing** — optional container isolation with memory limits, network isolation, and timeouts
-- **Human-in-the-loop approval** — configurable approval flows for high-risk tool calls
-- **Sandboxed skills** — user extensions run in Lua/Rhai, not arbitrary system code
-- **Sub-agent restrictions** — spawned agents default to stricter security policies
+- **Optional checkpoints** — configure `pause_before` for tools that should wait for human acknowledgment
+- **Budget enforcement** — monthly dollar limits with soft warnings and hard stops
 - **Guardian watchdog** — detects stalls, doom loops (same tool called repeatedly), and budget overruns; injects corrective hints
 
 ### Observability
@@ -114,13 +117,31 @@ Written in **Rust**. Ships as a **single binary**. Uses **15–30 MB of RAM**.
 - **Goal evaluation events** — stream `GoalEvaluated` and `JudgeVerdict` events to TUI, gateway, or custom subscribers
 - **Token usage tracking** — per-turn and per-run input/output token counts
 
-### Tools & Extensibility (62 Built-in Tools)
-- **62 built-in tools** — shell, file I/O, git, code analysis, network/HTTP, system, data transform, scheduling, database, sessions, memory, notifications
+### Tools & Extensibility (86+ Built-in Tools)
+- **86+ built-in tools** — shell, file I/O, git, code analysis, network/HTTP, system, data transform, scheduling, database, sessions, memory, notifications, browser, and more across 18 categories
 - **MCP-native** — connect to any Model Context Protocol server (stdio + SSE/Streamable HTTP transports)
 - **Drop-in skills** — Lua/Rhai scripts in `~/.ryvos/skills/` with manifest-declared schemas and sandbox requirements
 - **Tool registry** — built-in tools + custom tools via MCP or skills
 - **Role-based API keys** — Viewer, Operator, Admin roles for gateway access
 - **Soul interview** — `ryvos soul` runs a 5-question personality interview that generates SOUL.md, shaping agent tone, proactivity, and operator context
+
+### Viking Memory
+- **Hierarchical context database** — L0/L1/L2 tiered loading with FTS search for fast, relevant context retrieval
+
+### Browser Automation
+- **5 browser tools** — navigate, screenshot, click, type, extract (powered by Chromium)
+
+### WhatsApp Channel
+- **Cloud API adapter** for WhatsApp Business — full bidirectional messaging
+
+### Budget System
+- **Monthly dollar limits** with configurable warn/hard-stop thresholds
+
+### Semantic Memory
+- **Embedding-based search** for long-term context retrieval across sessions
+
+### Constitutional AI Safety
+- **Self-learning safety** with 7 principles and SafetyMemory — the agent improves its safety behavior over time
 
 ---
 
@@ -133,7 +154,7 @@ Written in **Rust**. Ships as a **single binary**. Uses **15–30 MB of RAM**.
 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
 
 # Pin a specific version
-RYVOS_VERSION=v0.5.0 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
+RYVOS_VERSION=v0.6.5 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
 
 # Custom install directory
 RYVOS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
@@ -149,9 +170,9 @@ cargo install --path .
 
 <div align="center">
 
-<img src="docs/demo.gif" alt="Ryvos demo — security gate blocks rm -rf" width="720">
+<img src="docs/demo.gif" alt="Ryvos demo — constitutional safety evaluates every action" width="720">
 
-*Security gate auto-blocks dangerous commands (T4) — no confirmation needed.*
+*Constitutional safety evaluates every action with full audit logging*
 
 </div>
 
@@ -176,7 +197,7 @@ ryvos tui
 # Start the Web UI + HTTP/WebSocket gateway
 ryvos serve
 
-# Always-on: Telegram + Discord + Slack + gateway in one process
+# Always-on: Telegram + Discord + Slack + WhatsApp + gateway in one process
 ryvos daemon --gateway
 
 # Check system health
@@ -206,7 +227,7 @@ ryvos completions fish > ~/.config/fish/completions/ryvos.fish             # fis
 | `ryvos run <prompt>` | Ask a question, get an answer, exit |
 | `ryvos tui` | Terminal UI with streaming output |
 | `ryvos serve` | Web UI + HTTP/WebSocket gateway |
-| `ryvos daemon` | Always-on assistant (Telegram, Discord, Slack) |
+| `ryvos daemon` | Always-on assistant (Telegram, Discord, Slack, WhatsApp) |
 | `ryvos daemon --gateway` | Always-on + Web UI in one process |
 | `ryvos init` | Interactive setup wizard |
 | `ryvos init -y` | Non-interactive setup with defaults |
@@ -229,8 +250,8 @@ Ryvos is a Cargo workspace with 10 crates. Together they form a complete autonom
 │                     ryvos (CLI)                     │
 ├──────────┬──────────┬───────────┬───────────────────┤
 │ ryvos-tui│  ryvos-  │  ryvos-   │  ryvos-channels   │
-│  (TUI)   │ gateway  │  agent    │ (Telegram/Discord/ │
-│          │(HTTP/WS) │           │      Slack)        │
+│  (TUI)   │ gateway  │  agent    │(Telegram/Discord/  │
+│          │(HTTP/WS) │           │ Slack/WhatsApp)    │
 ├──────────┴──────────┤           ├───────────────────┤
 │    ryvos-skills     │           │    ryvos-mcp      │
 │  (Lua/Rhai loader)  │           │  (MCP client)     │
@@ -248,68 +269,39 @@ Ryvos is a Cargo workspace with 10 crates. Together they form a complete autonom
 | Crate | Purpose |
 |-------|---------|
 | `ryvos-core` | Config, error types, scoped event bus, security policy, goal system, traits |
-| `ryvos-llm` | LLM client abstraction with streaming support (14 providers) |
-| `ryvos-tools` | Tool registry, 62 built-in tools across 11 categories |
+| `ryvos-llm` | LLM client abstraction with streaming support (18+ providers) |
+| `ryvos-tools` | Tool registry, 86+ built-in tools across 18 categories |
 | `ryvos-agent` | ReAct loop, SecurityGate, ApprovalBroker, Guardian watchdog, Judge, GoalEvaluator, OutputValidator, CheckpointStore, RunLogger, CronScheduler, GraphExecutor, MultiAgentOrchestrator |
 | `ryvos-memory` | SQLite-backed session and history storage |
 | `ryvos-gateway` | Axum HTTP/WS server, Web UI, role-based auth middleware |
-| `ryvos-channels` | Telegram, Discord, Slack adapters with DM policy enforcement |
+| `ryvos-channels` | Telegram, Discord, Slack, WhatsApp adapters with DM policy enforcement |
 | `ryvos-mcp` | MCP client (stdio + SSE transports) with sampling control |
 | `ryvos-skills` | Drop-in skill loader (Lua/Rhai) with manifest validation |
 | `ryvos-tui` | Terminal UI built on ratatui with adaptive banner |
 
 ---
 
-## Security Model
+## Security
 
-Security is enforced at the **SecurityGate middleware** — every tool call passes through it before execution.
+Ryvos uses a **constitutional self-learning safety model** — the agent reasons about the appropriateness of every action using 7 built-in principles.
 
-### Tool Tier System
+**No tool is ever blocked.** Safety comes from understanding, not prohibition.
 
-| Tier | Risk Level | Example | Default Policy |
-|------|-----------|---------|----------------|
-| T0 | Safe | Read file, list directory | Auto-approve |
-| T1 | Low | Web search, read URL | Auto-approve |
-| T2 | Medium | Write file, edit file | Needs approval |
-| T3 | High | Shell command, spawn agent | Needs approval |
-| T4 | Critical | rm -rf, DROP TABLE, curl\|bash | Deny |
+### How It Works
 
-### Dangerous Pattern Detection
+1. **Tool classification** — every tool has a security tier (T0 safe → T4 critical) for audit and context
+2. **Constitutional reasoning** — the agent evaluates each action against 7 principles: Preservation, Intent Match, Proportionality, Transparency, Boundaries, Secrets, Learning
+3. **Safety Memory** — the agent learns from past mistakes. SafetyMemory stores lessons as corrective rules that improve behavior over time
+4. **Full audit trail** — every tool call is logged with input, output, safety reasoning, and outcome
 
-The SecurityGate inspects tool inputs with regex patterns and **automatically escalates** to T4:
+### Additional Safety Layers
 
-```
-rm -rf    git --force    DROP TABLE    chmod 777
-mkfs      dd             >/dev/*       curl|bash    wget|sh
-```
+- **Dangerous pattern detection** — 9 built-in patterns (rm -rf, DROP TABLE, curl|bash, etc.) trigger explicit constitutional reasoning
+- **Docker sandboxing** — optional isolated execution for file system and network operations
+- **Optional checkpoints** — configure `pause_before` for tools that should wait for human acknowledgment
+- **Budget enforcement** — monthly dollar limits with soft warnings and hard stops
 
-### Docker Sandboxing
-
-```toml
-[agent.sandbox]
-enabled = true
-memory_mb = 512
-timeout_secs = 120
-network = "none"        # No network access
-mount_workspace = true  # Only mount the agent workspace
-```
-
-### Human-in-the-Loop Approval
-
-High-risk tool calls pause and wait for explicit approval — via REPL prompt, TUI dialog, Discord button, Telegram message, or gateway WebSocket:
-
-```toml
-[security]
-auto_approve_up_to = "t1"    # t0-t1 run automatically
-deny_above = "t3"            # t4 blocked outright (default)
-approval_timeout_secs = 60   # Unapproved requests timeout
-```
-
-The gate is **fail-closed** — if a tool call's arguments can't be parsed, it escalates to T4 and denies rather than silently allowing.
-
-### Sub-Agent Restrictions
-
-Agents that spawn child agents automatically apply a **stricter policy** — preventing privilege escalation through agent chains.
+> The old tier-based blocking system has been replaced. Tiers are retained for classification and backward compatibility, but they do not gate execution. See the [security documentation](https://ryvos.dev/docs/security/overview) for details.
 
 ---
 
@@ -345,9 +337,10 @@ api_key = "${ANTHROPIC_API_KEY}"
 # model_id = "qwen2.5:7b"
 
 [security]
-auto_approve_up_to = "t1"
-deny_above = "t4"
-approval_timeout_secs = 60
+mode = "constitutional"       # constitutional | legacy-tier
+pause_before = ["shell_exec"] # optional human checkpoints
+budget_monthly_usd = 50.0
+budget_warn_pct = 80
 
 [gateway]
 bind = "127.0.0.1:18789"
@@ -387,16 +380,17 @@ transport = { type = "stdio", command = "npx", args = ["-y", "@modelcontextproto
 - [x] Multi-channel inbox (Telegram, Discord, Slack)
 - [x] HTTP/WebSocket gateway with Web UI
 - [x] Heartbeat system with smart suppression and alert routing
+- [x] WhatsApp channel adapter (shipped in v0.5.0)
+- [x] Browser control — navigate, click, extract, screenshot (shipped in v0.5.0)
+- [x] Ryvos Cloud — hosted assistant with managed sessions (in preview at [cloud.ryvos.dev](https://cloud.ryvos.dev))
 
 ### Upcoming
 - [ ] Pre-built binaries (Windows, macOS, Linux) via GitHub Releases
 - [ ] `cargo install ryvos` from crates.io
-- [ ] WhatsApp, Signal, iMessage, and Google Chat channel adapters
+- [ ] Signal, iMessage, and Google Chat channel adapters
 - [ ] Voice mode — wake word detection + speech-to-text + TTS
 - [ ] Mobile companion apps (iOS, Android) via WebSocket
-- [ ] Browser control — navigate, click, extract, screenshot
 - [ ] Live Canvas — real-time document/artifact editing in Web UI
-- [ ] Ryvos Cloud — hosted assistant with managed sessions
 - [ ] SOC 2 compliance documentation
 - [ ] Signed & verified skill marketplace
 - [ ] MCP sampling support (server-initiated LLM calls)
