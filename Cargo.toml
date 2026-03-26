@@ -75,7 +75,7 @@ ratatui = "0.29"
 crossterm = "0.28"
 
 # MCP
-rmcp = { version = "0.16", features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"] }
+rmcp = { version = "0.16", features = ["client", "server", "macros", "transport-child-process", "transport-streamable-http-client-reqwest"] }
 
 # Internal crates
 ryvos-core = { path = "crates/ryvos-core" }
@@ -108,6 +108,7 @@ ryvos-gateway.workspace = true
 ryvos-tui.workspace = true
 ryvos-mcp.workspace = true
 ryvos-channels.workspace = true
+rmcp.workspace = true
 ryvos-skills.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

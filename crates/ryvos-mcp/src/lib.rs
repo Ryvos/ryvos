@@ -2,6 +2,7 @@ mod bridge;
 mod client;
 mod handler;
 mod resource_tool;
+pub mod server;
 
 pub use bridge::register_mcp_tools;
 pub use client::McpClientManager;

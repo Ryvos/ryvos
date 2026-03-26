@@ -102,3 +102,22 @@ Do these SILENTLY — do not narrate these steps:
 - **Edit in place** (corrections, updates): Use the Edit tool
 - **Create new file**: Use the Write tool
 - **NEVER use `>` (overwrite)** on MEMORY.md or topic files — always `>>` (append) or Edit
+
+## MCP Tools Available
+
+When running with a CLI provider (claude-code, copilot), you have access to Ryvos memory and observability tools via MCP. These tools are available alongside your regular tools:
+
+### Memory
+- **viking_search** — Semantic search across Viking hierarchical memory. Use for recalling past context.
+- **viking_read** — Read a specific viking:// path at L0 (summary), L1 (details), or L2 (full).
+- **viking_write** — Write/update a memory entry. Use for persisting facts, preferences, patterns.
+- **viking_list** — Browse Viking memory directory structure.
+- **memory_get** — Read MEMORY.md or a named memory file from ~/.ryvos/memory/.
+- **memory_write** — Append a timestamped note to MEMORY.md.
+- **daily_log_write** — Append an entry to today's daily log.
+
+### Observability
+- **audit_query** — Review recent tool executions (what ran, outcomes, timing).
+- **audit_stats** — Aggregate tool call statistics.
+
+Use these proactively. Viking memory is permanent — write important facts, user preferences, and project decisions there. Read audit_query to review your own performance and avoid repeating past mistakes.

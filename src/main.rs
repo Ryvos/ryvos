@@ -97,6 +97,8 @@ enum Commands {
     },
     /// Migrate SQLite memories into OpenViking hierarchical structure
     MigrateMemory,
+    /// Start as an MCP server on stdio (for CLI provider integration)
+    McpServer,
     /// Start the Viking memory server (Rust-native, port 1933)
     VikingServer {
         /// Bind address (default: 127.0.0.1:1933)
@@ -274,6 +276,11 @@ async fn main() -> anyhow::Result<()> {
         return viking_server::run_standalone(bind, &db_path)
             .await
             .map_err(Into::into);
+    }
+
+    // Handle MCP server mode before config loading (standalone stdio server)
+    if let Some(Commands::McpServer) = &cli.command {
+        return run_mcp_server().await;
     }
 
     // Handle MCP CLI subcommands before config loading
@@ -1004,6 +1011,7 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Skill { .. }) => unreachable!("handled before config load"),
         Some(Commands::Soul) => unreachable!("handled before config load"),
         Some(Commands::Update { .. }) => unreachable!("handled before config load"),
+        Some(Commands::McpServer) => unreachable!("handled before config load"),
         Some(Commands::VikingServer { .. }) => unreachable!("handled before config load"),
         Some(Commands::Repl) | None => {
             run_repl(
@@ -2232,4 +2240,74 @@ fn truncate(s: &str, max: usize) -> &str {
     } else {
         &s[..max]
     }
+}
+
+// ── MCP Server Mode ──────────────────────────────────────────────
+// Runs as a standalone MCP server on stdio. CLI providers (claude-code, copilot)
+// spawn this as a subprocess and discover Ryvos memory/audit tools via MCP protocol.
+
+async fn run_mcp_server() -> anyhow::Result<()> {
+    use rmcp::ServiceExt;
+    use std::sync::Arc;
+
+    // Determine workspace
+    let workspace = dirs_home()
+        .map(|h| h.join(".ryvos"))
+        .unwrap_or_else(|| PathBuf::from(".ryvos"));
+
+    // Try loading config for Viking URL
+    let config_path = workspace.join("config.toml");
+    let config = if config_path.exists() {
+        ryvos_core::config::AppConfig::load(&config_path).ok()
+    } else {
+        None
+    };
+
+    // Connect to Viking if configured and reachable
+    let viking = if let Some(ref cfg) = config {
+        if let Some(ref ov) = cfg.openviking {
+            if ov.enabled {
+                let client = ryvos_memory::VikingClient::new(&ov.base_url, &ov.user_id);
+                if client.health().await {
+                    Some(Arc::new(client))
+                } else {
+                    eprintln!("[ryvos mcp-server] Viking unreachable at {}", ov.base_url);
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Open audit trail read-only
+    let audit_path = workspace.join("audit.db");
+    let audit = if audit_path.exists() {
+        ryvos_mcp::server::audit_reader::AuditReader::open(&audit_path)
+            .ok()
+            .map(Arc::new)
+    } else {
+        None
+    };
+
+    eprintln!(
+        "[ryvos mcp-server] Starting (viking: {}, audit: {})",
+        if viking.is_some() { "connected" } else { "unavailable" },
+        if audit.is_some() { "available" } else { "unavailable" },
+    );
+
+    let handler = ryvos_mcp::server::RyvosServerHandler::new(viking, audit, workspace);
+
+    // Serve on stdio — all stdout is MCP protocol, stderr is for logs
+    let transport = (tokio::io::stdin(), tokio::io::stdout());
+    let service = handler.serve(transport).await
+        .map_err(|e| anyhow::anyhow!("MCP server init failed: {}", e))?;
+    service.waiting().await
+        .map_err(|e| anyhow::anyhow!("MCP server error: {}", e))?;
+
+    Ok(())
 }
