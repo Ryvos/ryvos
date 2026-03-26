@@ -493,6 +493,13 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
     println!();
     let provider = providers::select_provider()?;
 
+    // Set up MCP server for CLI providers (claude-code, copilot)
+    let ryvos_bin = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.to_str().map(String::from))
+        .unwrap_or_else(|| "ryvos".to_string());
+    providers::setup_mcp_for_cli_provider(&provider.provider, &ryvos_bin);
+
     // 6. Model selection
     println!();
     let model = providers::select_model(&provider)?;

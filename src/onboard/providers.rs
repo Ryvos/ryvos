@@ -350,6 +350,82 @@ fn configure_copilot() -> Result<ProviderChoice> {
     })
 }
 
+/// If the chosen provider is a CLI provider (claude-code, copilot), set up the
+/// Ryvos MCP server so the CLI can discover Viking memory, audit, and file memory tools.
+pub fn setup_mcp_for_cli_provider(provider: &str, ryvos_binary: &str) {
+    if provider != "claude-code" && provider != "copilot" {
+        return;
+    }
+
+    // Write to ~/.claude.json for claude-code
+    if provider == "claude-code" {
+        if let Some(home) = dirs_home() {
+            let claude_json = home.join(".claude.json");
+            let mut config: serde_json::Value = if claude_json.exists() {
+                std::fs::read_to_string(&claude_json)
+                    .ok()
+                    .and_then(|s| serde_json::from_str(&s).ok())
+                    .unwrap_or_else(|| serde_json::json!({}))
+            } else {
+                serde_json::json!({})
+            };
+
+            let servers = config
+                .as_object_mut()
+                .unwrap()
+                .entry("mcpServers")
+                .or_insert_with(|| serde_json::json!({}));
+
+            if servers.get("ryvos").is_none() {
+                servers.as_object_mut().unwrap().insert(
+                    "ryvos".to_string(),
+                    serde_json::json!({
+                        "type": "stdio",
+                        "command": ryvos_binary,
+                        "args": ["mcp-server"],
+                        "env": {}
+                    }),
+                );
+                if let Ok(json) = serde_json::to_string_pretty(&config) {
+                    if std::fs::write(&claude_json, json).is_ok() {
+                        println!("  ✓ Added Ryvos MCP server to {}", claude_json.display());
+                        println!("    Claude Code will discover viking_search, memory_write, audit_query, etc.");
+                    }
+                }
+            } else {
+                println!("  ✓ Ryvos MCP server already in {}", claude_json.display());
+            }
+        }
+    }
+
+    // For copilot, write .mcp.json to workspace
+    if provider == "copilot" {
+        if let Some(home) = dirs_home() {
+            let workspace = home.join(".ryvos");
+            let mcp_json_path = workspace.join(".mcp.json");
+            if !mcp_json_path.exists() {
+                let mcp_json = serde_json::json!({
+                    "mcpServers": {
+                        "ryvos": {
+                            "command": ryvos_binary,
+                            "args": ["mcp-server"]
+                        }
+                    }
+                });
+                if let Ok(json) = serde_json::to_string_pretty(&mcp_json) {
+                    if std::fs::write(&mcp_json_path, json).is_ok() {
+                        println!("  ✓ Created {} for Copilot MCP discovery", mcp_json_path.display());
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn dirs_home() -> Option<std::path::PathBuf> {
+    std::env::var("HOME").ok().map(std::path::PathBuf::from)
+}
+
 fn detect_claude_binary() -> Option<String> {
     detect_binary("claude")
 }
