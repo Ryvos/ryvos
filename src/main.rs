@@ -602,8 +602,9 @@ async fn main() -> anyhow::Result<()> {
         };
 
     // Wire Viking client into agent runtime so tools get it via ToolContext
+    // (uses interior mutability — can also be set later after Arc wrapping)
     if let Some(ref vc) = viking_client {
-        runtime_inner.set_viking_client(vc.clone());
+        runtime_inner.set_viking_client(vc.clone()).await;
     }
 
     let runtime = Arc::new(runtime_inner);
@@ -844,7 +845,10 @@ async fn main() -> anyhow::Result<()> {
                         let client = ryvos_memory::VikingClient::new(&ov_config.base_url, &ov_config.user_id);
                         if client.health().await {
                             info!(url = %ov_config.base_url, "OpenViking connected (after auto-start)");
-                            viking_client = Some(Arc::new(client));
+                            let vc = Arc::new(client);
+                            viking_client = Some(vc.clone());
+                            // Wire into the already-Arc-wrapped runtime
+                            runtime.set_viking_client(vc).await;
                         } else {
                             warn!("OpenViking still unreachable after auto-start");
                         }

@@ -54,8 +54,8 @@ pub struct AgentRuntime {
     cli_session_override: Arc<std::sync::Mutex<Option<String>>>,
     /// Self-reference for sub-agent spawning (set after Arc wrapping).
     pub spawner: Arc<tokio::sync::Mutex<Option<Arc<dyn ryvos_core::types::AgentSpawner>>>>,
-    /// OpenViking client for hierarchical memory (None if not configured).
-    viking_client: Option<Arc<ryvos_memory::VikingClient>>,
+    /// OpenViking client for hierarchical memory (set after Arc wrapping if auto-started).
+    pub viking_client: Arc<tokio::sync::Mutex<Option<Arc<ryvos_memory::VikingClient>>>>,
 }
 
 impl AgentRuntime {
@@ -81,7 +81,7 @@ impl AgentRuntime {
             last_message_id: Arc::new(std::sync::Mutex::new(None)),
             cli_session_override: Arc::new(std::sync::Mutex::new(None)),
             spawner: Arc::new(tokio::sync::Mutex::new(None)),
-            viking_client: None,
+            viking_client: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -109,7 +109,7 @@ impl AgentRuntime {
             last_message_id: Arc::new(std::sync::Mutex::new(None)),
             cli_session_override: Arc::new(std::sync::Mutex::new(None)),
             spawner: Arc::new(tokio::sync::Mutex::new(None)),
-            viking_client: None,
+            viking_client: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -134,8 +134,9 @@ impl AgentRuntime {
     }
 
     /// Set the OpenViking client for hierarchical memory tools.
-    pub fn set_viking_client(&mut self, client: Arc<ryvos_memory::VikingClient>) {
-        self.viking_client = Some(client);
+    /// Can be called after Arc wrapping (uses interior mutability).
+    pub async fn set_viking_client(&self, client: Arc<ryvos_memory::VikingClient>) {
+        *self.viking_client.lock().await = Some(client);
     }
 
     /// Set the CLI session ID override for the next run (for --resume).
@@ -293,6 +294,7 @@ impl AgentRuntime {
 
                 // Run one mini-turn to let agent call memory tools
                 let flush_tool_defs = self.tool_definitions().await;
+                let flush_vc = self.viking_client.lock().await.clone();
                 let flush_ctx = ToolContext {
                     session_id: session_id.clone(),
                     working_dir: std::env::current_dir().unwrap_or_else(|_| workspace.clone()),
@@ -300,7 +302,7 @@ impl AgentRuntime {
                     agent_spawner: None,
                     sandbox_config: self.config.agent.sandbox.clone(),
                     config_path: None,
-                    viking_client: self.viking_client.clone().map(|c| Arc::new(c) as Arc<dyn std::any::Any + Send + Sync>),
+                    viking_client: flush_vc.map(|c| Arc::new(c) as Arc<dyn std::any::Any + Send + Sync>),
                 };
                 if let Ok(mut stream) = self
                     .llm
@@ -369,6 +371,7 @@ impl AgentRuntime {
 
         let tool_defs = self.tool_definitions().await;
         let max_output_tokens = self.config.agent.max_tool_output_tokens;
+        let vc = self.viking_client.lock().await.clone();
         let tool_ctx = ToolContext {
             session_id: session_id.clone(),
             working_dir: std::env::current_dir().unwrap_or_else(|_| workspace.clone()),
@@ -376,7 +379,7 @@ impl AgentRuntime {
             agent_spawner: self.spawner.lock().await.clone(),
             sandbox_config: self.config.agent.sandbox.clone(),
             config_path: None,
-            viking_client: self.viking_client.clone().map(|c| Arc::new(c) as Arc<dyn std::any::Any + Send + Sync>),
+            viking_client: vc.map(|c| Arc::new(c) as Arc<dyn std::any::Any + Send + Sync>),
         };
 
         let mut total_input_tokens = 0u64;
