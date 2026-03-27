@@ -224,10 +224,23 @@ impl AgentRuntime {
             .system_prompt
             .as_deref()
             .map(|spec| context::resolve_system_prompt(spec, &workspace));
+
+        // Load Viking sustained context (Layer 2.5 Recall)
+        let mut extended = context::ExtendedContext::default();
+        if let Some(ref vc) = *self.viking_client.lock().await {
+            let query_hint = user_message;
+            let policy = ryvos_memory::viking::ContextLevelPolicy::default();
+            let viking_ctx = ryvos_memory::viking::load_viking_context(vc, query_hint, &policy).await;
+            if !viking_ctx.is_empty() {
+                info!(len = viking_ctx.len(), "Viking context injected into system prompt");
+                extended.viking_context = viking_ctx;
+            }
+        }
+
         let system_msg = if goal.is_some() {
-            context::build_goal_context(&workspace, prompt_override.as_deref(), goal)
+            context::build_goal_context_extended(&workspace, prompt_override.as_deref(), goal, &extended)
         } else {
-            context::build_default_context(&workspace, prompt_override.as_deref())
+            context::build_default_context_extended(&workspace, prompt_override.as_deref(), &extended)
         };
 
         // Generate a unique run_id for checkpointing
