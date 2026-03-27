@@ -1,0 +1,7 @@
+target/
+.git/
+*.md
+docs/
+install.sh
+ryvos.toml.example
+.github/
