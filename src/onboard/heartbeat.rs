@@ -59,6 +59,9 @@ pub fn configure() -> Result<Option<HeartbeatConfig>> {
     // Handle duplicate heartbeat files
     cleanup_heartbeat_files();
 
+    // Write default HEARTBEAT.md if it doesn't exist
+    write_default_heartbeat();
+
     println!("  Heartbeat uses HEARTBEAT.md in your workspace — customize it to define what the agent checks.");
 
     Ok(Some(HeartbeatConfig {
@@ -74,6 +77,20 @@ pub fn configure() -> Result<Option<HeartbeatConfig>> {
         heartbeat_file: "HEARTBEAT.md".to_string(),
         prompt: None,
     }))
+}
+
+fn write_default_heartbeat() {
+    let home = match std::env::var("HOME").ok() {
+        Some(h) => std::path::PathBuf::from(h),
+        None => return,
+    };
+    let heartbeat_path = home.join(".ryvos").join("HEARTBEAT.md");
+    if !heartbeat_path.exists() {
+        let template = include_str!("templates/HEARTBEAT.md");
+        if std::fs::write(&heartbeat_path, template).is_ok() {
+            println!("  ✓ Created default HEARTBEAT.md with Viking memory instructions");
+        }
+    }
 }
 
 fn cleanup_heartbeat_files() {
