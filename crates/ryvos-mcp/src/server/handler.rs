@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
+use rmcp::model::{ServerCapabilities, ServerInfo, Implementation, ProtocolVersion};
 use rmcp::{tool, tool_handler, tool_router, ServerHandler};
 
 use ryvos_memory::VikingClient;
@@ -38,7 +39,25 @@ impl RyvosServerHandler {
 }
 
 #[tool_handler(router = self.tool_router)]
-impl ServerHandler for RyvosServerHandler {}
+impl ServerHandler for RyvosServerHandler {
+    fn get_info(&self) -> ServerInfo {
+        ServerInfo {
+            protocol_version: ProtocolVersion::V_2024_11_05,
+            capabilities: ServerCapabilities::builder()
+                .enable_tools()
+                .build(),
+            server_info: Implementation {
+                name: "ryvos".into(),
+                title: Some("Ryvos Agent".into()),
+                version: env!("CARGO_PKG_VERSION").into(),
+                description: Some("Persistent agent memory & audit tools".into()),
+                icons: None,
+                website_url: Some("https://ryvos.dev".into()),
+            },
+            instructions: Some("Ryvos agent memory & audit tools. Use viking_* to read/write persistent memory, audit_* to inspect tool history.".into()),
+        }
+    }
+}
 
 #[tool_router(router = tool_router)]
 impl RyvosServerHandler {
