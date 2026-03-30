@@ -6,6 +6,7 @@
   let totalRuns = 0;
   let loading = true;
   let error = '';
+  let note = '';
   let currentOffset = 0;
   const pageSize = 20;
 
@@ -17,6 +18,7 @@
       const data = await apiFetch(`/api/runs?limit=${pageSize}&offset=${offset}`);
       runs = data.runs || [];
       totalRuns = data.total || 0;
+      note = data.note || '';
     } catch (e) {
       error = e.message;
       runs = [];
@@ -57,7 +59,7 @@
     </div>
   {:else if runs.length === 0}
     <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-12 text-center">
-      <p class="text-[#A09890] text-sm">No runs recorded yet</p>
+      <p class="text-[#A09890] text-sm">{note || 'No runs recorded yet'}</p>
     </div>
   {:else}
     <div class="border border-[rgba(255,255,255,0.08)] rounded-xl overflow-x-auto">

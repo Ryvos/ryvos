@@ -6,6 +6,8 @@ export const streamingText = writable('');
 
 let ws = null;
 let reconnectTimer = null;
+let retryCount = 0;
+const MAX_RETRY_DELAY = 30000;
 
 export function connect(apiKey) {
   if (ws) ws.close();
@@ -16,16 +18,22 @@ export function connect(apiKey) {
 
   try {
     ws = new WebSocket(url);
-  } catch (_) {
+  } catch (e) {
+    console.error('WebSocket creation failed:', e);
     connectionStatus.set('error');
     return;
   }
 
-  ws.onopen = () => connectionStatus.set('connected');
+  ws.onopen = () => {
+    connectionStatus.set('connected');
+    retryCount = 0;
+  };
 
   ws.onclose = () => {
     connectionStatus.set('disconnected');
-    reconnectTimer = setTimeout(() => connect(apiKey), 3000);
+    const delay = Math.min(1000 * Math.pow(2, retryCount), MAX_RETRY_DELAY);
+    retryCount++;
+    reconnectTimer = setTimeout(() => connect(apiKey), delay);
   };
 
   ws.onerror = () => connectionStatus.set('error');
@@ -52,7 +60,9 @@ export function connect(apiKey) {
           });
         }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to parse WebSocket message:', e);
+    }
   };
 }
 

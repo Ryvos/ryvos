@@ -11,9 +11,9 @@
     <span class="text-[0.7rem] px-2 py-0.5 rounded-full bg-[#F07030]/10 text-[#F07030] font-medium">Live</span>
   </div>
 
-  <div class="max-h-80 overflow-y-auto space-y-0">
+  <div class="max-h-[480px] overflow-y-auto space-y-0">
     {#if feed.length === 0}
-      <p class="text-[#A09890] text-sm text-center py-8">Waiting for events...</p>
+      <p class="text-[#A09890] text-sm text-center py-8">Events from heartbeats, agent runs, and cron jobs will appear here.</p>
     {:else}
       {#each feed as item}
         <div class="flex items-start gap-2.5 py-2 border-b border-[rgba(255,255,255,0.04)] last:border-0 text-[0.8rem] hover:bg-[#2A2A2A] -mx-2 px-2 rounded transition-colors duration-150">

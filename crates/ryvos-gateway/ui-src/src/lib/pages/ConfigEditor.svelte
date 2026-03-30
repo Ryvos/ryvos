@@ -15,7 +15,7 @@
       configContent = data.content || data.config || (typeof data === 'string' ? data : JSON.stringify(data, null, 2));
       originalContent = configContent;
     } catch (e) {
-      error = e.message;
+      error = e.message.includes('403') ? 'admin_required' : e.message;
     } finally {
       loading = false;
     }
@@ -52,9 +52,15 @@
     <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-8 text-center">
       <p class="text-[#A09890] text-sm animate-pulse">Loading configuration...</p>
     </div>
+  {:else if error === 'admin_required'}
+    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-12 text-center">
+      <svg class="mx-auto mb-3 w-8 h-8 text-[#F0A040]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <p class="text-[#E8E4E0] text-sm font-medium mb-1">Admin Access Required</p>
+      <p class="text-[#A09890] text-xs">The configuration editor requires an Admin API key. Connect with an admin key to edit config.toml.</p>
+    </div>
   {:else if error}
     <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-12 text-center">
-      <p class="text-[#A09890] text-sm">Configuration endpoint not available</p>
+      <p class="text-[#A09890] text-sm">Configuration endpoint not available: {error}</p>
     </div>
   {:else}
     <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-5">

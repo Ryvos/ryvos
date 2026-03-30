@@ -17,8 +17,21 @@
     }
   });
 
+  function getSid(session) {
+    return typeof session === 'string' ? session : (session.id || String(session));
+  }
+
   function truncate(s, max) {
+    if (!s || typeof s !== 'string') return String(s || '');
     return s.length > max ? s.substring(0, max) + '...' : s;
+  }
+
+  function formatTime(ts) {
+    if (!ts) return '-';
+    try {
+      const d = new Date(ts);
+      return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return '-'; }
   }
 </script>
 
@@ -49,6 +62,15 @@
               Session ID
             </th>
             <th class="px-4 py-3 bg-[#222222]/80 text-left text-[0.7rem] font-semibold text-[#A09890] uppercase tracking-wider border-b border-[rgba(255,255,255,0.08)]">
+              Channel
+            </th>
+            <th class="px-4 py-3 bg-[#222222]/80 text-left text-[0.7rem] font-semibold text-[#A09890] uppercase tracking-wider border-b border-[rgba(255,255,255,0.08)]">
+              Last Active
+            </th>
+            <th class="px-4 py-3 bg-[#222222]/80 text-left text-[0.7rem] font-semibold text-[#A09890] uppercase tracking-wider border-b border-[rgba(255,255,255,0.08)]">
+              Runs
+            </th>
+            <th class="px-4 py-3 bg-[#222222]/80 text-left text-[0.7rem] font-semibold text-[#A09890] uppercase tracking-wider border-b border-[rgba(255,255,255,0.08)]">
               Actions
             </th>
           </tr>
@@ -57,11 +79,20 @@
           {#each sessionList as session}
             <tr class="hover:bg-[#2A2A2A]/40 transition-colors duration-150">
               <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] font-mono text-xs text-[#E8E4E0]">
-                {truncate(session, 50)}
+                {truncate(getSid(session), 40)}
+              </td>
+              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] text-xs text-[#A09890]">
+                {session.channel || '-'}
+              </td>
+              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] text-xs text-[#A09890]">
+                {formatTime(session.last_active)}
+              </td>
+              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] text-xs text-[#A09890]">
+                {session.total_runs ?? '-'}
               </td>
               <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)]">
                 <a
-                  href="#/chat/{encodeURIComponent(session)}"
+                  href="#/chat/{encodeURIComponent(getSid(session))}"
                   class="inline-flex items-center gap-1 px-3 py-1.5 bg-[#2A2A2A] border border-[rgba(255,255,255,0.12)] rounded-md
                          text-xs text-[#E8E4E0] font-medium hover:bg-[#2A2A2A] hover:text-[#F07030]
                          hover:border-[#F07030] transition-all duration-200"

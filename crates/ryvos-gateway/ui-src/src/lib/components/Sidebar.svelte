@@ -1,6 +1,7 @@
 <script>
+  import { onMount } from 'svelte';
   import { connectionStatus, disconnect } from '../ws.js';
-  import { clearApiKey } from '../api.js';
+  import { clearApiKey, apiFetch } from '../api.js';
   import { authenticated } from '../stores.js';
   import logoUrl from '../../assets/logo.png';
 
@@ -8,7 +9,15 @@
   export let open = true;
 
   let status = 'disconnected';
+  let version = '';
   connectionStatus.subscribe(v => status = v);
+
+  onMount(async () => {
+    try {
+      const data = await apiFetch('/api/health');
+      version = data.version || '';
+    } catch {}
+  });
 
   const navItems = [
     { route: 'chat',       label: 'Chat',            icon: 'message' },
@@ -30,9 +39,7 @@
   }
 
   function isActive(route) {
-    if (route === currentRoute) return true;
-    if (route === 'chat' && currentRoute === 'sessions') return true;
-    return false;
+    return route === currentRoute;
   }
 
   function handleNavClick() {
@@ -54,7 +61,7 @@
   <div class="flex items-center gap-2.5 px-5 py-4">
     <img src={logoUrl} alt="Ryvos" class="w-7 h-7 rounded-sm" />
     <span class="text-lg font-bold tracking-tight text-[#E8E4E0]">Ryvos</span>
-    <span class="text-[0.6rem] font-semibold text-[#F07030] bg-[#F07030]/10 px-2 py-0.5 rounded-full">v0.6.5</span>
+    {#if version}<span class="text-[0.6rem] font-semibold text-[#F07030] bg-[#F07030]/10 px-2 py-0.5 rounded-full">v{version}</span>{/if}
   </div>
 
   <!-- Nav -->

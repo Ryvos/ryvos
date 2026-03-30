@@ -13,7 +13,7 @@
   async function loadTree(path = 'viking://') {
     try {
       const data = await apiFetch(`/api/viking/list?path=${encodeURIComponent(path)}`);
-      return data.entries || data.items || data.children || [];
+      return Array.isArray(data) ? data : (data.entries || data.items || data.children || []);
     } catch (e) {
       return [];
     }
@@ -57,7 +57,7 @@
   }
 
   function isDirectory(item) {
-    return item.type === 'directory' || item.type === 'dir' || item.is_dir || item.children !== undefined;
+    return item.is_directory === true || item.type === 'directory' || item.type === 'dir';
   }
 
   function getDisplayName(item) {

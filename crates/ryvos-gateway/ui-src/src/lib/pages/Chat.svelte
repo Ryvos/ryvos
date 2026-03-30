@@ -54,8 +54,11 @@
       }
 
       if (latest.kind === 'tool_end' && streaming) {
-        // Update last tool_call message with output + elapsed
-        const lastTool = [...messages].reverse().find(m => m.type === 'tool_call' && m.status === 'running');
+        // Update matching tool_call message with output + elapsed (match by tool name for parallel calls)
+        const endedTool = (latest.text || latest.detail?.replace('Tool done: ', '') || '').trim();
+        const lastTool = [...messages].reverse().find(
+          m => m.type === 'tool_call' && m.status === 'running' && (!endedTool || m.tool === endedTool)
+        );
         if (lastTool) {
           lastTool.status = 'done';
           lastTool.output = latest.data?.output || latest.detail || '';
@@ -148,10 +151,10 @@
     resetStreamingText();
     scrollToBottom();
 
-    sendWs('agent.send', { session_id: sessionId || 'web-' + Date.now().toString(36), message: text });
     if (!sessionId) {
       sessionId = 'web-' + Date.now().toString(36);
     }
+    sendWs('agent.send', { session_id: sessionId, message: text });
   }
 
   function handleKeydown(e) {
