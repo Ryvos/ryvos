@@ -45,29 +45,29 @@
 
 <div>
   <div class="mb-7">
-    <h2 class="text-2xl font-bold tracking-tight text-[#E8E4E0]">Run History</h2>
-    <p class="text-[#A09890] text-sm mt-1">All recorded agent runs</p>
+    <h2 class="text-2xl font-heading font-bold tracking-tight text-[#1A1A1A]">Run History</h2>
+    <p class="text-[#9B9590] text-sm mt-1">All recorded agent runs</p>
   </div>
 
   {#if loading}
-    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-8 text-center">
-      <p class="text-[#A09890] text-sm animate-pulse">Loading runs...</p>
+    <div class="bg-white border-2 border-[#1A1A1A] p-8 text-center">
+      <p class="text-[#9B9590] text-sm animate-pulse">Loading runs...</p>
     </div>
   {:else if error}
-    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-12 text-center">
-      <p class="text-[#A09890] text-sm">Cost tracking not configured</p>
+    <div class="bg-white border-2 border-[#1A1A1A] p-12 text-center">
+      <p class="text-[#9B9590] text-sm">Cost tracking not configured</p>
     </div>
   {:else if runs.length === 0}
-    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-12 text-center">
-      <p class="text-[#A09890] text-sm">{note || 'No runs recorded yet'}</p>
+    <div class="bg-white border-2 border-[#1A1A1A] p-12 text-center">
+      <p class="text-[#9B9590] text-sm">{note || 'No runs recorded yet'}</p>
     </div>
   {:else}
-    <div class="border border-[rgba(255,255,255,0.08)] rounded-xl overflow-x-auto">
+    <div class="border-2 border-[#1A1A1A] overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
           <tr>
             {#each ['Time', 'Session', 'Model', 'Turns', 'Tokens', 'Cost', 'Type', 'Status'] as col}
-              <th class="px-4 py-3 bg-[#222222]/80 text-left text-[0.7rem] font-semibold text-[#A09890] uppercase tracking-wider border-b border-[rgba(255,255,255,0.08)] sticky top-0">
+              <th class="px-4 py-3 bg-[#F7F4F0] text-left text-xs uppercase tracking-wider font-bold text-[#9B9590] border-b-2 border-[#1A1A1A] sticky top-0">
                 {col}
               </th>
             {/each}
@@ -77,24 +77,24 @@
           {#each runs as run}
             {@const tokens = (run.input_tokens || 0) + (run.output_tokens || 0)}
             {@const cost = '$' + ((run.cost_cents || 0) / 100).toFixed(3)}
-            <tr class="hover:bg-[#2A2A2A]/40 transition-colors duration-150">
-              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] font-mono text-xs text-[#A09890]">{formatTime(run.start_time)}</td>
-              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] font-mono text-[0.7rem] text-[#A09890]">{truncate(run.session_id || '', 12)}</td>
-              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] text-[#E8E4E0]">{run.model || '-'}</td>
-              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] text-[#E8E4E0]">{run.total_turns || 0}</td>
-              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] text-[#E8E4E0]">{tokens.toLocaleString()}</td>
-              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)] font-mono text-[#E8E4E0]">{cost}</td>
-              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)]">
-                <span class="inline-flex px-2.5 py-0.5 rounded-full text-[0.7rem] font-semibold
-                  {run.billing_type === 'subscription' ? 'bg-emerald-400/10 text-emerald-400' : 'bg-[#F07030]/10 text-[#F07030]'}">
+            <tr class="hover:bg-[#F7F4F0] transition-colors duration-150">
+              <td class="px-4 py-3 border-b border-[#E8E4E0] font-mono text-xs text-[#9B9590]">{formatTime(run.start_time)}</td>
+              <td class="px-4 py-3 border-b border-[#E8E4E0] font-mono text-[0.7rem] text-[#9B9590]">{truncate(run.session_id || '', 12)}</td>
+              <td class="px-4 py-3 border-b border-[#E8E4E0] text-[#1A1A1A]">{run.model || '-'}</td>
+              <td class="px-4 py-3 border-b border-[#E8E4E0] text-[#1A1A1A]">{run.total_turns || 0}</td>
+              <td class="px-4 py-3 border-b border-[#E8E4E0] text-[#1A1A1A]">{tokens.toLocaleString()}</td>
+              <td class="px-4 py-3 border-b border-[#E8E4E0] font-mono text-[#1A1A1A]">{cost}</td>
+              <td class="px-4 py-3 border-b border-[#E8E4E0]">
+                <span class="inline-flex px-2.5 py-0.5 text-[0.7rem] font-semibold
+                  {run.billing_type === 'subscription' ? 'bg-[#16A34A]/10 text-[#16A34A]' : 'bg-[#F07030]/10 text-[#F07030]'}">
                   {run.billing_type || 'api'}
                 </span>
               </td>
-              <td class="px-4 py-3 border-b border-[rgba(255,255,255,0.04)]">
+              <td class="px-4 py-3 border-b border-[#E8E4E0]">
                 <span class="font-medium
-                  {run.status === 'complete' ? 'text-emerald-400' :
+                  {run.status === 'complete' ? 'text-[#16A34A]' :
                    run.status === 'running' ? 'text-[#F07030]' :
-                   run.status === 'error' ? 'text-red-400' : 'text-[#A09890]'}">
+                   run.status === 'error' ? 'text-[#DC2626]' : 'text-[#9B9590]'}">
                   {run.status || '-'}
                 </span>
               </td>
@@ -110,10 +110,10 @@
         {#each Array(Math.min(totalPages, 10)) as _, i}
           <button
             on:click={() => loadRuns(i * pageSize)}
-            class="px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200
+            class="px-3 py-1.5 text-xs font-medium transition-all duration-200
               {i === currentPage
-                ? 'bg-[#F07030] text-white border border-[#F07030]'
-                : 'bg-[#222222] border border-[rgba(255,255,255,0.08)] text-[#A09890] hover:bg-[#2A2A2A] hover:text-[#E8E4E0]'}"
+                ? 'bg-[#F07030] text-white border-2 border-[#1A1A1A]'
+                : 'bg-white border-2 border-[#1A1A1A] text-[#9B9590] hover:bg-[#F7F4F0] hover:text-[#1A1A1A]'}"
           >
             {i + 1}
           </button>

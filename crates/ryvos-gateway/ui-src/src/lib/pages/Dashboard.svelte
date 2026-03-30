@@ -1,34 +1,70 @@
 <script>
   import { onMount } from 'svelte';
   import { apiFetch } from '../api.js';
-  import MetricCard from '../components/MetricCard.svelte';
   import ActivityFeed from '../components/ActivityFeed.svelte';
 
-  let metricsData = null;
-  let healthData = null;
   let loading = true;
   let error = '';
 
-  function formatDuration(secs) {
+  // Data stores
+  let uptimeSecs = 0;
+  let activeSessions = 0;
+  let totalEntries = 0;
+  let toolBreakdown = [];
+  let heartbeatSessions = 0;
+  let vikingEntries = 0;
+  let channelCount = 0;
+  let version = '';
+  let status = '';
+
+  function formatUptime(secs) {
     if (!secs && secs !== 0) return '-';
-    if (secs < 60) return secs + 's';
-    if (secs < 3600) return Math.floor(secs / 60) + 'm';
-    if (secs < 86400) return Math.floor(secs / 3600) + 'h ' + Math.floor((secs % 3600) / 60) + 'm';
-    return Math.floor(secs / 86400) + 'd ' + Math.floor((secs % 86400) / 3600) + 'h';
+    const d = Math.floor(secs / 86400);
+    const h = Math.floor((secs % 86400) / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    return `${h}h ${m}m`;
   }
 
-  $: allZero = metricsData && (metricsData.total_runs || 0) === 0
-    && (metricsData.active_sessions || 0) === 0
-    && (metricsData.total_cost_cents || 0) === 0;
+  function formatNumber(n) {
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return String(n);
+  }
+
+  $: totalToolCalls = toolBreakdown.reduce((sum, t) => sum + (t.count || 0), 0);
+  $: maxToolCount = toolBreakdown.length > 0 ? toolBreakdown[0].count : 1;
 
   onMount(async () => {
     try {
-      const [metrics, health] = await Promise.all([
+      const [metrics, auditStats, channels, health] = await Promise.all([
         apiFetch('/api/metrics').catch(() => null),
+        apiFetch('/api/audit/stats').catch(() => null),
+        apiFetch('/api/channels').catch(() => []),
         apiFetch('/api/health').catch(() => null),
       ]);
-      metricsData = metrics;
-      healthData = health;
+
+      if (metrics) {
+        uptimeSecs = metrics.uptime_secs || 0;
+        activeSessions = metrics.active_sessions || 0;
+      }
+
+      if (auditStats) {
+        totalEntries = auditStats.total_entries || 0;
+        toolBreakdown = auditStats.tool_breakdown || [];
+        heartbeatSessions = auditStats.heartbeat_sessions || 0;
+        vikingEntries = auditStats.viking_entries || 0;
+      }
+
+      if (Array.isArray(channels)) {
+        channelCount = channels.length;
+      } else if (channels && typeof channels === 'object') {
+        channelCount = Object.keys(channels).length;
+      }
+
+      if (health) {
+        version = health.version || 'unknown';
+        status = health.status || 'unknown';
+      }
     } catch (e) {
       error = e.message;
     } finally {
@@ -37,65 +73,189 @@
   });
 </script>
 
-<div>
-  <div class="mb-7">
-    <h2 class="text-2xl font-bold tracking-tight text-[#E8E4E0]">Dashboard</h2>
-    <p class="text-[#A09890] text-sm mt-1">Overview of your Ryvos instance</p>
+<div class="space-y-6">
+  <!-- Header -->
+  <div>
+    <h1 class="text-3xl font-heading">Dashboard</h1>
+    <p class="text-sm text-[#9B9590] mt-1">Overview of your Ryvos instance</p>
   </div>
 
-  <!-- Metric Cards -->
+  <!-- Top Metrics Strip -->
   {#if loading}
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-7">
+    <div class="border-2 border-[#1A1A1A] grid grid-cols-2 sm:grid-cols-5 divide-x-2 divide-[#1A1A1A]">
       {#each Array(5) as _}
-        <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-5 min-h-[100px] animate-pulse">
-          <div class="h-4 bg-[#2A2A2A] rounded w-20 mt-8"></div>
+        <div class="p-4 sm:p-5 animate-pulse">
+          <div class="h-3 bg-[#E8E4E0] w-20 mb-3"></div>
+          <div class="h-7 bg-[#E8E4E0] w-14"></div>
         </div>
       {/each}
     </div>
-  {:else if metricsData}
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-7">
-      <MetricCard label="Runs" value={metricsData.total_runs ?? 0} type="runs" />
-      <MetricCard label="Sessions" value={metricsData.active_sessions ?? 0} type="sessions" />
-      <MetricCard label="Spend" value={'$' + ((metricsData.total_cost_cents || 0) / 100).toFixed(2)} type="spend" />
-      <MetricCard
-        label="Budget"
-        value={metricsData.monthly_budget_cents > 0 ? metricsData.budget_utilization_pct + '%' : 'Unlimited'}
-        type="budget"
-      />
-      <MetricCard label="Uptime" value={formatDuration(metricsData.uptime_secs)} type="uptime" />
-    </div>
-    {#if allZero}
-      <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-4 mb-7">
-        <p class="text-[#A09890] text-sm">
-          All metrics are showing 0. To enable budget tracking, add a <code class="font-mono bg-[#0F0F0F] px-1.5 py-0.5 rounded text-xs">[budget]</code> section to your config.toml. Runs and sessions will populate as agents are used.
-        </p>
-      </div>
-    {/if}
   {:else}
-    <p class="text-[#A09890] mb-7">Failed to load metrics</p>
+    <div class="border-2 border-[#1A1A1A] bg-white grid grid-cols-2 sm:grid-cols-5 divide-x-2 divide-[#1A1A1A] divide-y-2 sm:divide-y-0">
+      <!-- Heartbeats -->
+      <div class="p-4 sm:p-5">
+        <div class="flex items-center gap-2 text-[#9B9590] mb-1">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <span class="text-xs uppercase tracking-wider font-medium">Heartbeats</span>
+        </div>
+        <p class="text-2xl font-heading">{formatNumber(heartbeatSessions)}</p>
+      </div>
+
+      <!-- Sessions -->
+      <div class="p-4 sm:p-5">
+        <div class="flex items-center gap-2 text-[#9B9590] mb-1">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          </svg>
+          <span class="text-xs uppercase tracking-wider font-medium">Sessions</span>
+        </div>
+        <p class="text-2xl font-heading">{activeSessions}</p>
+      </div>
+
+      <!-- Tool Calls -->
+      <div class="p-4 sm:p-5">
+        <div class="flex items-center gap-2 text-[#9B9590] mb-1">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+          </svg>
+          <span class="text-xs uppercase tracking-wider font-medium">Tool Calls</span>
+        </div>
+        <p class="text-2xl font-heading">{formatNumber(totalToolCalls)}</p>
+      </div>
+
+      <!-- Viking Memories -->
+      <div class="p-4 sm:p-5">
+        <div class="flex items-center gap-2 text-[#9B9590] mb-1">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+          </svg>
+          <span class="text-xs uppercase tracking-wider font-medium">Viking Memories</span>
+        </div>
+        <p class="text-2xl font-heading">{formatNumber(vikingEntries)}</p>
+      </div>
+
+      <!-- Uptime -->
+      <div class="p-4 sm:p-5">
+        <div class="flex items-center gap-2 text-[#9B9590] mb-1">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span class="text-xs uppercase tracking-wider font-medium">Uptime</span>
+        </div>
+        <p class="text-2xl font-heading">{formatUptime(uptimeSecs)}</p>
+      </div>
+    </div>
   {/if}
 
-  <!-- Activity Feed -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+  <!-- Tool Usage -->
+  {#if !loading && toolBreakdown.length > 0}
+    <div class="border-2 border-[#1A1A1A] bg-white p-5">
+      <h2 class="label mb-4">Tool Usage</h2>
+      {#each toolBreakdown.slice(0, 8) as item}
+        <div class="flex items-center gap-3 mb-2">
+          <span class="text-xs font-mono w-32 text-[#6B6560] truncate">{item.tool}</span>
+          <div class="flex-1 bg-[#F7F4F0] h-5 border border-[#E8E4E0]">
+            <div class="bg-[#F07030] h-full transition-all duration-500" style="width: {(item.count / maxToolCount * 100)}%"></div>
+          </div>
+          <span class="text-xs font-mono text-[#9B9590] w-12 text-right">{item.count}</span>
+        </div>
+      {/each}
+    </div>
+  {:else if !loading}
+    <div class="border-2 border-[#1A1A1A] bg-white p-5">
+      <h2 class="label mb-4">Tool Usage</h2>
+      <p class="text-sm text-[#9B9590] py-4 text-center">No tool calls recorded yet. Tools will appear here as agents use them.</p>
+    </div>
+  {/if}
+
+  <!-- Activity Feed + System -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
     <ActivityFeed />
-    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-sm font-semibold text-[#E8E4E0]">System</h3>
-      </div>
-      {#if healthData}
-        <div class="space-y-3">
+
+    <div class="border-2 border-[#1A1A1A] bg-white p-5">
+      <h2 class="label mb-4">System</h2>
+      {#if loading}
+        <div class="space-y-4 animate-pulse">
           <div>
-            <span class="text-xs font-medium text-[#A09890] uppercase tracking-wider">Version</span>
-            <p class="text-lg font-semibold text-[#E8E4E0] mt-0.5">{healthData.version || 'unknown'}</p>
+            <div class="h-3 bg-[#E8E4E0] w-16 mb-2"></div>
+            <div class="h-6 bg-[#E8E4E0] w-24"></div>
           </div>
           <div>
-            <span class="text-xs font-medium text-[#A09890] uppercase tracking-wider">Status</span>
-            <p class="text-lg font-semibold text-emerald-400 mt-0.5">{healthData.status || 'unknown'}</p>
+            <div class="h-3 bg-[#E8E4E0] w-16 mb-2"></div>
+            <div class="h-6 bg-[#E8E4E0] w-20"></div>
           </div>
         </div>
       {:else}
-        <p class="text-[#A09890] text-sm text-center py-8">System info unavailable</p>
+        <div class="space-y-4">
+          <div>
+            <span class="label">Version</span>
+            <p class="text-lg font-heading mt-0.5">{version || 'unknown'}</p>
+          </div>
+          <div>
+            <span class="label">Status</span>
+            <div class="flex items-center gap-2 mt-0.5">
+              {#if status === 'ok' || status === 'healthy'}
+                <span class="w-2 h-2 bg-[#16A34A] border border-[#1A1A1A] inline-block animate-pulse-glow"></span>
+                <p class="text-lg font-heading text-[#16A34A]">{status}</p>
+              {:else}
+                <p class="text-lg font-heading">{status || 'unknown'}</p>
+              {/if}
+            </div>
+          </div>
+          <div>
+            <span class="label">Channels Active</span>
+            <p class="text-lg font-heading mt-0.5">{channelCount}</p>
+          </div>
+          <div>
+            <span class="label">Audit Entries</span>
+            <p class="text-lg font-heading mt-0.5">{formatNumber(totalEntries)}</p>
+          </div>
+        </div>
       {/if}
     </div>
   </div>
+
+  <!-- Quick Actions -->
+  <div>
+    <h2 class="label mb-3">Quick Actions</h2>
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <a href="#/chat" class="flex items-center gap-3 border-l-4 border-l-[#F07030] pl-4 py-3 text-sm text-[#6B6560] hover:bg-[#F7F4F0] transition-colors">
+        <svg class="w-4 h-4 text-[#F07030]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+        Chat with agent
+        <span class="ml-auto text-[#9B9590]">&rarr;</span>
+      </a>
+      <a href="#/memory" class="flex items-center gap-3 border-l-4 border-l-[#F07030] pl-4 py-3 text-sm text-[#6B6560] hover:bg-[#F7F4F0] transition-colors">
+        <svg class="w-4 h-4 text-[#F07030]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+        </svg>
+        Browse memory
+        <span class="ml-auto text-[#9B9590]">&rarr;</span>
+      </a>
+      <a href="#/audit" class="flex items-center gap-3 border-l-4 border-l-[#F07030] pl-4 py-3 text-sm text-[#6B6560] hover:bg-[#F7F4F0] transition-colors">
+        <svg class="w-4 h-4 text-[#F07030]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        View audit trail
+        <span class="ml-auto text-[#9B9590]">&rarr;</span>
+      </a>
+      <a href="#/channels" class="flex items-center gap-3 border-l-4 border-l-[#F07030] pl-4 py-3 text-sm text-[#6B6560] hover:bg-[#F7F4F0] transition-colors">
+        <svg class="w-4 h-4 text-[#F07030]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
+        </svg>
+        Check channels
+        <span class="ml-auto text-[#9B9590]">&rarr;</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Error display -->
+  {#if error}
+    <div class="border-2 border-[#DC2626] bg-white p-4">
+      <p class="text-sm text-[#DC2626]">Failed to load some data: {error}</p>
+    </div>
+  {/if}
 </div>

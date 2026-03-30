@@ -72,12 +72,12 @@
 {#if !isAuthenticated}
   <LoginOverlay on:login={handleLogin} />
 {:else}
-  <div class="flex h-screen bg-[#0F0F0F]">
+  <div class="flex h-screen bg-[#FEFCF9]">
     <!-- Mobile overlay -->
     {#if sidebarOpen}
       <!-- svelte-ignore a11y-click-events-have-key-events -->
       <!-- svelte-ignore a11y-no-static-element-interactions -->
-      <div class="fixed inset-0 bg-black/50 z-40 md:hidden" on:click={() => sidebarOpen = false}></div>
+      <div class="fixed inset-0 bg-black/40 z-40 md:hidden" on:click={() => sidebarOpen = false}></div>
     {/if}
 
     <Sidebar {currentRoute} bind:open={sidebarOpen} />
@@ -85,7 +85,7 @@
     <main class="flex-1 overflow-y-auto p-6 md:p-8">
       <!-- Mobile hamburger -->
       <button
-        class="md:hidden mb-4 p-2 rounded-lg bg-[#1A1A1A] border border-[rgba(255,255,255,0.08)] text-[#A09890] hover:text-[#E8E4E0] transition-colors"
+        class="md:hidden mb-4 p-2 bg-white border-2 border-[#1A1A1A] text-[#6B6560] hover:text-[#1A1A1A] hover:bg-[#F7F4F0] transition-colors"
         on:click={() => sidebarOpen = true}
       >
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">

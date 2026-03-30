@@ -67,23 +67,23 @@
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div
-    class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center pt-[20vh]"
+    class="fixed inset-0 bg-black/40 z-50 flex items-start justify-center pt-[20vh]"
     on:click={handleBackdropClick}
     on:keydown={handleKeydown}
   >
-    <div class="bg-[#1A1A1A] border border-[rgba(255,255,255,0.12)] rounded-xl w-[520px] shadow-2xl overflow-hidden">
+    <div class="bg-white border-2 border-[#1A1A1A] shadow-brutal w-[520px] overflow-hidden">
       <!-- Search input -->
-      <div class="flex items-center gap-3 px-4 py-3 border-b border-[rgba(255,255,255,0.08)]">
-        <svg class="w-5 h-5 text-[#A09890] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <div class="flex items-center gap-3 px-4 py-3 border-b-2 border-[#1A1A1A]">
+        <svg class="w-5 h-5 text-[#9B9590] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
         <input
           bind:this={inputEl}
           bind:value={searchQuery}
           placeholder="Search pages..."
-          class="flex-1 bg-transparent text-[#E8E4E0] text-sm outline-none placeholder:text-[#555]"
+          class="flex-1 bg-transparent text-[#1A1A1A] text-sm outline-none placeholder:text-[#9B9590]"
         />
-        <kbd class="text-[0.65rem] text-[#A09890] bg-[#2A2A2A] px-1.5 py-0.5 rounded border border-[rgba(255,255,255,0.08)]">ESC</kbd>
+        <kbd class="text-[0.65rem] text-[#6B6560] bg-[#F7F4F0] px-1.5 py-0.5 border-2 border-[#1A1A1A]">ESC</kbd>
       </div>
 
       <!-- Results -->
@@ -91,16 +91,16 @@
         {#each filteredPages as page, i}
           <button
             class="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100
-              {i === selectedIndex ? 'bg-[#F07030]/10 text-[#F07030]' : 'text-[#E8E4E0] hover:bg-[#2A2A2A]'}"
+              {i === selectedIndex ? 'bg-[#FEF3EC] text-[#F07030]' : 'text-[#1A1A1A] hover:bg-[#F7F4F0]'}"
             on:click={() => navigate(page)}
             on:mouseenter={() => selectedIndex = i}
           >
             <span class="font-medium text-sm">{page.label}</span>
-            <span class="text-xs text-[#A09890]">{page.desc}</span>
+            <span class="text-xs text-[#9B9590]">{page.desc}</span>
           </button>
         {/each}
         {#if filteredPages.length === 0}
-          <p class="text-[#A09890] text-sm text-center py-4">No matching pages</p>
+          <p class="text-[#9B9590] text-sm text-center py-4">No matching pages</p>
         {/if}
       </div>
     </div>

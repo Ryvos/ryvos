@@ -26,48 +26,48 @@
 
 <div>
   <div class="mb-7">
-    <h2 class="text-2xl font-bold tracking-tight text-[#E8E4E0]">Channels</h2>
-    <p class="text-[#A09890] text-sm mt-1">Integration channel status</p>
+    <h2 class="text-2xl font-heading font-bold tracking-tight text-[#1A1A1A]">Channels</h2>
+    <p class="text-[#9B9590] text-sm mt-1">Integration channel status</p>
   </div>
 
   {#if loading}
-    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-8 text-center">
-      <p class="text-[#A09890] text-sm animate-pulse">Loading channels...</p>
+    <div class="bg-white border-2 border-[#1A1A1A] p-8 text-center">
+      <p class="text-[#9B9590] text-sm animate-pulse">Loading channels...</p>
     </div>
   {:else if error}
-    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-12 text-center">
-      <p class="text-[#A09890] text-sm">Channels endpoint not available</p>
+    <div class="bg-white border-2 border-[#1A1A1A] p-12 text-center">
+      <p class="text-[#9B9590] text-sm">Channels endpoint not available</p>
     </div>
   {:else if channels.length === 0}
-    <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-12 text-center">
-      <p class="text-[#A09890] text-sm">No channels configured</p>
+    <div class="bg-white border-2 border-[#1A1A1A] p-12 text-center">
+      <p class="text-[#9B9590] text-sm">No channels configured</p>
     </div>
   {:else}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
       {#each channels as channel}
-        <div class="bg-[#222222] border border-[rgba(255,255,255,0.08)] rounded-xl p-5 hover:border-[rgba(255,255,255,0.15)] transition-all duration-200">
+        <div class="bg-white border-2 border-[#1A1A1A] shadow-brutal-sm p-5 hover:bg-[#F7F4F0] transition-all duration-200">
           <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-semibold text-[#E8E4E0]">{channel.name || 'Unknown'}</h3>
-            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[0.7rem] font-semibold
+            <h3 class="text-sm font-semibold text-[#1A1A1A]">{channel.name || 'Unknown'}</h3>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[0.7rem] font-semibold
               {channel.status === 'connected' || channel.status === 'active' || channel.status === 'ok'
-                ? 'bg-emerald-400/10 text-emerald-400'
+                ? 'bg-[#16A34A]/10 text-[#16A34A]'
                 : channel.status === 'error'
-                  ? 'bg-red-400/10 text-red-400'
-                  : 'bg-[#2A2A2A] text-[#A09890]'}">
+                  ? 'bg-[#DC2626]/10 text-[#DC2626]'
+                  : 'bg-[#F7F4F0] text-[#9B9590]'}">
               <span class="w-1.5 h-1.5 rounded-full
                 {channel.status === 'connected' || channel.status === 'active' || channel.status === 'ok'
-                  ? 'bg-emerald-400'
+                  ? 'bg-[#16A34A]'
                   : channel.status === 'error'
-                    ? 'bg-red-400'
-                    : 'bg-[#A09890]'}"></span>
+                    ? 'bg-[#DC2626]'
+                    : 'bg-[#9B9590]'}"></span>
               {channel.status || 'unknown'}
             </span>
           </div>
           {#if channel.type}
-            <p class="text-xs text-[#A09890]">Type: {channel.type}</p>
+            <p class="text-xs text-[#9B9590]">Type: {channel.type}</p>
           {/if}
           {#if channel.description}
-            <p class="text-xs text-[#A09890] mt-1">{channel.description}</p>
+            <p class="text-xs text-[#9B9590] mt-1">{channel.description}</p>
           {/if}
         </div>
       {/each}

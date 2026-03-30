@@ -166,6 +166,34 @@ impl AuditTrail {
         Ok(count as u64)
     }
 
+    /// Get tool usage breakdown for dashboard.
+    pub async fn tool_breakdown(&self) -> Result<Vec<(String, u64)>, String> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn
+            .prepare("SELECT tool_name, COUNT(*) as cnt FROM audit_log GROUP BY tool_name ORDER BY cnt DESC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u64))
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    /// Count distinct heartbeat sessions.
+    pub async fn heartbeat_session_count(&self) -> Result<u64, String> {
+        let conn = self.conn.lock().await;
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(DISTINCT session_id) FROM audit_log WHERE session_id LIKE 'heartbeat:%'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(count as u64)
+    }
+
     /// Query entries by tool name (for analysis).
     pub async fn entries_by_tool(
         &self,

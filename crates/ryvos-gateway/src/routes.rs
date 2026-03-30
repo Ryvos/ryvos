@@ -522,7 +522,27 @@ pub async fn audit_stats(
     }
     let trail = state.audit_trail.as_ref().ok_or(StatusCode::NOT_FOUND)?;
     let total = trail.total_entries().await.unwrap_or(0);
-    Ok(Json(serde_json::json!({ "total_entries": total })))
+    let tool_breakdown = trail.tool_breakdown().await.unwrap_or_default();
+    let heartbeat_sessions = trail.heartbeat_session_count().await.unwrap_or(0);
+
+    let tools: Vec<serde_json::Value> = tool_breakdown
+        .into_iter()
+        .map(|(tool, count)| serde_json::json!({"tool": tool, "count": count}))
+        .collect();
+
+    // Get Viking entry count if available
+    let viking_entries = if let Some(ref vc) = state.viking_client {
+        vc.list_directory("viking://").await.map(|v| v.len() as u64).unwrap_or(0)
+    } else {
+        0
+    };
+
+    Ok(Json(serde_json::json!({
+        "total_entries": total,
+        "tool_breakdown": tools,
+        "heartbeat_sessions": heartbeat_sessions,
+        "viking_entries": viking_entries,
+    })))
 }
 
 // ── Viking Memory Browser API ───────────────────────────────────
