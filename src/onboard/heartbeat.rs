@@ -18,13 +18,7 @@ pub fn configure() -> Result<Option<HeartbeatConfig>> {
         .validate_with(|input: &String| -> std::result::Result<(), String> {
             input
                 .parse::<u64>()
-                .map(|v| {
-                    if v >= 60 {
-                        ()
-                    } else {
-                        return;
-                    }
-                })
+                .map(|v| if v >= 60 {})
                 .map_err(|_| "Must be a number >= 60".to_string())
         })
         .interact_text()?;
@@ -102,9 +96,8 @@ fn cleanup_heartbeat_files() {
     let lowercase = workspace.join("heartbeat.md");
     let uppercase = workspace.join("HEARTBEAT.md");
 
-    if lowercase.exists() && !uppercase.exists() {
-        if std::fs::rename(&lowercase, &uppercase).is_ok() {
-            println!("  Renamed heartbeat.md → HEARTBEAT.md");
-        }
+    if lowercase.exists() && !uppercase.exists() && std::fs::rename(&lowercase, &uppercase).is_ok()
+    {
+        println!("  Renamed heartbeat.md → HEARTBEAT.md");
     }
 }

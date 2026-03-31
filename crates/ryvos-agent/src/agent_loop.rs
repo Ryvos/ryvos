@@ -192,7 +192,7 @@ impl AgentRuntime {
         goal: Option<&Goal>,
     ) -> Result<String> {
         // Director delegation: if enabled and a goal is provided, use Director orchestration
-        if let (Some(goal), Some(ref director_cfg)) = (goal, self.config.agent.director.as_ref()) {
+        if let (Some(goal), Some(director_cfg)) = (goal, self.config.agent.director.as_ref()) {
             if director_cfg.enabled {
                 return self.run_with_director(session_id, user_message, goal).await;
             }

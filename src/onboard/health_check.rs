@@ -69,7 +69,7 @@ pub fn run(config: &AppConfig) {
 
     // Check gateway port
     if let Some(ref gw) = config.gateway {
-        if let Some(port_str) = gw.bind.split(':').last() {
+        if let Some(port_str) = gw.bind.split(':').next_back() {
             if let Ok(port) = port_str.parse::<u16>() {
                 match std::net::TcpListener::bind(("127.0.0.1", port)) {
                     Ok(_) => ok(&format!("Gateway port {} available", port)),

@@ -587,7 +587,7 @@ mod tests {
             evolution_count: 0,
         };
 
-        let failures = vec![SemanticFailure {
+        let failures = [SemanticFailure {
             timestamp: chrono::Utc::now(),
             node_id: "n1".to_string(),
             category: FailureCategory::VelocityDrift,

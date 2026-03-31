@@ -27,6 +27,12 @@ pub struct ClaudeCodeClient {
     pattern_matcher: Option<Arc<DangerousPatternMatcher>>,
 }
 
+impl Default for ClaudeCodeClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClaudeCodeClient {
     pub fn new() -> Self {
         Self {
@@ -60,7 +66,6 @@ impl LlmClient for ClaudeCodeClient {
         _tools: &[ToolDefinition],
     ) -> BoxFuture<'_, Result<BoxStream<'_, Result<StreamDelta>>>> {
         let config = config.clone();
-        let messages = messages;
         let matcher = self.pattern_matcher.clone();
 
         Box::pin(async move {
@@ -251,8 +256,8 @@ impl LlmClient for ClaudeCodeClient {
 async fn parse_stream_json(
     json: &serde_json::Value,
     matcher: Option<&DangerousPatternMatcher>,
-    child_id: Option<u32>,
-    killed: &Mutex<bool>,
+    _child_id: Option<u32>,
+    _killed: &Mutex<bool>,
 ) -> Option<Result<StreamDelta>> {
     let msg_type = json["type"].as_str()?;
 
@@ -297,7 +302,7 @@ async fn parse_stream_json(
 
                         // Informational pattern check (no blocking)
                         if let Some(matcher) = matcher {
-                            if (tool_name == "Bash" || tool_name == "bash") {
+                            if tool_name == "Bash" || tool_name == "bash" {
                                 if let Some(label) = matcher.is_dangerous(&input_summary) {
                                     warn!(
                                         tool = tool_name,

@@ -27,6 +27,12 @@ pub struct CopilotClient {
     pattern_matcher: Option<Arc<DangerousPatternMatcher>>,
 }
 
+impl Default for CopilotClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CopilotClient {
     pub fn new() -> Self {
         Self {
@@ -115,11 +121,7 @@ fn build_args(config: &ModelConfig, prompt: &str, system_context: &str) -> Vec<S
     ];
 
     // Tool permissions
-    if config
-        .cli_permission_mode
-        .as_deref()
-        .map_or(false, |m| m == "dontAsk")
-    {
+    if config.cli_permission_mode.as_deref() == Some("dontAsk") {
         args.push("--allow-all".to_string());
     } else {
         for tool in &config.cli_allowed_tools {
@@ -153,8 +155,8 @@ fn build_args(config: &ModelConfig, prompt: &str, system_context: &str) -> Vec<S
 async fn parse_copilot_event(
     json: &serde_json::Value,
     matcher: Option<&DangerousPatternMatcher>,
-    child_id: Option<u32>,
-    killed: &Mutex<bool>,
+    _child_id: Option<u32>,
+    _killed: &Mutex<bool>,
     saw_text_delta: &Mutex<bool>,
 ) -> Option<Result<StreamDelta>> {
     let event_type = json["type"].as_str()?;
@@ -230,7 +232,7 @@ async fn parse_copilot_event(
             // Extract ALL tool requests for audit trail / safety memory logging.
             // CLI providers execute tools internally — we can't block, but we CAN log.
             if let Some(requests) = tool_requests {
-                for req in requests {
+                if let Some(req) = requests.iter().next() {
                     let tool_name = req["toolName"].as_str().unwrap_or("unknown");
                     let input_summary = if tool_name == "Bash"
                         || tool_name == "bash"
@@ -304,7 +306,6 @@ impl LlmClient for CopilotClient {
         _tools: &[ToolDefinition],
     ) -> BoxFuture<'_, Result<BoxStream<'_, Result<StreamDelta>>>> {
         let config = config.clone();
-        let messages = messages;
         let matcher = self.pattern_matcher.clone();
 
         Box::pin(async move {

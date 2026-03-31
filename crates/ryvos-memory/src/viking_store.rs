@@ -227,7 +227,7 @@ impl VikingStore {
                     path: row.get(0)?,
                     content: content.chars().take(500).collect(),
                     level: ContextLevel::L1,
-                    relevance_score: (-score).max(0.0).min(1.0),
+                    relevance_score: (-score).clamp(0.0, 1.0),
                     trajectory: vec!["fts5".to_string()],
                 })
             })
@@ -468,7 +468,7 @@ mod tests {
             .unwrap();
 
         let results = store.search("user1", "production", None, 10).unwrap();
-        assert!(results.len() >= 1);
+        assert!(!results.is_empty());
         assert!(results.iter().any(|r| r.content.contains("production")));
     }
 

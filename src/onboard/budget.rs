@@ -19,13 +19,7 @@ pub fn configure() -> Result<Option<BudgetConfig>> {
         .validate_with(|input: &String| -> std::result::Result<(), String> {
             input
                 .parse::<f64>()
-                .map(|v| {
-                    if v > 0.0 {
-                        ()
-                    } else {
-                        return;
-                    }
-                })
+                .map(|v| if v > 0.0 {})
                 .map_err(|_| "Must be a positive number".to_string())
         })
         .interact_text()?;

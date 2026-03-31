@@ -30,6 +30,7 @@ pub struct SecurityGate {
     policy: SecurityPolicy,
     tools: Arc<tokio::sync::RwLock<ToolRegistry>>,
     broker: Arc<ApprovalBroker>,
+    #[allow(dead_code)]
     event_bus: Arc<EventBus>,
     safety_memory: Option<Arc<SafetyMemory>>,
     audit_trail: Option<Arc<AuditTrail>>,

@@ -185,13 +185,13 @@ impl Tool for MemoryDeleteTool {
                     vc.downcast_ref::<std::sync::Arc<ryvos_memory::VikingClient>>()
                 {
                     // Try to find and delete matching Viking entries
-                    let search_path = format!("viking://agent/events/");
+                    let search_path = "viking://agent/events/".to_string();
                     if let Ok(entries) = viking.list_directory(&search_path).await {
                         for entry in entries {
                             if entry
                                 .summary
                                 .as_deref()
-                                .map_or(false, |s| s.contains(&params.heading))
+                                .is_some_and(|s| s.contains(&params.heading))
                             {
                                 let _ = viking.delete_memory(&entry.path).await;
                             }

@@ -273,9 +273,7 @@ async fn main() -> anyhow::Result<()> {
             .map(|h| h.join(".ryvos"))
             .unwrap_or_else(|| PathBuf::from(".ryvos"));
         let db_path = db.clone().unwrap_or_else(|| workspace.join("viking.db"));
-        return viking_server::run_standalone(bind, &db_path)
-            .await
-            .map_err(Into::into);
+        return viking_server::run_standalone(bind, &db_path).await;
     }
 
     // Handle MCP server mode before config loading (standalone stdio server)
