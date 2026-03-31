@@ -288,7 +288,11 @@ pub fn build_default_context(
     workspace: &Path,
     system_prompt_override: Option<&str>,
 ) -> ChatMessage {
-    build_default_context_extended(workspace, system_prompt_override, &ExtendedContext::default())
+    build_default_context_extended(
+        workspace,
+        system_prompt_override,
+        &ExtendedContext::default(),
+    )
 }
 
 /// Build the default context with optional Viking + safety layers.
@@ -327,7 +331,12 @@ pub fn build_goal_context(
     system_prompt_override: Option<&str>,
     goal: Option<&Goal>,
 ) -> ChatMessage {
-    build_goal_context_extended(workspace, system_prompt_override, goal, &ExtendedContext::default())
+    build_goal_context_extended(
+        workspace,
+        system_prompt_override,
+        goal,
+        &ExtendedContext::default(),
+    )
 }
 
 /// Build goal context with optional Viking + safety layers.

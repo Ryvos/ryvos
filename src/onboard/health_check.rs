@@ -56,10 +56,7 @@ pub fn run(config: &AppConfig) {
 
     // Check npx availability for MCP servers
     if config.mcp.is_some() {
-        match std::process::Command::new("which")
-            .arg("npx")
-            .output()
-        {
+        match std::process::Command::new("which").arg("npx").output() {
             Ok(output) if output.status.success() => {
                 ok("npx found on PATH (needed for MCP servers)");
             }

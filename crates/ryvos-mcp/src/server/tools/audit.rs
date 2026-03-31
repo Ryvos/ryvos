@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use super::super::audit_reader::AuditReader;
+use std::sync::Arc;
 
 pub async fn query(audit: &Arc<AuditReader>, limit: usize) -> String {
     match audit.recent_entries(limit).await {

@@ -106,7 +106,8 @@ impl AuditTrail {
         let conn = self.conn.lock().await;
 
         // When session_id is empty, query all entries (no WHERE filter)
-        let (query, params): (&str, Vec<Box<dyn rusqlite::types::ToSql>>) = if session_id.is_empty() {
+        let (query, params): (&str, Vec<Box<dyn rusqlite::types::ToSql>>) = if session_id.is_empty()
+        {
             (
                 "SELECT timestamp, session_id, tool_name, input_summary, output_summary, safety_reasoning, outcome, lessons_available
                  FROM audit_log
@@ -137,8 +138,7 @@ impl AuditTrail {
                 let outcome: SafetyOutcome =
                     serde_json::from_str(&outcome_str).unwrap_or(SafetyOutcome::Harmless);
                 let lessons_str: String = row.get(7)?;
-                let lessons: Vec<String> =
-                    serde_json::from_str(&lessons_str).unwrap_or_default();
+                let lessons: Vec<String> = serde_json::from_str(&lessons_str).unwrap_or_default();
                 Ok(AuditEntry {
                     timestamp,
                     session_id: row.get(1)?,
@@ -221,8 +221,7 @@ impl AuditTrail {
                 let outcome: SafetyOutcome =
                     serde_json::from_str(&outcome_str).unwrap_or(SafetyOutcome::Harmless);
                 let lessons_str: String = row.get(7)?;
-                let lessons: Vec<String> =
-                    serde_json::from_str(&lessons_str).unwrap_or_default();
+                let lessons: Vec<String> = serde_json::from_str(&lessons_str).unwrap_or_default();
                 Ok(AuditEntry {
                     timestamp,
                     session_id: row.get(1)?,

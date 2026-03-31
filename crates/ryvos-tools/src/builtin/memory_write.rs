@@ -71,8 +71,13 @@ impl Tool for MemoryWriteTool {
             // Dual-write to Viking if available (SQLite is always primary)
             let mut viking_note = String::new();
             if let Some(ref vc) = ctx.viking_client {
-                if let Some(viking) = vc.downcast_ref::<std::sync::Arc<ryvos_memory::VikingClient>>() {
-                    let path = format!("viking://agent/events/{}", chrono::Utc::now().format("%Y%m%d-%H%M%S"));
+                if let Some(viking) =
+                    vc.downcast_ref::<std::sync::Arc<ryvos_memory::VikingClient>>()
+                {
+                    let path = format!(
+                        "viking://agent/events/{}",
+                        chrono::Utc::now().format("%Y%m%d-%H%M%S")
+                    );
                     match viking.write_memory(&path, note, None).await {
                         Ok(()) => viking_note = format!(" + Viking ({})", path),
                         Err(e) => {

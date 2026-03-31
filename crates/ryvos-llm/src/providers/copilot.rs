@@ -58,8 +58,8 @@ fn strip_ansi_escapes(input: &str) -> String {
                 // CSI sequence: ESC [ ... final_byte
                 Some('[') => {
                     chars.next(); // consume '['
-                    // Consume parameter bytes (0x30-0x3F), intermediate bytes (0x20-0x2F),
-                    // until we hit a final byte (0x40-0x7E).
+                                  // Consume parameter bytes (0x30-0x3F), intermediate bytes (0x20-0x2F),
+                                  // until we hit a final byte (0x40-0x7E).
                     for c in chars.by_ref() {
                         if ('@'..='~').contains(&c) {
                             break;
@@ -166,9 +166,7 @@ async fn parse_copilot_event(
             None
         }
         "assistant.message_delta" => {
-            let content = json
-                .get("data")
-                .and_then(|d| d["deltaContent"].as_str())?;
+            let content = json.get("data").and_then(|d| d["deltaContent"].as_str())?;
             if content.is_empty() {
                 return None;
             }
@@ -177,9 +175,7 @@ async fn parse_copilot_event(
             Some(Ok(StreamDelta::TextDelta(content.to_string())))
         }
         "assistant.reasoning_delta" => {
-            let content = json
-                .get("data")
-                .and_then(|d| d["deltaContent"].as_str())?;
+            let content = json.get("data").and_then(|d| d["deltaContent"].as_str())?;
             if content.is_empty() {
                 return None;
             }
@@ -208,17 +204,26 @@ async fn parse_copilot_event(
             }
 
             // Check for usage data in the message
-            if let Some(usage) = json.get("data").and_then(|d| d.get("usage"))
+            if let Some(usage) = json
+                .get("data")
+                .and_then(|d| d.get("usage"))
                 .or_else(|| json.get("usage"))
             {
-                let input = usage.get("inputTokens")
+                let input = usage
+                    .get("inputTokens")
                     .or_else(|| usage.get("input_tokens"))
-                    .and_then(|v| v.as_u64()).unwrap_or(0);
-                let output = usage.get("outputTokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let output = usage
+                    .get("outputTokens")
                     .or_else(|| usage.get("output_tokens"))
-                    .and_then(|v| v.as_u64()).unwrap_or(0);
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
                 if input > 0 || output > 0 {
-                    return Some(Ok(StreamDelta::Usage { input_tokens: input, output_tokens: output }));
+                    return Some(Ok(StreamDelta::Usage {
+                        input_tokens: input,
+                        output_tokens: output,
+                    }));
                 }
             }
 
@@ -227,19 +232,32 @@ async fn parse_copilot_event(
             if let Some(requests) = tool_requests {
                 for req in requests {
                     let tool_name = req["toolName"].as_str().unwrap_or("unknown");
-                    let input_summary = if tool_name == "Bash" || tool_name == "bash" || tool_name.starts_with("shell") {
+                    let input_summary = if tool_name == "Bash"
+                        || tool_name == "bash"
+                        || tool_name.starts_with("shell")
+                    {
                         req.get("input")
                             .and_then(|i| i["command"].as_str().or_else(|| i["cmd"].as_str()))
                             .unwrap_or("")
                             .to_string()
                     } else {
-                        let s = serde_json::to_string(req.get("input").unwrap_or(&serde_json::Value::Null)).unwrap_or_default();
-                        if s.len() > 120 { format!("{}...", &s[..120]) } else { s }
+                        let s = serde_json::to_string(
+                            req.get("input").unwrap_or(&serde_json::Value::Null),
+                        )
+                        .unwrap_or_default();
+                        if s.len() > 120 {
+                            format!("{}...", &s[..120])
+                        } else {
+                            s
+                        }
                     };
 
                     // Informational pattern check (no blocking)
                     if let Some(matcher) = matcher {
-                        if tool_name == "Bash" || tool_name == "bash" || tool_name.starts_with("shell") {
+                        if tool_name == "Bash"
+                            || tool_name == "bash"
+                            || tool_name.starts_with("shell")
+                        {
                             if let Some(label) = matcher.is_dangerous(&input_summary) {
                                 warn!(
                                     tool = tool_name,
@@ -297,7 +315,11 @@ impl LlmClient for CopilotClient {
                 .find_map(|m| {
                     if m.role == Role::User {
                         let t = m.text();
-                        if t.is_empty() { None } else { Some(t) }
+                        if t.is_empty() {
+                            None
+                        } else {
+                            Some(t)
+                        }
                     } else {
                         None
                     }
@@ -640,16 +662,18 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
         let saw_text_delta = Mutex::new(false);
-        let result = rt
-            .block_on(parse_copilot_event(
-                &json,
-                Some(&matcher),
-                None,
-                &killed,
-                &saw_text_delta,
-            ));
+        let result = rt.block_on(parse_copilot_event(
+            &json,
+            Some(&matcher),
+            None,
+            &killed,
+            &saw_text_delta,
+        ));
         // No patterns → no blocking → process is NOT killed
-        assert!(!*rt.block_on(killed.lock()), "should not kill process with no patterns");
+        assert!(
+            !*rt.block_on(killed.lock()),
+            "should not kill process with no patterns"
+        );
         // result may be None or Some(Ok(_))
         if let Some(r) = result {
             assert!(r.is_ok(), "should not return error with no patterns");

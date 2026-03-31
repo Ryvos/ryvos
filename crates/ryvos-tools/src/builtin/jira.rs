@@ -9,9 +9,15 @@ use ryvos_core::types::{ToolContext, ToolResult};
 pub struct JiraSearchTool;
 
 impl Tool for JiraSearchTool {
-    fn name(&self) -> &str { "jira_search" }
-    fn tier(&self) -> SecurityTier { SecurityTier::T0 }
-    fn description(&self) -> &str { "Search Jira issues with JQL." }
+    fn name(&self) -> &str {
+        "jira_search"
+    }
+    fn tier(&self) -> SecurityTier {
+        SecurityTier::T0
+    }
+    fn description(&self) -> &str {
+        "Search Jira issues with JQL."
+    }
     fn input_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",
@@ -22,17 +28,31 @@ impl Tool for JiraSearchTool {
             "required": ["jql"]
         })
     }
-    fn execute(&self, _input: serde_json::Value, _ctx: ToolContext) -> BoxFuture<'_, Result<ToolResult>> {
-        Box::pin(async move { Ok(ToolResult::error("Jira not configured. Add [jira] section to config.toml.")) })
+    fn execute(
+        &self,
+        _input: serde_json::Value,
+        _ctx: ToolContext,
+    ) -> BoxFuture<'_, Result<ToolResult>> {
+        Box::pin(async move {
+            Ok(ToolResult::error(
+                "Jira not configured. Add [jira] section to config.toml.",
+            ))
+        })
     }
 }
 
 pub struct JiraCreateIssueTool;
 
 impl Tool for JiraCreateIssueTool {
-    fn name(&self) -> &str { "jira_create_issue" }
-    fn tier(&self) -> SecurityTier { SecurityTier::T2 }
-    fn description(&self) -> &str { "Create a new Jira issue." }
+    fn name(&self) -> &str {
+        "jira_create_issue"
+    }
+    fn tier(&self) -> SecurityTier {
+        SecurityTier::T2
+    }
+    fn description(&self) -> &str {
+        "Create a new Jira issue."
+    }
     fn input_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",
@@ -45,7 +65,11 @@ impl Tool for JiraCreateIssueTool {
             "required": ["project", "summary"]
         })
     }
-    fn execute(&self, _input: serde_json::Value, _ctx: ToolContext) -> BoxFuture<'_, Result<ToolResult>> {
+    fn execute(
+        &self,
+        _input: serde_json::Value,
+        _ctx: ToolContext,
+    ) -> BoxFuture<'_, Result<ToolResult>> {
         Box::pin(async move { Ok(ToolResult::error("Jira not configured.")) })
     }
 }
@@ -53,9 +77,15 @@ impl Tool for JiraCreateIssueTool {
 pub struct JiraUpdateIssueTool;
 
 impl Tool for JiraUpdateIssueTool {
-    fn name(&self) -> &str { "jira_update_issue" }
-    fn tier(&self) -> SecurityTier { SecurityTier::T2 }
-    fn description(&self) -> &str { "Update a Jira issue (status, assignee, fields)." }
+    fn name(&self) -> &str {
+        "jira_update_issue"
+    }
+    fn tier(&self) -> SecurityTier {
+        SecurityTier::T2
+    }
+    fn description(&self) -> &str {
+        "Update a Jira issue (status, assignee, fields)."
+    }
     fn input_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",
@@ -66,7 +96,11 @@ impl Tool for JiraUpdateIssueTool {
             "required": ["issue_key"]
         })
     }
-    fn execute(&self, _input: serde_json::Value, _ctx: ToolContext) -> BoxFuture<'_, Result<ToolResult>> {
+    fn execute(
+        &self,
+        _input: serde_json::Value,
+        _ctx: ToolContext,
+    ) -> BoxFuture<'_, Result<ToolResult>> {
         Box::pin(async move { Ok(ToolResult::error("Jira not configured.")) })
     }
 }

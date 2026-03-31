@@ -143,17 +143,15 @@ impl SecurityGate {
         }
 
         // 4. Execute — always
-        let result = self.execute_tool_direct(&tool, name, input.clone(), ctx.clone()).await;
+        let result = self
+            .execute_tool_direct(&tool, name, input.clone(), ctx.clone())
+            .await;
 
         // 5. Post-action: assess outcome and learn
         match &result {
             Ok(tool_result) => {
-                let outcome = assess_outcome(
-                    name,
-                    &input,
-                    &tool_result.content,
-                    tool_result.is_error,
-                );
+                let outcome =
+                    assess_outcome(name, &input, &tool_result.content, tool_result.is_error);
 
                 // Record to audit trail (post-execution)
                 if let Some(ref trail) = self.audit_trail {
@@ -176,7 +174,10 @@ impl SecurityGate {
                 // Record safety lesson for incidents
                 if let Some(ref memory) = self.safety_memory {
                     match &outcome {
-                        SafetyOutcome::Incident { what_happened, severity } => {
+                        SafetyOutcome::Incident {
+                            what_happened,
+                            severity,
+                        } => {
                             let lesson = crate::safety_memory::SafetyLesson {
                                 id: Uuid::new_v4().to_string(),
                                 timestamp: Utc::now(),

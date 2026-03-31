@@ -16,9 +16,7 @@ pub fn configure() -> Result<Option<CronConfig>> {
 
     loop {
         println!();
-        let name: String = Input::new()
-            .with_prompt("Task name")
-            .interact_text()?;
+        let name: String = Input::new().with_prompt("Task name").interact_text()?;
 
         let schedule: String = Input::new()
             .with_prompt("Cron expression (e.g., '0 9 * * *' for daily at 9am)")

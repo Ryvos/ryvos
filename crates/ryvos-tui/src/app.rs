@@ -224,7 +224,10 @@ impl App {
             AgentEvent::HeartbeatFired { timestamp } => {
                 self.messages.push(DisplayMessage {
                     role: MessageRole::System,
-                    text: format!("[Heartbeat] Checking workspace at {}", timestamp.format("%H:%M:%S UTC")),
+                    text: format!(
+                        "[Heartbeat] Checking workspace at {}",
+                        timestamp.format("%H:%M:%S UTC")
+                    ),
                 });
             }
             AgentEvent::HeartbeatOk { response_chars, .. } => {

@@ -510,8 +510,7 @@ mod tests {
 
         // Do NOT publish RunStarted — daemon idle mode
         // Wait longer than stall_timeout
-        let result =
-            tokio::time::timeout(std::time::Duration::from_secs(3), hint_rx.recv()).await;
+        let result = tokio::time::timeout(std::time::Duration::from_secs(3), hint_rx.recv()).await;
 
         assert!(
             result.is_err(),

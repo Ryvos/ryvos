@@ -230,17 +230,30 @@ impl AgentRuntime {
         if let Some(ref vc) = *self.viking_client.lock().await {
             let query_hint = user_message;
             let policy = ryvos_memory::viking::ContextLevelPolicy::default();
-            let viking_ctx = ryvos_memory::viking::load_viking_context(vc, query_hint, &policy).await;
+            let viking_ctx =
+                ryvos_memory::viking::load_viking_context(vc, query_hint, &policy).await;
             if !viking_ctx.is_empty() {
-                info!(len = viking_ctx.len(), "Viking context injected into system prompt");
+                info!(
+                    len = viking_ctx.len(),
+                    "Viking context injected into system prompt"
+                );
                 extended.viking_context = viking_ctx;
             }
         }
 
         let system_msg = if goal.is_some() {
-            context::build_goal_context_extended(&workspace, prompt_override.as_deref(), goal, &extended)
+            context::build_goal_context_extended(
+                &workspace,
+                prompt_override.as_deref(),
+                goal,
+                &extended,
+            )
         } else {
-            context::build_default_context_extended(&workspace, prompt_override.as_deref(), &extended)
+            context::build_default_context_extended(
+                &workspace,
+                prompt_override.as_deref(),
+                &extended,
+            )
         };
 
         // Generate a unique run_id for checkpointing
@@ -315,7 +328,8 @@ impl AgentRuntime {
                     agent_spawner: None,
                     sandbox_config: self.config.agent.sandbox.clone(),
                     config_path: None,
-                    viking_client: flush_vc.map(|c| Arc::new(c) as Arc<dyn std::any::Any + Send + Sync>),
+                    viking_client: flush_vc
+                        .map(|c| Arc::new(c) as Arc<dyn std::any::Any + Send + Sync>),
                 };
                 if let Ok(mut stream) = self
                     .llm
@@ -345,9 +359,12 @@ impl AgentRuntime {
 
                     // Execute any memory tool calls from the flush
                     for tc in &flush_tool_calls {
-                        if tc.name.starts_with("memory") || tc.name.starts_with("daily_log")
-                            || tc.name == "write" || tc.name == "Write"
-                            || tc.name == "bash" || tc.name == "Bash"
+                        if tc.name.starts_with("memory")
+                            || tc.name.starts_with("daily_log")
+                            || tc.name == "write"
+                            || tc.name == "Write"
+                            || tc.name == "bash"
+                            || tc.name == "Bash"
                         {
                             let input: serde_json::Value =
                                 serde_json::from_str(&tc.input_json).unwrap_or_default();
@@ -367,8 +384,7 @@ impl AgentRuntime {
 
         if self.config.agent.enable_summarization {
             let pruned =
-                summarize_and_prune(&mut messages, budget, 6, &*self.llm, &model_config)
-                    .await?;
+                summarize_and_prune(&mut messages, budget, 6, &*self.llm, &model_config).await?;
             if pruned > 0 {
                 info!(
                     pruned,
@@ -490,7 +506,10 @@ impl AgentRuntime {
                         *self.last_message_id.lock().unwrap() = Some(id.clone());
                         model_config.cli_session_id = Some(id);
                     }
-                    StreamDelta::CliToolExecuted { tool_name, input_summary } => {
+                    StreamDelta::CliToolExecuted {
+                        tool_name,
+                        input_summary,
+                    } => {
                         // CLI providers (claude-code, copilot) execute tools internally.
                         // We can't block them, but we log to AuditTrail + SafetyMemory
                         // for post-hoc accountability — global security across all providers.
@@ -515,7 +534,8 @@ impl AgentRuntime {
                                     session_id: session_id.to_string(),
                                     tool_name: tool_name.clone(),
                                     input_summary: input_summary.clone(),
-                                    output_summary: "[CLI provider — executed internally]".to_string(),
+                                    output_summary: "[CLI provider — executed internally]"
+                                        .to_string(),
                                     safety_reasoning: None,
                                     outcome: crate::safety_memory::SafetyOutcome::Harmless,
                                     lessons_available: vec![],

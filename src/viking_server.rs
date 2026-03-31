@@ -106,9 +106,15 @@ async fn write_memory(
     State(store): State<AppState>,
     Json(req): Json<WriteRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
-    store.write(&req.user_id, &req.path, &req.content, &req.metadata)
+    store
+        .write(&req.user_id, &req.path, &req.content, &req.metadata)
         .map(|_| StatusCode::OK)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e })))
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: e }),
+            )
+        })
 }
 
 async fn read_memory(
@@ -120,7 +126,8 @@ async fn read_memory(
         "L2" => ryvos_memory::viking::ContextLevel::L2,
         _ => ryvos_memory::viking::ContextLevel::L1,
     };
-    store.read(&q.user_id, &q.path, level)
+    store
+        .read(&q.user_id, &q.path, level)
         .map(Json)
         .map_err(|e| (StatusCode::NOT_FOUND, Json(ErrorResponse { error: e })))
 }
@@ -129,36 +136,60 @@ async fn search_memory(
     State(store): State<AppState>,
     Query(q): Query<SearchQuery>,
 ) -> Result<Json<Vec<VikingResult>>, (StatusCode, Json<ErrorResponse>)> {
-    store.search(&q.user_id, &q.query, q.directory.as_deref(), q.limit)
+    store
+        .search(&q.user_id, &q.query, q.directory.as_deref(), q.limit)
         .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e })))
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: e }),
+            )
+        })
 }
 
 async fn list_directory(
     State(store): State<AppState>,
     Query(q): Query<ListQuery>,
 ) -> Result<Json<Vec<VikingDirEntry>>, (StatusCode, Json<ErrorResponse>)> {
-    store.list_directory(&q.user_id, &q.path)
+    store
+        .list_directory(&q.user_id, &q.path)
         .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e })))
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: e }),
+            )
+        })
 }
 
 async fn delete_memory(
     State(store): State<AppState>,
     Query(q): Query<DeleteQuery>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
-    store.delete(&q.user_id, &q.path)
+    store
+        .delete(&q.user_id, &q.path)
         .map(|_| StatusCode::OK)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e })))
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: e }),
+            )
+        })
 }
 
 async fn iterate(
     State(store): State<AppState>,
     Json(req): Json<IterateRequest>,
 ) -> Result<Json<IterateResponse>, (StatusCode, Json<ErrorResponse>)> {
-    store.iterate(&req.user_id, &req.transcript)
+    store
+        .iterate(&req.user_id, &req.transcript)
         .map(|count| Json(IterateResponse { extracted: count }))
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e })))
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: e }),
+            )
+        })
 }
 
 // ── Server ──────────────────────────────────────────────────────

@@ -50,7 +50,9 @@ impl VikingStore {
              -- FTS sync is manual in write/delete methods to handle upserts correctly",
         )
         .map_err(|e| e.to_string())?;
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     /// Create an in-memory store for testing.
@@ -78,7 +80,9 @@ impl VikingStore {
              -- FTS5 sync is done manually in write/delete methods to handle upserts correctly",
         )
         .map_err(|e| e.to_string())?;
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     /// Generate L0 summary from content (first sentence, max 100 chars).
@@ -146,7 +150,12 @@ impl VikingStore {
     }
 
     /// Read a memory entry at the given detail level.
-    pub fn read(&self, user_id: &str, path: &str, level: ContextLevel) -> Result<VikingResult, String> {
+    pub fn read(
+        &self,
+        user_id: &str,
+        path: &str,
+        level: ContextLevel,
+    ) -> Result<VikingResult, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let content_col = match level {
             ContextLevel::L0 => "content_l0",
@@ -224,14 +233,20 @@ impl VikingStore {
             })
             .map_err(|e| e.to_string())?;
 
-        results.collect::<std::result::Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        results
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     /// List directory contents with L0 summaries.
     /// Groups entries by the next path segment after the given prefix.
     pub fn list_directory(&self, user_id: &str, path: &str) -> Result<Vec<VikingDirEntry>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        let prefix = if path.ends_with('/') { path.to_string() } else { format!("{}/", path) };
+        let prefix = if path.ends_with('/') {
+            path.to_string()
+        } else {
+            format!("{}/", path)
+        };
 
         let mut stmt = conn
             .prepare(
@@ -241,7 +256,10 @@ impl VikingStore {
 
         let rows: Vec<(String, String)> = stmt
             .query_map(params![user_id, format!("{}%", prefix)], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1).unwrap_or_default()))
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1).unwrap_or_default(),
+                ))
             })
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
@@ -330,21 +348,47 @@ impl VikingStore {
 
         for (i, para) in paragraphs.iter().enumerate() {
             let lower = para.to_lowercase();
-            let category = if lower.contains("prefer") || lower.contains("like") || lower.contains("don't like") || lower.contains("always use") {
+            let category = if lower.contains("prefer")
+                || lower.contains("like")
+                || lower.contains("don't like")
+                || lower.contains("always use")
+            {
                 "user/preferences"
-            } else if lower.contains("name is") || lower.contains("i am") || lower.contains("my ") || lower.contains("i'm ") {
+            } else if lower.contains("name is")
+                || lower.contains("i am")
+                || lower.contains("my ")
+                || lower.contains("i'm ")
+            {
                 "user/profile"
-            } else if lower.contains("ip ") || lower.contains("server") || lower.contains("password") || lower.contains("key") || lower.contains("path") {
+            } else if lower.contains("ip ")
+                || lower.contains("server")
+                || lower.contains("password")
+                || lower.contains("key")
+                || lower.contains("path")
+            {
                 "user/entities"
-            } else if lower.contains("learned") || lower.contains("pattern") || lower.contains("rule") || lower.contains("always ") {
+            } else if lower.contains("learned")
+                || lower.contains("pattern")
+                || lower.contains("rule")
+                || lower.contains("always ")
+            {
                 "agent/patterns"
-            } else if lower.contains("error") || lower.contains("failed") || lower.contains("bug") || lower.contains("fix") {
+            } else if lower.contains("error")
+                || lower.contains("failed")
+                || lower.contains("bug")
+                || lower.contains("fix")
+            {
                 "agent/cases"
             } else {
                 "agent/events"
             };
 
-            let path = format!("viking://{}/{}-{}", category, now.format("%Y%m%d-%H%M%S"), i);
+            let path = format!(
+                "viking://{}/{}-{}",
+                category,
+                now.format("%Y%m%d-%H%M%S"),
+                i
+            );
             let meta = VikingMeta {
                 category: Some(category.to_string()),
                 ..Default::default()
@@ -381,13 +425,24 @@ mod tests {
     fn test_write_and_read() {
         let store = VikingStore::in_memory().unwrap();
         let meta = VikingMeta::default();
-        store.write("user1", "viking://user/profile/name", "My name is Alice and I work at Acme Corp.", &meta).unwrap();
+        store
+            .write(
+                "user1",
+                "viking://user/profile/name",
+                "My name is Alice and I work at Acme Corp.",
+                &meta,
+            )
+            .unwrap();
 
-        let result = store.read("user1", "viking://user/profile/name", ContextLevel::L2).unwrap();
+        let result = store
+            .read("user1", "viking://user/profile/name", ContextLevel::L2)
+            .unwrap();
         assert_eq!(result.content, "My name is Alice and I work at Acme Corp.");
         assert_eq!(result.path, "viking://user/profile/name");
 
-        let l0 = store.read("user1", "viking://user/profile/name", ContextLevel::L0).unwrap();
+        let l0 = store
+            .read("user1", "viking://user/profile/name", ContextLevel::L0)
+            .unwrap();
         assert!(l0.content.len() <= 100);
     }
 
@@ -395,8 +450,22 @@ mod tests {
     fn test_search() {
         let store = VikingStore::in_memory().unwrap();
         let meta = VikingMeta::default();
-        store.write("user1", "viking://user/entities/server", "The production server IP is 10.0.0.1", &meta).unwrap();
-        store.write("user1", "viking://agent/events/deploy", "Deployed version 2.0 to production", &meta).unwrap();
+        store
+            .write(
+                "user1",
+                "viking://user/entities/server",
+                "The production server IP is 10.0.0.1",
+                &meta,
+            )
+            .unwrap();
+        store
+            .write(
+                "user1",
+                "viking://agent/events/deploy",
+                "Deployed version 2.0 to production",
+                &meta,
+            )
+            .unwrap();
 
         let results = store.search("user1", "production", None, 10).unwrap();
         assert!(results.len() >= 1);
@@ -407,10 +476,21 @@ mod tests {
     fn test_search_with_directory() {
         let store = VikingStore::in_memory().unwrap();
         let meta = VikingMeta::default();
-        store.write("user1", "viking://user/entities/a", "Apple fruit", &meta).unwrap();
-        store.write("user1", "viking://agent/events/b", "Banana event with apple", &meta).unwrap();
+        store
+            .write("user1", "viking://user/entities/a", "Apple fruit", &meta)
+            .unwrap();
+        store
+            .write(
+                "user1",
+                "viking://agent/events/b",
+                "Banana event with apple",
+                &meta,
+            )
+            .unwrap();
 
-        let results = store.search("user1", "apple", Some("viking://user/"), 10).unwrap();
+        let results = store
+            .search("user1", "apple", Some("viking://user/"), 10)
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].path.starts_with("viking://user/"));
     }
@@ -419,9 +499,20 @@ mod tests {
     fn test_list_directory() {
         let store = VikingStore::in_memory().unwrap();
         let meta = VikingMeta::default();
-        store.write("user1", "viking://user/profile/name", "Alice", &meta).unwrap();
-        store.write("user1", "viking://user/profile/role", "Engineer", &meta).unwrap();
-        store.write("user1", "viking://user/preferences/theme", "Dark mode", &meta).unwrap();
+        store
+            .write("user1", "viking://user/profile/name", "Alice", &meta)
+            .unwrap();
+        store
+            .write("user1", "viking://user/profile/role", "Engineer", &meta)
+            .unwrap();
+        store
+            .write(
+                "user1",
+                "viking://user/preferences/theme",
+                "Dark mode",
+                &meta,
+            )
+            .unwrap();
 
         let entries = store.list_directory("user1", "viking://user/").unwrap();
         assert_eq!(entries.len(), 2); // profile (dir) + preferences (dir)
@@ -432,10 +523,16 @@ mod tests {
     fn test_delete() {
         let store = VikingStore::in_memory().unwrap();
         let meta = VikingMeta::default();
-        store.write("user1", "viking://test/entry", "Test content", &meta).unwrap();
-        assert!(store.read("user1", "viking://test/entry", ContextLevel::L2).is_ok());
+        store
+            .write("user1", "viking://test/entry", "Test content", &meta)
+            .unwrap();
+        assert!(store
+            .read("user1", "viking://test/entry", ContextLevel::L2)
+            .is_ok());
         assert!(store.delete("user1", "viking://test/entry").unwrap());
-        assert!(store.read("user1", "viking://test/entry", ContextLevel::L2).is_err());
+        assert!(store
+            .read("user1", "viking://test/entry", ContextLevel::L2)
+            .is_err());
     }
 
     #[test]
@@ -451,7 +548,10 @@ mod tests {
 
     #[test]
     fn test_l0_generation() {
-        assert_eq!(VikingStore::generate_l0("Hello world. This is a test."), "Hello world.");
+        assert_eq!(
+            VikingStore::generate_l0("Hello world. This is a test."),
+            "Hello world."
+        );
         assert_eq!(VikingStore::generate_l0("Short"), "Short");
         let long = "A".repeat(200);
         assert_eq!(VikingStore::generate_l0(&long).len(), 100);
@@ -461,10 +561,16 @@ mod tests {
     fn test_upsert() {
         let store = VikingStore::in_memory().unwrap();
         let meta = VikingMeta::default();
-        store.write("user1", "viking://test/x", "Version 1", &meta).unwrap();
-        store.write("user1", "viking://test/x", "Version 2", &meta).unwrap();
+        store
+            .write("user1", "viking://test/x", "Version 1", &meta)
+            .unwrap();
+        store
+            .write("user1", "viking://test/x", "Version 2", &meta)
+            .unwrap();
 
-        let result = store.read("user1", "viking://test/x", ContextLevel::L2).unwrap();
+        let result = store
+            .read("user1", "viking://test/x", ContextLevel::L2)
+            .unwrap();
         assert_eq!(result.content, "Version 2");
 
         assert_eq!(store.count("user1").unwrap(), 1); // No duplicate

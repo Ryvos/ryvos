@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{ServerCapabilities, ServerInfo, Implementation, ProtocolVersion};
+use rmcp::model::{Implementation, ProtocolVersion, ServerCapabilities, ServerInfo};
 use rmcp::{tool, tool_handler, tool_router, ServerHandler};
 
 use ryvos_memory::VikingClient;
@@ -73,7 +73,13 @@ impl RyvosServerHandler {
             return "Viking memory not available. Enable [openviking] in config.toml.".to_string();
         };
         let limit = params.0.limit.unwrap_or(10);
-        viking::search(viking, &params.0.query, params.0.directory.as_deref(), limit).await
+        viking::search(
+            viking,
+            &params.0.query,
+            params.0.directory.as_deref(),
+            limit,
+        )
+        .await
     }
 
     /// Read a viking:// memory path at L0 (summary), L1 (details), or L2 (full content).

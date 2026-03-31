@@ -503,7 +503,10 @@ pub async fn audit_entries(
     }
     let trail = state.audit_trail.as_ref().ok_or(StatusCode::NOT_FOUND)?;
     let entries = if let Some(ref tool) = q.tool {
-        trail.entries_by_tool(tool, q.limit).await.unwrap_or_default()
+        trail
+            .entries_by_tool(tool, q.limit)
+            .await
+            .unwrap_or_default()
     } else if let Some(ref sid) = q.session_id {
         trail.recent_entries(sid, q.limit).await.unwrap_or_default()
     } else {
@@ -532,7 +535,10 @@ pub async fn audit_stats(
 
     // Get Viking entry count if available
     let viking_entries = if let Some(ref vc) = state.viking_client {
-        vc.list_directory("viking://").await.map(|v| v.len() as u64).unwrap_or(0)
+        vc.list_directory("viking://")
+            .await
+            .map(|v| v.len() as u64)
+            .unwrap_or(0)
     } else {
         0
     };
@@ -628,7 +634,10 @@ pub async fn viking_search(
         return Err(StatusCode::FORBIDDEN);
     }
     let viking = state.viking_client.as_ref().ok_or(StatusCode::NOT_FOUND)?;
-    match viking.search(&q.query, q.directory.as_deref(), q.limit).await {
+    match viking
+        .search(&q.query, q.directory.as_deref(), q.limit)
+        .await
+    {
         Ok(results) => Ok(Json(serde_json::json!(results))),
         Err(e) => Ok(Json(serde_json::json!({ "error": e }))),
     }
@@ -664,9 +673,7 @@ pub async fn put_config(
         return Err(StatusCode::FORBIDDEN);
     }
     let path = state.config_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
-    let content = body["content"]
-        .as_str()
-        .ok_or(StatusCode::BAD_REQUEST)?;
+    let content = body["content"].as_str().ok_or(StatusCode::BAD_REQUEST)?;
 
     // Validate TOML before writing
     if toml::from_str::<ryvos_core::config::AppConfig>(content).is_err() {

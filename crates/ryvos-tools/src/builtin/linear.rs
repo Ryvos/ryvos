@@ -9,9 +9,15 @@ use ryvos_core::types::{ToolContext, ToolResult};
 pub struct LinearSearchTool;
 
 impl Tool for LinearSearchTool {
-    fn name(&self) -> &str { "linear_search" }
-    fn tier(&self) -> SecurityTier { SecurityTier::T0 }
-    fn description(&self) -> &str { "Search Linear issues." }
+    fn name(&self) -> &str {
+        "linear_search"
+    }
+    fn tier(&self) -> SecurityTier {
+        SecurityTier::T0
+    }
+    fn description(&self) -> &str {
+        "Search Linear issues."
+    }
     fn input_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",
@@ -22,17 +28,31 @@ impl Tool for LinearSearchTool {
             "required": ["query"]
         })
     }
-    fn execute(&self, _input: serde_json::Value, _ctx: ToolContext) -> BoxFuture<'_, Result<ToolResult>> {
-        Box::pin(async move { Ok(ToolResult::error("Linear not configured. Add [linear] section to config.toml.")) })
+    fn execute(
+        &self,
+        _input: serde_json::Value,
+        _ctx: ToolContext,
+    ) -> BoxFuture<'_, Result<ToolResult>> {
+        Box::pin(async move {
+            Ok(ToolResult::error(
+                "Linear not configured. Add [linear] section to config.toml.",
+            ))
+        })
     }
 }
 
 pub struct LinearCreateIssueTool;
 
 impl Tool for LinearCreateIssueTool {
-    fn name(&self) -> &str { "linear_create_issue" }
-    fn tier(&self) -> SecurityTier { SecurityTier::T2 }
-    fn description(&self) -> &str { "Create a new Linear issue." }
+    fn name(&self) -> &str {
+        "linear_create_issue"
+    }
+    fn tier(&self) -> SecurityTier {
+        SecurityTier::T2
+    }
+    fn description(&self) -> &str {
+        "Create a new Linear issue."
+    }
     fn input_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",
@@ -45,7 +65,11 @@ impl Tool for LinearCreateIssueTool {
             "required": ["title", "team_id"]
         })
     }
-    fn execute(&self, _input: serde_json::Value, _ctx: ToolContext) -> BoxFuture<'_, Result<ToolResult>> {
+    fn execute(
+        &self,
+        _input: serde_json::Value,
+        _ctx: ToolContext,
+    ) -> BoxFuture<'_, Result<ToolResult>> {
         Box::pin(async move { Ok(ToolResult::error("Linear not configured.")) })
     }
 }
@@ -53,13 +77,23 @@ impl Tool for LinearCreateIssueTool {
 pub struct LinearListProjectsTool;
 
 impl Tool for LinearListProjectsTool {
-    fn name(&self) -> &str { "linear_list_projects" }
-    fn tier(&self) -> SecurityTier { SecurityTier::T0 }
-    fn description(&self) -> &str { "List Linear projects and teams." }
+    fn name(&self) -> &str {
+        "linear_list_projects"
+    }
+    fn tier(&self) -> SecurityTier {
+        SecurityTier::T0
+    }
+    fn description(&self) -> &str {
+        "List Linear projects and teams."
+    }
     fn input_schema(&self) -> serde_json::Value {
         json!({ "type": "object", "properties": {} })
     }
-    fn execute(&self, _input: serde_json::Value, _ctx: ToolContext) -> BoxFuture<'_, Result<ToolResult>> {
+    fn execute(
+        &self,
+        _input: serde_json::Value,
+        _ctx: ToolContext,
+    ) -> BoxFuture<'_, Result<ToolResult>> {
         Box::pin(async move { Ok(ToolResult::error("Linear not configured.")) })
     }
 }

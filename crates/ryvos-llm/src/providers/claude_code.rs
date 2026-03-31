@@ -71,7 +71,11 @@ impl LlmClient for ClaudeCodeClient {
                 .find_map(|m| {
                     if m.role == Role::User {
                         let t = m.text();
-                        if t.is_empty() { None } else { Some(t) }
+                        if t.is_empty() {
+                            None
+                        } else {
+                            Some(t)
+                        }
                     } else {
                         None
                     }
@@ -274,13 +278,21 @@ async fn parse_stream_json(
                     if block["type"].as_str() == Some("tool_use") {
                         let tool_name = block["name"].as_str().unwrap_or("unknown");
                         let input_summary = if tool_name == "Bash" || tool_name == "bash" {
-                            block.get("input")
+                            block
+                                .get("input")
                                 .and_then(|i| i["command"].as_str().or_else(|| i["cmd"].as_str()))
                                 .unwrap_or("")
                                 .to_string()
                         } else {
-                            let input_str = serde_json::to_string(block.get("input").unwrap_or(&serde_json::Value::Null)).unwrap_or_default();
-                            if input_str.len() > 120 { format!("{}...", &input_str[..120]) } else { input_str }
+                            let input_str = serde_json::to_string(
+                                block.get("input").unwrap_or(&serde_json::Value::Null),
+                            )
+                            .unwrap_or_default();
+                            if input_str.len() > 120 {
+                                format!("{}...", &input_str[..120])
+                            } else {
+                                input_str
+                            }
                         };
 
                         // Informational pattern check (no blocking)
@@ -452,11 +464,13 @@ mod tests {
         let matcher = DangerousPatternMatcher::new(&patterns);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let killed = Mutex::new(false);
-        let result = rt
-            .block_on(parse_stream_json(&json, Some(&matcher), None, &killed));
+        let result = rt.block_on(parse_stream_json(&json, Some(&matcher), None, &killed));
         // No patterns → no blocking → returns None (tool_use processed in stream) or Ok
         // The key assertion: the process is NOT killed
-        assert!(!*rt.block_on(killed.lock()), "should not kill process with no patterns");
+        assert!(
+            !*rt.block_on(killed.lock()),
+            "should not kill process with no patterns"
+        );
         // result may be None (no text delta) or Some(Ok(_))
         if let Some(r) = result {
             assert!(r.is_ok(), "should not return error with no patterns");

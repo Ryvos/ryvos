@@ -42,9 +42,7 @@ pub fn configure() -> Result<Option<EmbeddingConfig>> {
             .interact_text()?;
         Some(url)
     } else if choice == 2 {
-        let url: String = Input::new()
-            .with_prompt("Base URL")
-            .interact_text()?;
+        let url: String = Input::new().with_prompt("Base URL").interact_text()?;
         Some(url)
     } else {
         None

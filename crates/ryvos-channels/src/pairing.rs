@@ -51,7 +51,10 @@ impl PairingManager {
         }
 
         // Check if sender already has a pending code
-        if pending.values().any(|r| r.sender_id == sender_id && r.channel == channel) {
+        if pending
+            .values()
+            .any(|r| r.sender_id == sender_id && r.channel == channel)
+        {
             return None;
         }
 
@@ -148,7 +151,10 @@ mod tests {
     async fn test_max_per_channel() {
         let mgr = PairingManager::new();
         for i in 0..3 {
-            assert!(mgr.create_pairing("telegram", &i.to_string(), None).await.is_some());
+            assert!(mgr
+                .create_pairing("telegram", &i.to_string(), None)
+                .await
+                .is_some());
         }
         // 4th should fail
         assert!(mgr.create_pairing("telegram", "999", None).await.is_none());
@@ -159,7 +165,13 @@ mod tests {
     #[tokio::test]
     async fn test_no_duplicate_sender() {
         let mgr = PairingManager::new();
-        assert!(mgr.create_pairing("telegram", "12345", None).await.is_some());
-        assert!(mgr.create_pairing("telegram", "12345", None).await.is_none());
+        assert!(mgr
+            .create_pairing("telegram", "12345", None)
+            .await
+            .is_some());
+        assert!(mgr
+            .create_pairing("telegram", "12345", None)
+            .await
+            .is_none());
     }
 }

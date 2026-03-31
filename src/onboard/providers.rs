@@ -289,8 +289,12 @@ fn configure_claude_code() -> Result<ProviderChoice> {
             println!("  Restricting CLI to read-only tools. Edit cli_allowed_tools in config to customize.");
             (
                 vec![
-                    "Read".into(), "Glob".into(), "Grep".into(),
-                    "WebSearch".into(), "WebFetch".into(), "mcp__*".into(),
+                    "Read".into(),
+                    "Glob".into(),
+                    "Grep".into(),
+                    "WebSearch".into(),
+                    "WebFetch".into(),
+                    "mcp__*".into(),
                 ],
                 Some("plan".to_string()),
             )
@@ -414,7 +418,10 @@ pub fn setup_mcp_for_cli_provider(provider: &str, ryvos_binary: &str) {
                 });
                 if let Ok(json) = serde_json::to_string_pretty(&mcp_json) {
                     if std::fs::write(&mcp_json_path, json).is_ok() {
-                        println!("  ✓ Created {} for Copilot MCP discovery", mcp_json_path.display());
+                        println!(
+                            "  ✓ Created {} for Copilot MCP discovery",
+                            mcp_json_path.display()
+                        );
                     }
                 }
             }
@@ -477,7 +484,13 @@ pub fn select_model(provider: &ProviderChoice) -> Result<ModelChoice> {
             0,
         ),
         "copilot" => (
-            vec!["gpt-5", "gpt-5-mini", "o4-mini", "default", "Enter manually"],
+            vec![
+                "gpt-5",
+                "gpt-5-mini",
+                "o4-mini",
+                "default",
+                "Enter manually",
+            ],
             0,
         ),
         "ollama" => (

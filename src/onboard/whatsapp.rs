@@ -12,8 +12,7 @@ pub fn configure_whatsapp() -> Result<WhatsAppConfig> {
     println!("  3) Note your Phone Number ID from the API setup page");
     println!();
 
-    let access_token =
-        prompt_token_or_env("WhatsApp access token", "WHATSAPP_ACCESS_TOKEN")?;
+    let access_token = prompt_token_or_env("WhatsApp access token", "WHATSAPP_ACCESS_TOKEN")?;
     let phone_number_id: String = Input::new()
         .with_prompt("Phone Number ID")
         .interact_text()?;

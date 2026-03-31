@@ -83,7 +83,10 @@ pub fn configure() -> Result<HashMap<String, McpServerConfig>> {
 
 fn configure_server(template: &McpTemplate) -> Result<McpServerConfig> {
     println!();
-    println!("  Configuring {}...", template.label.split('—').next().unwrap().trim());
+    println!(
+        "  Configuring {}...",
+        template.label.split('—').next().unwrap().trim()
+    );
 
     let mut env = HashMap::new();
 
@@ -95,9 +98,7 @@ fn configure_server(template: &McpTemplate) -> Result<McpServerConfig> {
 
     let transport = if template.package.is_empty() {
         // Custom command (e.g., Google/Gmail)
-        let command: String = Input::new()
-            .with_prompt("Command to run")
-            .interact_text()?;
+        let command: String = Input::new().with_prompt("Command to run").interact_text()?;
         let args_str: String = Input::new()
             .with_prompt("Arguments (space-separated, blank for none)")
             .allow_empty(true)
@@ -130,9 +131,7 @@ fn prompt_env_var(var: &str) -> Result<String> {
     if std::env::var(var).is_ok() {
         Ok(format!("${{{var}}}"))
     } else {
-        let value = Password::new()
-            .with_prompt(var.to_string())
-            .interact()?;
+        let value = Password::new().with_prompt(var.to_string()).interact()?;
         Ok(value)
     }
 }

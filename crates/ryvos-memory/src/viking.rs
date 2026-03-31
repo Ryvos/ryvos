@@ -367,7 +367,10 @@ pub async fn load_viking_context(
         return String::new();
     }
 
-    format!("# Sustained Context (Viking)\n\n{}", context_parts.join("\n"))
+    format!(
+        "# Sustained Context (Viking)\n\n{}",
+        context_parts.join("\n")
+    )
 }
 
 #[cfg(test)]
@@ -383,8 +386,14 @@ mod tests {
 
     #[test]
     fn test_memory_category_paths() {
-        assert_eq!(MemoryCategory::UserProfile.viking_path(), "viking://user/profile/");
-        assert_eq!(MemoryCategory::AgentPatterns.viking_path(), "viking://agent/patterns/");
+        assert_eq!(
+            MemoryCategory::UserProfile.viking_path(),
+            "viking://user/profile/"
+        );
+        assert_eq!(
+            MemoryCategory::AgentPatterns.viking_path(),
+            "viking://agent/patterns/"
+        );
     }
 
     #[test]

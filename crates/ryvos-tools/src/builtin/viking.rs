@@ -25,8 +25,12 @@ fn default_limit() -> usize {
 }
 
 impl Tool for VikingSearchTool {
-    fn name(&self) -> &str { "viking_search" }
-    fn tier(&self) -> SecurityTier { SecurityTier::T0 }
+    fn name(&self) -> &str {
+        "viking_search"
+    }
+    fn tier(&self) -> SecurityTier {
+        SecurityTier::T0
+    }
     fn description(&self) -> &str {
         "Search Viking hierarchical memory with semantic + path-based retrieval. \
          Returns results ranked by relevance with retrieval trajectory."
@@ -42,27 +46,43 @@ impl Tool for VikingSearchTool {
             "required": ["query"]
         })
     }
-    fn execute(&self, input: serde_json::Value, ctx: ToolContext) -> BoxFuture<'_, Result<ToolResult>> {
+    fn execute(
+        &self,
+        input: serde_json::Value,
+        ctx: ToolContext,
+    ) -> BoxFuture<'_, Result<ToolResult>> {
         Box::pin(async move {
             let params: VikingSearchInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
 
-            let viking = ctx.viking_client
+            let viking = ctx
+                .viking_client
                 .as_ref()
                 .and_then(|c| c.downcast_ref::<std::sync::Arc<ryvos_memory::VikingClient>>())
                 .ok_or_else(|| RyvosError::ToolExecution {
                     tool: "viking_search".into(),
-                    message: "OpenViking not configured. Enable it in config.toml under [openviking].".into(),
+                    message:
+                        "OpenViking not configured. Enable it in config.toml under [openviking]."
+                            .into(),
                 })?;
 
-            match viking.search(&params.query, params.directory.as_deref(), params.limit).await {
+            match viking
+                .search(&params.query, params.directory.as_deref(), params.limit)
+                .await
+            {
                 Ok(results) => {
                     if results.is_empty() {
                         Ok(ToolResult::success("No results found in Viking memory."))
                     } else {
-                        let formatted: Vec<String> = results.iter().map(|r| {
-                            format!("[score:{:.2}] {}\n{}", r.relevance_score, r.path, r.content)
-                        }).collect();
+                        let formatted: Vec<String> = results
+                            .iter()
+                            .map(|r| {
+                                format!(
+                                    "[score:{:.2}] {}\n{}",
+                                    r.relevance_score, r.path, r.content
+                                )
+                            })
+                            .collect();
                         Ok(ToolResult::success(formatted.join("\n---\n")))
                     }
                 }
@@ -88,8 +108,12 @@ fn default_level() -> String {
 }
 
 impl Tool for VikingReadTool {
-    fn name(&self) -> &str { "viking_read" }
-    fn tier(&self) -> SecurityTier { SecurityTier::T0 }
+    fn name(&self) -> &str {
+        "viking_read"
+    }
+    fn tier(&self) -> SecurityTier {
+        SecurityTier::T0
+    }
     fn description(&self) -> &str {
         "Read a viking:// memory path at L0 (summary), L1 (details), or L2 (full content)."
     }
@@ -103,12 +127,17 @@ impl Tool for VikingReadTool {
             "required": ["path"]
         })
     }
-    fn execute(&self, input: serde_json::Value, ctx: ToolContext) -> BoxFuture<'_, Result<ToolResult>> {
+    fn execute(
+        &self,
+        input: serde_json::Value,
+        ctx: ToolContext,
+    ) -> BoxFuture<'_, Result<ToolResult>> {
         Box::pin(async move {
             let params: VikingReadInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
 
-            let viking = ctx.viking_client
+            let viking = ctx
+                .viking_client
                 .as_ref()
                 .and_then(|c| c.downcast_ref::<std::sync::Arc<ryvos_memory::VikingClient>>())
                 .ok_or_else(|| RyvosError::ToolExecution {
@@ -146,8 +175,12 @@ struct VikingWriteInput {
 }
 
 impl Tool for VikingWriteTool {
-    fn name(&self) -> &str { "viking_write" }
-    fn tier(&self) -> SecurityTier { SecurityTier::T1 }
+    fn name(&self) -> &str {
+        "viking_write"
+    }
+    fn tier(&self) -> SecurityTier {
+        SecurityTier::T1
+    }
     fn description(&self) -> &str {
         "Write or update a memory entry at a viking:// path. \
          Use for persisting long-term facts, preferences, and patterns."
@@ -163,12 +196,17 @@ impl Tool for VikingWriteTool {
             "required": ["path", "content"]
         })
     }
-    fn execute(&self, input: serde_json::Value, ctx: ToolContext) -> BoxFuture<'_, Result<ToolResult>> {
+    fn execute(
+        &self,
+        input: serde_json::Value,
+        ctx: ToolContext,
+    ) -> BoxFuture<'_, Result<ToolResult>> {
         Box::pin(async move {
             let params: VikingWriteInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
 
-            let viking = ctx.viking_client
+            let viking = ctx
+                .viking_client
                 .as_ref()
                 .and_then(|c| c.downcast_ref::<std::sync::Arc<ryvos_memory::VikingClient>>())
                 .ok_or_else(|| RyvosError::ToolExecution {
@@ -182,7 +220,10 @@ impl Tool for VikingWriteTool {
                 ..Default::default()
             };
 
-            match viking.write_memory(&params.path, &params.content, Some(meta)).await {
+            match viking
+                .write_memory(&params.path, &params.content, Some(meta))
+                .await
+            {
                 Ok(()) => Ok(ToolResult::success(format!("Written to {}", params.path))),
                 Err(e) => Ok(ToolResult::error(format!("Viking write failed: {}", e))),
             }
@@ -205,8 +246,12 @@ fn default_viking_root() -> String {
 }
 
 impl Tool for VikingListTool {
-    fn name(&self) -> &str { "viking_list" }
-    fn tier(&self) -> SecurityTier { SecurityTier::T0 }
+    fn name(&self) -> &str {
+        "viking_list"
+    }
+    fn tier(&self) -> SecurityTier {
+        SecurityTier::T0
+    }
     fn description(&self) -> &str {
         "List Viking memory directory contents with L0 summaries."
     }
@@ -218,12 +263,17 @@ impl Tool for VikingListTool {
             }
         })
     }
-    fn execute(&self, input: serde_json::Value, ctx: ToolContext) -> BoxFuture<'_, Result<ToolResult>> {
+    fn execute(
+        &self,
+        input: serde_json::Value,
+        ctx: ToolContext,
+    ) -> BoxFuture<'_, Result<ToolResult>> {
         Box::pin(async move {
             let params: VikingListInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
 
-            let viking = ctx.viking_client
+            let viking = ctx
+                .viking_client
                 .as_ref()
                 .and_then(|c| c.downcast_ref::<std::sync::Arc<ryvos_memory::VikingClient>>())
                 .ok_or_else(|| RyvosError::ToolExecution {
@@ -234,13 +284,23 @@ impl Tool for VikingListTool {
             match viking.list_directory(&params.path).await {
                 Ok(entries) => {
                     if entries.is_empty() {
-                        Ok(ToolResult::success(format!("Empty directory: {}", params.path)))
+                        Ok(ToolResult::success(format!(
+                            "Empty directory: {}",
+                            params.path
+                        )))
                     } else {
-                        let formatted: Vec<String> = entries.iter().map(|e| {
-                            let icon = if e.is_directory { "\u{1f4c1}" } else { "\u{1f4c4}" };
-                            let summary = e.summary.as_deref().unwrap_or("");
-                            format!("{} {} {}", icon, e.path, summary)
-                        }).collect();
+                        let formatted: Vec<String> = entries
+                            .iter()
+                            .map(|e| {
+                                let icon = if e.is_directory {
+                                    "\u{1f4c1}"
+                                } else {
+                                    "\u{1f4c4}"
+                                };
+                                let summary = e.summary.as_deref().unwrap_or("");
+                                format!("{} {} {}", icon, e.path, summary)
+                            })
+                            .collect();
                         Ok(ToolResult::success(formatted.join("\n")))
                     }
                 }

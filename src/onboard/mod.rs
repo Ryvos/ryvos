@@ -357,7 +357,10 @@ fn resolve_non_interactive_provider(
         }
         "copilot" | "github-copilot" | "copilot-cli" => {
             // Copilot CLI — subscription based, optional GH token override
-            Ok((api_key_flag.or_else(|| std::env::var("GH_TOKEN").ok()), None))
+            Ok((
+                api_key_flag.or_else(|| std::env::var("GH_TOKEN").ok()),
+                None,
+            ))
         }
         _ => {
             // Generic: use provided key or try common env var patterns
@@ -734,7 +737,9 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
     println!("  \x1b[1;36mPersonalization\x1b[0m");
     println!("  Your agent will interview you naturally on your first");
     println!("  conversation to build its personality. Just start talking!");
-    println!("  (Run \x1b[1mryvos soul\x1b[0m later if you want the quick 5-question version instead.)");
+    println!(
+        "  (Run \x1b[1mryvos soul\x1b[0m later if you want the quick 5-question version instead.)"
+    );
 
     // Service install (systemd/launchd)
     println!();
@@ -809,8 +814,14 @@ pub fn create_workspace_templates(workspace: &Path) -> Result<()> {
         ("IDENTITY.md", include_str!("templates/IDENTITY.md")),
         ("MEMORY.md", include_str!("templates/MEMORY.md")),
         ("memory/facts.md", include_str!("templates/memory_facts.md")),
-        ("memory/projects.md", include_str!("templates/memory_projects.md")),
-        ("memory/preferences.md", include_str!("templates/memory_preferences.md")),
+        (
+            "memory/projects.md",
+            include_str!("templates/memory_projects.md"),
+        ),
+        (
+            "memory/preferences.md",
+            include_str!("templates/memory_preferences.md"),
+        ),
     ];
 
     let mut created = Vec::new();

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use rusqlite::Connection;
-use tokio::sync::Mutex;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 
 /// Severity levels for safety incidents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,7 +20,10 @@ pub enum SafetyOutcome {
     /// Agent caught a potential issue before damage occurred.
     NearMiss { what_could_have_happened: String },
     /// Something actually went wrong.
-    Incident { what_happened: String, severity: Severity },
+    Incident {
+        what_happened: String,
+        severity: Severity,
+    },
     /// User explicitly corrected the agent.
     UserCorrected { feedback: String },
 }
@@ -64,8 +67,11 @@ impl SafetyMemory {
              );
              CREATE INDEX IF NOT EXISTS idx_lessons_action ON safety_lessons(action);
              CREATE INDEX IF NOT EXISTS idx_lessons_confidence ON safety_lessons(confidence DESC);",
-        ).map_err(|e| e.to_string())?;
-        Ok(Self { conn: Mutex::new(conn) })
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     /// Create an in-memory store for testing.
@@ -83,8 +89,11 @@ impl SafetyMemory {
                  confidence REAL NOT NULL DEFAULT 0.8,
                  times_applied INTEGER NOT NULL DEFAULT 0
              );",
-        ).map_err(|e| e.to_string())?;
-        Ok(Self { conn: Mutex::new(conn) })
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     /// Record a new safety lesson.
@@ -111,7 +120,11 @@ impl SafetyMemory {
 
     /// Retrieve lessons relevant to a given tool name or action pattern.
     /// Returns up to `limit` lessons ordered by confidence (highest first).
-    pub async fn relevant_lessons(&self, tool_name: &str, limit: usize) -> Result<Vec<SafetyLesson>, String> {
+    pub async fn relevant_lessons(
+        &self,
+        tool_name: &str,
+        limit: usize,
+    ) -> Result<Vec<SafetyLesson>, String> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, timestamp, action, outcome, reflection, principle_violated, corrective_rule, confidence, times_applied
@@ -121,27 +134,32 @@ impl SafetyMemory {
              LIMIT ?2"
         ).map_err(|e| e.to_string())?;
 
-        let lessons = stmt.query_map(rusqlite::params![tool_name, limit as i64], |row| {
-            let outcome_str: String = row.get(3)?;
-            let outcome: SafetyOutcome = serde_json::from_str(&outcome_str).unwrap_or(SafetyOutcome::Harmless);
-            let ts_str: String = row.get(1)?;
-            let timestamp = DateTime::parse_from_rfc3339(&ts_str)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now());
-            Ok(SafetyLesson {
-                id: row.get(0)?,
-                timestamp,
-                action: row.get(2)?,
-                outcome,
-                reflection: row.get(4)?,
-                principle_violated: row.get(5)?,
-                corrective_rule: row.get(6)?,
-                confidence: row.get(7)?,
-                times_applied: row.get(8)?,
+        let lessons = stmt
+            .query_map(rusqlite::params![tool_name, limit as i64], |row| {
+                let outcome_str: String = row.get(3)?;
+                let outcome: SafetyOutcome =
+                    serde_json::from_str(&outcome_str).unwrap_or(SafetyOutcome::Harmless);
+                let ts_str: String = row.get(1)?;
+                let timestamp = DateTime::parse_from_rfc3339(&ts_str)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now());
+                Ok(SafetyLesson {
+                    id: row.get(0)?,
+                    timestamp,
+                    action: row.get(2)?,
+                    outcome,
+                    reflection: row.get(4)?,
+                    principle_violated: row.get(5)?,
+                    corrective_rule: row.get(6)?,
+                    confidence: row.get(7)?,
+                    times_applied: row.get(8)?,
+                })
             })
-        }).map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?;
 
-        lessons.collect::<std::result::Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        lessons
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     /// Increment the times_applied counter for a lesson (when it prevents a repeat).
@@ -150,12 +168,17 @@ impl SafetyMemory {
         conn.execute(
             "UPDATE safety_lessons SET times_applied = times_applied + 1 WHERE id = ?1",
             rusqlite::params![lesson_id],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     /// Get all high-confidence lessons (for context injection).
-    pub async fn high_confidence_lessons(&self, min_confidence: f64, limit: usize) -> Result<Vec<SafetyLesson>, String> {
+    pub async fn high_confidence_lessons(
+        &self,
+        min_confidence: f64,
+        limit: usize,
+    ) -> Result<Vec<SafetyLesson>, String> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, timestamp, action, outcome, reflection, principle_violated, corrective_rule, confidence, times_applied
@@ -165,31 +188,40 @@ impl SafetyMemory {
              LIMIT ?2"
         ).map_err(|e| e.to_string())?;
 
-        let lessons = stmt.query_map(rusqlite::params![min_confidence, limit as i64], |row| {
-            let outcome_str: String = row.get(3)?;
-            let outcome: SafetyOutcome = serde_json::from_str(&outcome_str).unwrap_or(SafetyOutcome::Harmless);
-            let ts_str: String = row.get(1)?;
-            let timestamp = DateTime::parse_from_rfc3339(&ts_str)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now());
-            Ok(SafetyLesson {
-                id: row.get(0)?,
-                timestamp,
-                action: row.get(2)?,
-                outcome,
-                reflection: row.get(4)?,
-                principle_violated: row.get(5)?,
-                corrective_rule: row.get(6)?,
-                confidence: row.get(7)?,
-                times_applied: row.get(8)?,
+        let lessons = stmt
+            .query_map(rusqlite::params![min_confidence, limit as i64], |row| {
+                let outcome_str: String = row.get(3)?;
+                let outcome: SafetyOutcome =
+                    serde_json::from_str(&outcome_str).unwrap_or(SafetyOutcome::Harmless);
+                let ts_str: String = row.get(1)?;
+                let timestamp = DateTime::parse_from_rfc3339(&ts_str)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now());
+                Ok(SafetyLesson {
+                    id: row.get(0)?,
+                    timestamp,
+                    action: row.get(2)?,
+                    outcome,
+                    reflection: row.get(4)?,
+                    principle_violated: row.get(5)?,
+                    corrective_rule: row.get(6)?,
+                    confidence: row.get(7)?,
+                    times_applied: row.get(8)?,
+                })
             })
-        }).map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?;
 
-        lessons.collect::<std::result::Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        lessons
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     /// Prune low-confidence lessons that have never been applied.
-    pub async fn prune_stale(&self, max_age_days: i64, min_confidence: f64) -> Result<usize, String> {
+    pub async fn prune_stale(
+        &self,
+        max_age_days: i64,
+        min_confidence: f64,
+    ) -> Result<usize, String> {
         let conn = self.conn.lock().await;
         let cutoff = (Utc::now() - chrono::Duration::days(max_age_days)).to_rfc3339();
         let affected = conn.execute(
@@ -221,20 +253,32 @@ impl SafetyMemory {
         }
 
         // Sort by confidence desc, take top `limit`
-        all_lessons.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+        all_lessons.sort_by(|a, b| {
+            b.confidence
+                .partial_cmp(&a.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         all_lessons.truncate(limit);
 
         let mut output = String::from("# Lessons from Past Experience\n");
         for lesson in &all_lessons {
             let date = lesson.timestamp.format("%Y-%m-%d");
-            output.push_str(&format!("- [{}] {}: {}\n", date, lesson.action, lesson.corrective_rule));
+            output.push_str(&format!(
+                "- [{}] {}: {}\n",
+                date, lesson.action, lesson.corrective_rule
+            ));
         }
         output
     }
 }
 
 /// Assess the outcome of a tool execution based on heuristics.
-pub fn assess_outcome(tool_name: &str, _input: &serde_json::Value, result: &str, is_error: bool) -> SafetyOutcome {
+pub fn assess_outcome(
+    tool_name: &str,
+    _input: &serde_json::Value,
+    result: &str,
+    is_error: bool,
+) -> SafetyOutcome {
     if !is_error {
         return SafetyOutcome::Harmless;
     }
@@ -248,7 +292,9 @@ pub fn assess_outcome(tool_name: &str, _input: &serde_json::Value, result: &str,
             severity: Severity::Medium,
         };
     }
-    if lower.contains("no such file or directory") && (tool_name == "file_delete" || tool_name.contains("delete")) {
+    if lower.contains("no such file or directory")
+        && (tool_name == "file_delete" || tool_name.contains("delete"))
+    {
         return SafetyOutcome::Incident {
             what_happened: format!("File not found after delete operation via {}", tool_name),
             severity: Severity::Low,
@@ -295,7 +341,10 @@ mod tests {
 
         let results = mem.relevant_lessons("bash", 10).await.unwrap();
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].corrective_rule, "Use cargo clean instead of rm -rf for build artifacts");
+        assert_eq!(
+            results[0].corrective_rule,
+            "Use cargo clean instead of rm -rf for build artifacts"
+        );
     }
 
     #[tokio::test]
@@ -305,10 +354,13 @@ mod tests {
             id: "test-2".to_string(),
             timestamp: Utc::now(),
             action: "file_delete".to_string(),
-            outcome: SafetyOutcome::UserCorrected { feedback: "Don't delete config files".to_string() },
+            outcome: SafetyOutcome::UserCorrected {
+                feedback: "Don't delete config files".to_string(),
+            },
             reflection: "Config files are user-created".to_string(),
             principle_violated: Some("Preservation".to_string()),
-            corrective_rule: "Always read a file before deleting to check if it's user-created".to_string(),
+            corrective_rule: "Always read a file before deleting to check if it's user-created"
+                .to_string(),
             confidence: 1.0,
             times_applied: 0,
         };
@@ -352,6 +404,12 @@ mod tests {
     #[test]
     fn test_assess_outcome_permission_denied() {
         let result = assess_outcome("bash", &serde_json::json!({}), "permission denied", true);
-        assert!(matches!(result, SafetyOutcome::Incident { severity: Severity::Medium, .. }));
+        assert!(matches!(
+            result,
+            SafetyOutcome::Incident {
+                severity: Severity::Medium,
+                ..
+            }
+        ));
     }
 }

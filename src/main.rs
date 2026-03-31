@@ -425,12 +425,8 @@ async fn main() -> anyhow::Result<()> {
     // Build security gate (passthrough — no blocking, self-learning safety)
     let policy = config.security.to_policy();
     let broker = Arc::new(ApprovalBroker::new(event_bus.clone()));
-    let mut gate_inner = SecurityGate::new(
-        policy,
-        tools.clone(),
-        broker.clone(),
-        event_bus.clone(),
-    );
+    let mut gate_inner =
+        SecurityGate::new(policy, tools.clone(), broker.clone(), event_bus.clone());
 
     // Initialize safety memory (self-learning from past incidents)
     let safety_db_path = workspace.join("safety.db");
@@ -447,18 +443,19 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize audit trail (post-hoc accountability)
     let audit_db_path = workspace.join("audit.db");
-    let audit_trail: Option<Arc<ryvos_agent::AuditTrail>> = match ryvos_agent::AuditTrail::open(&audit_db_path) {
-        Ok(trail) => {
-            let trail = Arc::new(trail);
-            gate_inner.set_audit_trail(trail.clone());
-            info!("Audit trail initialized");
-            Some(trail)
-        }
-        Err(e) => {
-            error!(error = %e, "Failed to initialize audit trail");
-            None
-        }
-    };
+    let audit_trail: Option<Arc<ryvos_agent::AuditTrail>> =
+        match ryvos_agent::AuditTrail::open(&audit_db_path) {
+            Ok(trail) => {
+                let trail = Arc::new(trail);
+                gate_inner.set_audit_trail(trail.clone());
+                info!("Audit trail initialized");
+                Some(trail)
+            }
+            Err(e) => {
+                error!(error = %e, "Failed to initialize audit trail");
+                None
+            }
+        };
 
     let gate = Arc::new(gate_inner);
 
@@ -590,23 +587,24 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Initialize OpenViking client if configured (must happen before Arc-wrapping runtime)
-    let mut viking_client: Option<Arc<ryvos_memory::VikingClient>> =
-        if let Some(ref ov_config) = config.openviking {
-            if ov_config.enabled {
-                let client = ryvos_memory::VikingClient::new(&ov_config.base_url, &ov_config.user_id);
-                if client.health().await {
-                    info!(url = %ov_config.base_url, "OpenViking connected");
-                    Some(Arc::new(client))
-                } else {
-                    warn!(url = %ov_config.base_url, "OpenViking unreachable — running without sustained context");
-                    None
-                }
+    let mut viking_client: Option<Arc<ryvos_memory::VikingClient>> = if let Some(ref ov_config) =
+        config.openviking
+    {
+        if ov_config.enabled {
+            let client = ryvos_memory::VikingClient::new(&ov_config.base_url, &ov_config.user_id);
+            if client.health().await {
+                info!(url = %ov_config.base_url, "OpenViking connected");
+                Some(Arc::new(client))
             } else {
+                warn!(url = %ov_config.base_url, "OpenViking unreachable — running without sustained context");
                 None
             }
         } else {
             None
-        };
+        }
+    } else {
+        None
+    };
 
     // Wire Viking client into agent runtime so tools get it via ToolContext
     // (uses interior mutability — can also be set later after Arc wrapping)
@@ -637,9 +635,13 @@ async fn main() -> anyhow::Result<()> {
             println!("=========================================");
             if let Some(ref ov_config) = config.openviking {
                 if ov_config.enabled {
-                    let viking = ryvos_memory::VikingClient::new(&ov_config.base_url, &ov_config.user_id);
+                    let viking =
+                        ryvos_memory::VikingClient::new(&ov_config.base_url, &ov_config.user_id);
                     if !viking.health().await {
-                        eprintln!("Error: OpenViking is not reachable at {}", ov_config.base_url);
+                        eprintln!(
+                            "Error: OpenViking is not reachable at {}",
+                            ov_config.base_url
+                        );
                         eprintln!("Start the OpenViking service first, then retry.");
                         return Ok(());
                     }
@@ -656,9 +658,15 @@ async fn main() -> anyhow::Result<()> {
                             continue;
                         }
                         let ts = r.timestamp.format("%Y%m%d-%H%M%S").to_string();
-                        let category = if r.content.contains("prefer") || r.content.contains("like") || r.content.contains("don't") {
+                        let category = if r.content.contains("prefer")
+                            || r.content.contains("like")
+                            || r.content.contains("don't")
+                        {
                             "user/preferences"
-                        } else if r.content.contains("learned") || r.content.contains("pattern") || r.content.contains("always") {
+                        } else if r.content.contains("learned")
+                            || r.content.contains("pattern")
+                            || r.content.contains("always")
+                        {
                             "agent/patterns"
                         } else {
                             "agent/events"
@@ -849,7 +857,10 @@ async fn main() -> anyhow::Result<()> {
 
                     // Retry Viking client connection now that server is up
                     if viking_client.is_none() {
-                        let client = ryvos_memory::VikingClient::new(&ov_config.base_url, &ov_config.user_id);
+                        let client = ryvos_memory::VikingClient::new(
+                            &ov_config.base_url,
+                            &ov_config.user_id,
+                        );
                         if client.health().await {
                             info!(url = %ov_config.base_url, "OpenViking connected (after auto-start)");
                             let vc = Arc::new(client);
@@ -2159,7 +2170,10 @@ async fn self_update(skip_confirm: bool) -> anyhow::Result<()> {
     let size_bytes = asset["size"].as_u64().unwrap_or(0);
     let size_mb = size_bytes as f64 / 1_048_576.0;
 
-    println!("\n  Update available: v{} -> {}", current_version, latest_tag);
+    println!(
+        "\n  Update available: v{} -> {}",
+        current_version, latest_tag
+    );
     println!("  Artifact: {} ({:.1} MB)", artifact_name, size_mb);
 
     if !skip_confirm {
@@ -2204,7 +2218,10 @@ async fn self_update(skip_confirm: bool) -> anyhow::Result<()> {
     if let Err(e) = std::fs::rename(&tmp_path, &current_exe) {
         // Rollback: restore backup
         std::fs::rename(&bak_path, &current_exe).ok();
-        anyhow::bail!("Failed to install update: {}. Rolled back to previous version.", e);
+        anyhow::bail!(
+            "Failed to install update: {}. Rolled back to previous version.",
+            e
+        );
     }
 
     // Clean up backup
@@ -2296,17 +2313,29 @@ async fn run_mcp_server() -> anyhow::Result<()> {
 
     eprintln!(
         "[ryvos mcp-server] Starting (viking: {}, audit: {})",
-        if viking.is_some() { "connected" } else { "unavailable" },
-        if audit.is_some() { "available" } else { "unavailable" },
+        if viking.is_some() {
+            "connected"
+        } else {
+            "unavailable"
+        },
+        if audit.is_some() {
+            "available"
+        } else {
+            "unavailable"
+        },
     );
 
     let handler = ryvos_mcp::server::RyvosServerHandler::new(viking, audit, workspace);
 
     // Serve on stdio — all stdout is MCP protocol, stderr is for logs
     let transport = (tokio::io::stdin(), tokio::io::stdout());
-    let service = handler.serve(transport).await
+    let service = handler
+        .serve(transport)
+        .await
         .map_err(|e| anyhow::anyhow!("MCP server init failed: {}", e))?;
-    service.waiting().await
+    service
+        .waiting()
+        .await
         .map_err(|e| anyhow::anyhow!("MCP server error: {}", e))?;
 
     Ok(())

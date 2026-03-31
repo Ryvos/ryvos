@@ -1,8 +1,13 @@
-use std::sync::Arc;
+use ryvos_memory::viking::{ContextLevel, VikingMeta};
 use ryvos_memory::VikingClient;
-use ryvos_memory::viking::{VikingMeta, ContextLevel};
+use std::sync::Arc;
 
-pub async fn search(viking: &Arc<VikingClient>, query: &str, directory: Option<&str>, limit: usize) -> String {
+pub async fn search(
+    viking: &Arc<VikingClient>,
+    query: &str,
+    directory: Option<&str>,
+    limit: usize,
+) -> String {
     match viking.search(query, directory, limit).await {
         Ok(results) => {
             if results.is_empty() {
@@ -17,7 +22,11 @@ pub async fn search(viking: &Arc<VikingClient>, query: &str, directory: Option<&
                             i + 1,
                             r.path,
                             r.relevance_score,
-                            if r.content.len() > 200 { format!("{}...", &r.content[..200]) } else { r.content.clone() }
+                            if r.content.len() > 200 {
+                                format!("{}...", &r.content[..200])
+                            } else {
+                                r.content.clone()
+                            }
                         )
                     })
                     .collect::<Vec<_>>()
@@ -46,7 +55,12 @@ pub async fn read(viking: &Arc<VikingClient>, path: &str, level: &str) -> String
     }
 }
 
-pub async fn write(viking: &Arc<VikingClient>, path: &str, content: &str, tags: Option<&[String]>) -> String {
+pub async fn write(
+    viking: &Arc<VikingClient>,
+    path: &str,
+    content: &str,
+    tags: Option<&[String]>,
+) -> String {
     let meta = tags.map(|t| VikingMeta {
         tags: t.to_vec(),
         ..Default::default()
@@ -67,7 +81,12 @@ pub async fn list(viking: &Arc<VikingClient>, path: &str) -> String {
                     .iter()
                     .map(|e| {
                         let icon = if e.is_directory { "📁" } else { "📄" };
-                        format!("{} {} — {}", icon, e.path, e.summary.as_deref().unwrap_or(""))
+                        format!(
+                            "{} {} — {}",
+                            icon,
+                            e.path,
+                            e.summary.as_deref().unwrap_or("")
+                        )
                     })
                     .collect::<Vec<_>>()
                     .join("\n")
