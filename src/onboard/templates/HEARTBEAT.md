@@ -26,7 +26,16 @@
 - Use **viking_search** before acting if you need to recall past context
 - Use **daily_log_write** for the heartbeat log entry (instead of Bash append)
 
-### 4. Report
+### 4. Self-Reflection (Reflexion)
+- Before acting, use **viking_search** to check for lessons from past mistakes
+- If a heartbeat fails or produces errors, record the lesson:
+  - Use **viking_write** to `viking://agent/lessons/{topic}`
+  - Include: what went wrong, why, what to do differently
+- If the user corrected you in any channel, record that correction as a lesson
+- Review lessons before repeating similar operations
+- Goal: never make the same mistake twice
+
+### 5. Report
 - Log heartbeat result using **daily_log_write**
 - Only alert the user if something actionable is found
 - Silence means everything is fine

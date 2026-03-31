@@ -14,6 +14,8 @@
   let currentStreamText = '';
   let streaming = false;
   let sessionList = [];
+  let allSessions = [];
+  let showAllSessions = false;
   let showSessionDropdown = false;
 
   // Configure marked
@@ -112,8 +114,14 @@
     try {
       const data = await apiFetch('/api/sessions');
       const raw = data.sessions || [];
-      // Handle both formats: array of strings OR array of objects with .id
-      sessionList = raw.map(s => typeof s === 'string' ? s : (s.id || s.session_key || String(s)));
+      allSessions = raw;
+      // Filter to webui sessions by default, show all if toggled
+      const filtered = raw.filter(s => {
+        if (showAllSessions) return true;
+        const ch = typeof s === 'string' ? '' : (s.channel || '');
+        return !ch || ch === 'webui' || ch === 'websocket';
+      });
+      sessionList = filtered.map(s => typeof s === 'string' ? s : (s.id || s.session_key || String(s)));
     } catch (e) {
       console.error('Failed to load sessions:', e);
     }
@@ -152,7 +160,7 @@
     scrollToBottom();
 
     if (!sessionId) {
-      sessionId = 'web-' + Date.now().toString(36);
+      sessionId = 'webui:' + Date.now().toString(36);
     }
     sendWs('agent.send', { session_id: sessionId, message: text });
   }
@@ -165,7 +173,7 @@
   }
 
   function newSession() {
-    window.location.hash = '#/chat/web-' + Date.now().toString(36);
+    window.location.hash = '#/chat/webui:' + Date.now().toString(36);
   }
 
   async function handleApproval(id, approved) {
@@ -228,6 +236,17 @@
         </div>
       {/if}
     </div>
+
+    <!-- Show all channels toggle -->
+    <label class="flex items-center gap-2 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        bind:checked={showAllSessions}
+        on:change={() => loadSessions()}
+        class="w-3.5 h-3.5 accent-[#F07030] border-2 border-[#1A1A1A]"
+      />
+      <span class="text-xs text-[#6B6560] font-medium uppercase tracking-wider">All channels</span>
+    </label>
 
     <div class="flex-1"></div>
 

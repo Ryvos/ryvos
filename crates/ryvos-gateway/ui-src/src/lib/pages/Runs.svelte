@@ -46,7 +46,7 @@
 <div>
   <div class="mb-7">
     <h2 class="text-2xl font-heading font-bold tracking-tight text-[#1A1A1A]">Run History</h2>
-    <p class="text-[#9B9590] text-sm mt-1">All recorded agent runs</p>
+    <p class="text-[#9B9590] text-sm mt-1">Each run is one agent execution cycle — a complete request → response → tool loop.</p>
   </div>
 
   {#if loading}

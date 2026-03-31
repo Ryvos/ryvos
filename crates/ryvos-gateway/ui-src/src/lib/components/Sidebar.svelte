@@ -28,6 +28,7 @@
     { route: 'channels',   label: 'Channels',        icon: 'radio' },
     { route: 'audit',      label: 'Audit Trail',     icon: 'shield' },
     { route: 'viking',     label: 'Viking Browser',  icon: 'database' },
+    { route: 'cron',       label: 'Cron Jobs',       icon: 'clock' },
     { route: 'config',     label: 'Config',          icon: 'file' },
     { route: 'settings',   label: 'Settings',        icon: 'settings' },
   ];
@@ -134,6 +135,8 @@
           <svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         {:else if item.icon === 'radio'}
           <svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 010 8.49m-8.48-.01a6 6 0 010-8.49m11.31-2.82a10 10 0 010 14.14m-14.14 0a10 10 0 010-14.14"/></svg>
+        {:else if item.icon === 'clock'}
+          <svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         {/if}
         <span>{item.label}</span>
       </a>

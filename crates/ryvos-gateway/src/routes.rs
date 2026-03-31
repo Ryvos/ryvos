@@ -767,3 +767,341 @@ pub async fn deny_request(
         .await;
     Ok(Json(serde_json::json!({ "denied": found })))
 }
+
+// ── Cron Management API ─────────────────────────────────────────
+
+// GET /api/cron — list cron jobs from config
+pub async fn list_cron(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let path = state.config_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let content = tokio::fs::read_to_string(path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let config: toml::Value =
+        toml::from_str(&content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let jobs = config
+        .get("cron")
+        .and_then(|c| c.get("jobs"))
+        .and_then(|j| j.as_array())
+        .cloned()
+        .unwrap_or_default();
+    Ok(Json(serde_json::json!({ "jobs": jobs })))
+}
+
+// POST /api/cron — add a cron job
+#[derive(Deserialize)]
+pub struct AddCronBody {
+    name: String,
+    schedule: String,
+    prompt: String,
+    channel: Option<String>,
+    goal: Option<String>,
+}
+
+pub async fn add_cron(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<AddCronBody>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_operator_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let path = state.config_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let mut content = tokio::fs::read_to_string(path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Append new job as TOML
+    content.push_str("\n\n[[cron.jobs]]\n");
+    content.push_str(&format!("name = {:?}\n", body.name));
+    content.push_str(&format!("schedule = {:?}\n", body.schedule));
+    content.push_str(&format!("prompt = {:?}\n", body.prompt));
+    if let Some(ref ch) = body.channel {
+        content.push_str(&format!("channel = {:?}\n", ch));
+    }
+    if let Some(ref goal) = body.goal {
+        content.push_str(&format!("goal = {:?}\n", goal));
+    }
+
+    // Validate
+    if toml::from_str::<ryvos_core::config::AppConfig>(&content).is_err() {
+        return Ok(Json(
+            serde_json::json!({ "error": "Invalid config after adding job" }),
+        ));
+    }
+
+    tokio::fs::write(path, &content)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(
+        serde_json::json!({ "ok": true, "note": "Restart required for changes to take effect" }),
+    ))
+}
+
+// DELETE /api/cron/:name — remove a cron job
+pub async fn delete_cron(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_operator_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let path = state.config_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let content = tokio::fs::read_to_string(path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut config: toml::Value =
+        toml::from_str(&content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Remove matching job
+    if let Some(cron) = config.get_mut("cron") {
+        if let Some(jobs) = cron.get_mut("jobs") {
+            if let Some(arr) = jobs.as_array_mut() {
+                arr.retain(|j| j.get("name").and_then(|n| n.as_str()) != Some(&name));
+            }
+        }
+    }
+
+    let new_content =
+        toml::to_string_pretty(&config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    tokio::fs::write(path, &new_content)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(
+        serde_json::json!({ "ok": true, "note": "Restart required for changes to take effect" }),
+    ))
+}
+
+// ── Budget API ──────────────────────────────────────────────────
+
+// GET /api/budget — current budget config
+pub async fn get_budget(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    match &state.budget_config {
+        Some(bc) => Ok(Json(serde_json::json!({
+            "monthly_budget_cents": bc.monthly_budget_cents,
+            "warn_pct": bc.warn_pct,
+        }))),
+        None => Ok(Json(serde_json::json!({
+            "configured": false,
+            "note": "No [budget] section in config.toml"
+        }))),
+    }
+}
+
+// PUT /api/budget — update budget in config
+#[derive(Deserialize)]
+pub struct UpdateBudgetBody {
+    monthly_budget_cents: Option<u64>,
+    warn_pct: Option<u8>,
+}
+
+pub async fn put_budget(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<UpdateBudgetBody>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_operator_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let path = state.config_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let content = tokio::fs::read_to_string(path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut config: toml::Value =
+        toml::from_str(&content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Ensure [budget] section exists
+    let budget = config
+        .as_table_mut()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
+        .entry("budget")
+        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+
+    if let Some(table) = budget.as_table_mut() {
+        if let Some(v) = body.monthly_budget_cents {
+            table.insert(
+                "monthly_budget_cents".to_string(),
+                toml::Value::Integer(v as i64),
+            );
+        }
+        if let Some(v) = body.warn_pct {
+            table.insert("warn_pct".to_string(), toml::Value::Integer(v as i64));
+        }
+    }
+
+    let new_content =
+        toml::to_string_pretty(&config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    tokio::fs::write(path, &new_content)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(
+        serde_json::json!({ "ok": true, "note": "Restart required for changes to take effect" }),
+    ))
+}
+
+// ── Model API ───────────────────────────────────────────────────
+
+// GET /api/model — current model config (api_key redacted)
+pub async fn get_model(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let path = state.config_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let content = tokio::fs::read_to_string(path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let config: toml::Value =
+        toml::from_str(&content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut model = config
+        .get("model")
+        .cloned()
+        .unwrap_or(toml::Value::Table(toml::map::Map::new()));
+
+    // Redact sensitive fields
+    if let Some(table) = model.as_table_mut() {
+        table.remove("api_key");
+        table.remove("token");
+    }
+
+    Ok(Json(serde_json::json!({ "model": model })))
+}
+
+// GET /api/models/available — model catalog per provider
+#[derive(Deserialize)]
+pub struct ModelsQuery {
+    #[serde(default)]
+    provider: Option<String>,
+}
+
+pub async fn list_models(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<ModelsQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Read current provider from config if not specified
+    let path = state.config_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let content = tokio::fs::read_to_string(path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let config: toml::Value =
+        toml::from_str(&content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let provider = q.provider.or_else(|| {
+        config
+            .get("model")
+            .and_then(|m| m.get("provider"))
+            .and_then(|p| p.as_str())
+            .map(String::from)
+    });
+
+    let models = match provider.as_deref() {
+        Some("anthropic") | Some("claude-code") | Some("claude-cli") | Some("claude-sub") => {
+            vec![
+                serde_json::json!({"id": "claude-opus-4-20250514", "name": "Claude Opus 4"}),
+                serde_json::json!({"id": "claude-sonnet-4-20250514", "name": "Claude Sonnet 4"}),
+                serde_json::json!({"id": "claude-haiku-4-20250506", "name": "Claude Haiku 4"}),
+                serde_json::json!({"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet"}),
+            ]
+        }
+        Some("openai") => {
+            vec![
+                serde_json::json!({"id": "gpt-4.1", "name": "GPT-4.1"}),
+                serde_json::json!({"id": "gpt-4.1-mini", "name": "GPT-4.1 Mini"}),
+                serde_json::json!({"id": "gpt-4o", "name": "GPT-4o"}),
+                serde_json::json!({"id": "gpt-4o-mini", "name": "GPT-4o Mini"}),
+            ]
+        }
+        Some("gemini" | "google") => {
+            vec![
+                serde_json::json!({"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro"}),
+                serde_json::json!({"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash"}),
+                serde_json::json!({"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash"}),
+            ]
+        }
+        Some("groq") => {
+            vec![
+                serde_json::json!({"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B"}),
+                serde_json::json!({"id": "llama-3.1-8b-instant", "name": "Llama 3.1 8B"}),
+                serde_json::json!({"id": "mixtral-8x7b-32768", "name": "Mixtral 8x7B"}),
+            ]
+        }
+        _ => vec![serde_json::json!({"id": "unknown", "name": "Unknown provider"})],
+    };
+
+    Ok(Json(serde_json::json!({
+        "provider": provider,
+        "models": models
+    })))
+}
+
+// PUT /api/model — update model settings in config
+#[derive(Deserialize)]
+pub struct UpdateModelBody {
+    model_id: Option<String>,
+    temperature: Option<f32>,
+    max_tokens: Option<u32>,
+    thinking: Option<String>,
+}
+
+pub async fn put_model(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<UpdateModelBody>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_operator_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let path = state.config_path.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+    let content = tokio::fs::read_to_string(path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut config: toml::Value =
+        toml::from_str(&content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if let Some(model) = config.get_mut("model").and_then(|m| m.as_table_mut()) {
+        if let Some(v) = &body.model_id {
+            model.insert("model_id".to_string(), toml::Value::String(v.clone()));
+        }
+        if let Some(v) = body.temperature {
+            model.insert("temperature".to_string(), toml::Value::Float(v as f64));
+        }
+        if let Some(v) = body.max_tokens {
+            model.insert("max_tokens".to_string(), toml::Value::Integer(v as i64));
+        }
+        if let Some(v) = &body.thinking {
+            model.insert("thinking".to_string(), toml::Value::String(v.clone()));
+        }
+    }
+
+    let new_content =
+        toml::to_string_pretty(&config).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    tokio::fs::write(path, &new_content)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(
+        serde_json::json!({ "ok": true, "note": "Restart required for changes to take effect" }),
+    ))
+}

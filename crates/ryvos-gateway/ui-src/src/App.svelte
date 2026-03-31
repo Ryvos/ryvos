@@ -18,7 +18,7 @@
   import VikingBrowser from './lib/pages/VikingBrowser.svelte';
   import ConfigEditor from './lib/pages/ConfigEditor.svelte';
   import Channels from './lib/pages/Channels.svelte';
-  import Graph from './lib/pages/Graph.svelte';
+  import CronManager from './lib/pages/Graph.svelte';
 
   let isAuthenticated = false;
   let currentRoute = 'chat';
@@ -113,8 +113,8 @@
         <ConfigEditor />
       {:else if currentRoute === 'channels'}
         <Channels />
-      {:else if currentRoute === 'graph'}
-        <Graph />
+      {:else if currentRoute === 'cron'}
+        <CronManager />
       {:else}
         <Chat sessionId={routeParam} />
       {/if}

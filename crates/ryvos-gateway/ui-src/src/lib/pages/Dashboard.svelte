@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { apiFetch } from '../api.js';
+  import { activityFeed } from '../ws.js';
   import ActivityFeed from '../components/ActivityFeed.svelte';
 
   let loading = true;
@@ -30,6 +31,15 @@
     if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
     return String(n);
   }
+
+  let guardianAlerts = [];
+  activityFeed.subscribe(feed => {
+    guardianAlerts = feed.filter(item =>
+      item.kind === 'guardian_stall' ||
+      item.kind === 'guardian_doom_loop' ||
+      item.kind === 'guardian_budget_alert'
+    ).slice(0, 5);
+  });
 
   $: totalToolCalls = toolBreakdown.reduce((sum, t) => sum + (t.count || 0), 0);
   $: maxToolCount = toolBreakdown.length > 0 ? toolBreakdown[0].count : 1;
@@ -79,6 +89,22 @@
     <h1 class="text-3xl font-heading">Dashboard</h1>
     <p class="text-sm text-[#9B9590] mt-1">Overview of your Ryvos instance</p>
   </div>
+
+  <!-- Guardian Alerts -->
+  {#if guardianAlerts.length > 0}
+    <div class="border-2 border-[#DC2626] bg-[#DC2626]/5 p-4 mb-6">
+      <div class="flex items-center gap-2 mb-2">
+        <svg class="w-5 h-5 text-[#DC2626]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span class="label text-[#DC2626]">GUARDIAN ALERTS</span>
+      </div>
+      {#each guardianAlerts as alert}
+        <div class="flex items-center gap-2 text-sm text-[#DC2626] py-1">
+          <span class="text-xs font-mono text-[#9B9590]">{alert.time}</span>
+          <span>{alert.detail}</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   <!-- Top Metrics Strip -->
   {#if loading}

@@ -408,7 +408,7 @@ async fn process_request(
                 }
                 sid
             } else {
-                let sid = SessionId::from_string(session_id_str);
+                let sid = session_mgr.get_or_create(session_id_str, "webui");
                 let mut subs = subscribed.lock().await;
                 if !subs.contains(&sid.to_string()) {
                     subs.push(sid.to_string());

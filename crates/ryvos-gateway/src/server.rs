@@ -138,19 +138,37 @@ impl GatewayServer {
             .route("/api/viking/read", get(routes::viking_read))
             .route("/api/viking/search", get(routes::viking_search))
             // Config editor API
-            .route("/api/config", get(routes::get_config))
-            .route("/api/config", axum::routing::put(routes::put_config))
+            .route(
+                "/api/config",
+                get(routes::get_config).put(routes::put_config),
+            )
             // Channel status
             .route("/api/channels", get(routes::channels_status))
             // Approvals (already exist logically in WS, now also REST)
             .route("/api/approvals", get(routes::list_approvals))
             .route("/api/approvals/{id}/approve", post(routes::approve_request))
             .route("/api/approvals/{id}/deny", post(routes::deny_request))
+            // Cron management API
+            .route("/api/cron", get(routes::list_cron).post(routes::add_cron))
+            .route(
+                "/api/cron/{name}",
+                axum::routing::delete(routes::delete_cron),
+            )
+            // Budget API
+            .route(
+                "/api/budget",
+                get(routes::get_budget).put(routes::put_budget),
+            )
+            // Model API
+            .route("/api/model", get(routes::get_model).put(routes::put_model))
+            .route("/api/models/available", get(routes::list_models))
             // Webhooks
             .route("/api/hooks/wake", post(routes::webhook_wake))
             // WhatsApp Cloud API webhooks
-            .route("/api/whatsapp/webhook", get(routes::whatsapp_verify))
-            .route("/api/whatsapp/webhook", post(routes::whatsapp_incoming))
+            .route(
+                "/api/whatsapp/webhook",
+                get(routes::whatsapp_verify).post(routes::whatsapp_incoming),
+            )
             // Embedded Web UI
             .route("/", get(static_files::index))
             .route("/assets/{*path}", get(static_files::static_file))

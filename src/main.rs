@@ -518,8 +518,8 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    // Initialize cost store if budget is configured
-    let cost_store: Option<Arc<ryvos_memory::CostStore>> = if config.budget.is_some() {
+    // Always initialize cost store for run tracking (budget enforcement is separate)
+    let cost_store: Option<Arc<ryvos_memory::CostStore>> = {
         let cost_db_path = workspace.join("cost.db");
         match ryvos_memory::CostStore::open(&cost_db_path) {
             Ok(cs) => {
@@ -531,8 +531,6 @@ async fn main() -> anyhow::Result<()> {
                 None
             }
         }
-    } else {
-        None
     };
 
     let session_mgr = Arc::new(ryvos_agent::SessionManager::new());
