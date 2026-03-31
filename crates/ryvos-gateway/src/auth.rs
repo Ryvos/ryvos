@@ -57,12 +57,13 @@ pub fn validate_auth(
         return None;
     }
 
-    // 3. No auth configured = anonymous access (only if no api_keys either)
-    // Default to Viewer (not Admin) for anonymous access — least privilege.
+    // 3. No auth configured = full admin access (self-hosted single-user mode).
+    // If you haven't set up API keys, you're the only user — full access.
+    // To restrict access, add [[gateway.api_keys]] to config.toml.
     if config.api_keys.is_empty() {
         Some(AuthResult {
-            name: "anonymous".into(),
-            role: ApiKeyRole::Viewer,
+            name: "anonymous-admin".into(),
+            role: ApiKeyRole::Admin,
         })
     } else {
         None
@@ -122,12 +123,12 @@ mod tests {
     }
 
     #[test]
-    fn test_no_auth_anonymous_viewer() {
+    fn test_no_auth_anonymous_admin() {
         let config = gateway(None, None, vec![]);
         let result = validate_auth(&config, None, None, None);
         assert!(result.is_some());
-        // Anonymous access defaults to Viewer (least privilege)
-        assert_eq!(result.unwrap().role, ApiKeyRole::Viewer);
+        // No auth configured = full admin (self-hosted single-user mode)
+        assert_eq!(result.unwrap().role, ApiKeyRole::Admin);
         assert!(validate_auth(&config, Some("anything"), None, None).is_none()); // Bearer with no match
         assert!(validate_auth(&config, None, Some("anything"), None).is_some());
         // No token configured
