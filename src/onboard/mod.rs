@@ -290,6 +290,7 @@ async fn run_non_interactive(config_path: &Path, options: InitOptions) -> Result
         notion: None,
         jira: None,
         linear: None,
+        integrations: Default::default(),
     };
 
     if let Some(parent) = config_path.parent() {
@@ -716,6 +717,7 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         notion: None,
         jira: None,
         linear: None,
+        integrations: Default::default(),
     };
 
     if let Some(parent) = config_path.parent() {

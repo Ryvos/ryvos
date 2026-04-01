@@ -186,6 +186,9 @@ pub struct AppConfig {
     /// Linear integration.
     #[serde(default)]
     pub linear: Option<LinearConfig>,
+    /// One-click OAuth integrations.
+    #[serde(default)]
+    pub integrations: IntegrationsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1080,6 +1083,36 @@ pub struct JiraConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinearConfig {
     /// Linear API key from linear.app/settings/api.
+    pub api_key: String,
+}
+
+/// OAuth app credentials for one-click integrations.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OAuthAppConfig {
+    pub client_id: String,
+    pub client_secret: String,
+}
+
+/// Configuration for one-click integrations.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct IntegrationsConfig {
+    #[serde(default)]
+    pub gmail: Option<OAuthAppConfig>,
+    #[serde(default)]
+    pub slack: Option<OAuthAppConfig>,
+    #[serde(default)]
+    pub github: Option<OAuthAppConfig>,
+    #[serde(default)]
+    pub jira: Option<OAuthAppConfig>,
+    #[serde(default)]
+    pub linear: Option<OAuthAppConfig>,
+    #[serde(default)]
+    pub notion: Option<NotionIntegrationConfig>,
+}
+
+/// Notion uses internal integration tokens, not OAuth.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NotionIntegrationConfig {
     pub api_key: String,
 }
 

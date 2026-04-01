@@ -13,6 +13,7 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 rmcp.workspace = true
+http.workspace = true
 chrono.workspace = true
 rusqlite.workspace = true
 schemars = "1"

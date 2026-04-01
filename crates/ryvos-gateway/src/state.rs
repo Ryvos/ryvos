@@ -4,10 +4,11 @@ use std::time::Instant;
 
 use ryvos_agent::{AgentRuntime, ApprovalBroker, AuditTrail, SessionManager};
 use ryvos_channels::WhatsAppWebhookHandle;
+use ryvos_core::config::IntegrationsConfig;
 use ryvos_core::config::{BudgetConfig, GatewayConfig};
 use ryvos_core::event::EventBus;
 use ryvos_core::traits::SessionStore;
-use ryvos_memory::{CostStore, SessionMetaStore, VikingClient};
+use ryvos_memory::{CostStore, IntegrationStore, SessionMetaStore, VikingClient};
 
 /// Shared application state for axum handlers.
 pub struct AppState {
@@ -25,4 +26,6 @@ pub struct AppState {
     pub viking_client: Option<Arc<VikingClient>>,
     pub config_path: Option<PathBuf>,
     pub session_meta: Option<Arc<SessionMetaStore>>,
+    pub integration_store: Option<Arc<IntegrationStore>>,
+    pub integrations_config: IntegrationsConfig,
 }

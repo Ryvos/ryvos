@@ -10,10 +10,10 @@ use tracing::info;
 
 use ryvos_agent::{AgentRuntime, ApprovalBroker, AuditTrail, SessionManager};
 use ryvos_channels::WhatsAppWebhookHandle;
-use ryvos_core::config::{BudgetConfig, GatewayConfig};
+use ryvos_core::config::{BudgetConfig, GatewayConfig, IntegrationsConfig};
 use ryvos_core::event::EventBus;
 use ryvos_core::traits::SessionStore;
-use ryvos_memory::{CostStore, SessionMetaStore, VikingClient};
+use ryvos_memory::{CostStore, IntegrationStore, SessionMetaStore, VikingClient};
 
 use crate::routes;
 use crate::state::AppState;
@@ -35,6 +35,8 @@ pub struct GatewayServer {
     viking_client: Option<Arc<VikingClient>>,
     config_path: Option<std::path::PathBuf>,
     session_meta: Option<Arc<SessionMetaStore>>,
+    integration_store: Option<Arc<IntegrationStore>>,
+    integrations_config: IntegrationsConfig,
 }
 
 impl GatewayServer {
@@ -61,6 +63,8 @@ impl GatewayServer {
             viking_client: None,
             config_path: None,
             session_meta: None,
+            integration_store: None,
+            integrations_config: IntegrationsConfig::default(),
         }
     }
 
@@ -99,6 +103,16 @@ impl GatewayServer {
         self.session_meta = Some(meta);
     }
 
+    /// Set the integration store for OAuth token persistence.
+    pub fn set_integration_store(&mut self, store: Arc<IntegrationStore>) {
+        self.integration_store = Some(store);
+    }
+
+    /// Set the integrations config for one-click OAuth providers.
+    pub fn set_integrations_config(&mut self, config: IntegrationsConfig) {
+        self.integrations_config = config;
+    }
+
     /// Run the gateway server until the cancellation token is triggered.
     pub async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()> {
         let state = Arc::new(AppState {
@@ -116,6 +130,8 @@ impl GatewayServer {
             viking_client: self.viking_client.clone(),
             config_path: self.config_path.clone(),
             session_meta: self.session_meta.clone(),
+            integration_store: self.integration_store.clone(),
+            integrations_config: self.integrations_config.clone(),
         });
 
         let app = Router::new()
@@ -162,6 +178,20 @@ impl GatewayServer {
             // Model API
             .route("/api/model", get(routes::get_model).put(routes::put_model))
             .route("/api/models/available", get(routes::list_models))
+            // Integrations API (OAuth one-click connect)
+            .route("/api/integrations", get(routes::list_integrations))
+            .route(
+                "/api/integrations/callback",
+                get(routes::integration_callback),
+            )
+            .route(
+                "/api/integrations/{app}/connect",
+                post(routes::connect_integration),
+            )
+            .route(
+                "/api/integrations/{app}",
+                axum::routing::delete(routes::disconnect_integration),
+            )
             // Webhooks
             .route("/api/hooks/wake", post(routes::webhook_wake))
             // WhatsApp Cloud API webhooks

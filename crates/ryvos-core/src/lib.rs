@@ -8,6 +8,7 @@ pub mod traits;
 pub mod types;
 
 pub use config::AppConfig;
+pub use config::IntegrationsConfig;
 pub use error::{Result, RyvosError};
 pub use event::EventBus;
 pub use types::*;

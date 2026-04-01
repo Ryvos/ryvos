@@ -25,8 +25,9 @@
     { route: 'sessions',   label: 'Sessions',        icon: 'layers' },
     { route: 'runs',       label: 'Runs',            icon: 'activity' },
     { route: 'costs',      label: 'Costs',           icon: 'dollar' },
-    { route: 'channels',   label: 'Channels',        icon: 'radio' },
-    { route: 'audit',      label: 'Audit Trail',     icon: 'shield' },
+    { route: 'channels',      label: 'Channels',        icon: 'radio' },
+    { route: 'integrations',  label: 'Integrations',    icon: 'plug' },
+    { route: 'audit',         label: 'Audit Trail',     icon: 'shield' },
     { route: 'viking',     label: 'Viking Browser',  icon: 'database' },
     { route: 'cron',       label: 'Cron Jobs',       icon: 'clock' },
     { route: 'config',     label: 'Config',          icon: 'file' },
@@ -127,6 +128,8 @@
           <svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         {:else if item.icon === 'settings'}
           <svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        {:else if item.icon === 'plug'}
+          <svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m-3-3h6m-9 5h12a2 2 0 012 2v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7a2 2 0 012-2z"/></svg>
         {:else if item.icon === 'shield'}
           <svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         {:else if item.icon === 'database'}

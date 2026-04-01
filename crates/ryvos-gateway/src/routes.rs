@@ -1105,3 +1105,171 @@ pub async fn put_model(
         serde_json::json!({ "ok": true, "note": "Restart required for changes to take effect" }),
     ))
 }
+
+// ── Integrations API ────────────────────────────────────────────
+
+fn integration_apps() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::json!({"id": "gmail", "name": "Gmail", "provider": "google", "actions": 23, "icon": "mail"}),
+        serde_json::json!({"id": "calendar", "name": "Google Calendar", "provider": "google", "actions": 46, "icon": "calendar"}),
+        serde_json::json!({"id": "drive", "name": "Google Drive", "provider": "google", "actions": 50, "icon": "hard-drive"}),
+        serde_json::json!({"id": "slack", "name": "Slack", "provider": "slack", "actions": 74, "icon": "message-square"}),
+        serde_json::json!({"id": "notion", "name": "Notion", "provider": "notion", "actions": 48, "icon": "book"}),
+        serde_json::json!({"id": "github", "name": "GitHub", "provider": "github", "actions": 50, "icon": "github"}),
+        serde_json::json!({"id": "jira", "name": "Jira", "provider": "jira", "actions": 97, "icon": "clipboard"}),
+        serde_json::json!({"id": "linear", "name": "Linear", "provider": "linear", "actions": 33, "icon": "trending-up"}),
+    ]
+}
+
+// GET /api/integrations
+pub async fn list_integrations(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let integrations = &state.integrations_config;
+    let store = &state.integration_store;
+    let mut apps = Vec::new();
+    for app in integration_apps() {
+        let id = app["id"].as_str().unwrap_or("");
+        let configured = match id {
+            "gmail" | "calendar" | "drive" => integrations.gmail.is_some(),
+            "slack" => integrations.slack.is_some(),
+            "notion" => integrations.notion.is_some(),
+            "github" => integrations.github.is_some(),
+            "jira" => integrations.jira.is_some(),
+            "linear" => integrations.linear.is_some(),
+            _ => false,
+        };
+        let store_key = match id {
+            "calendar" | "drive" => "gmail",
+            other => other,
+        };
+        let connected = if let Some(ref s) = store {
+            s.is_connected(store_key).await
+        } else {
+            false
+        };
+        apps.push(serde_json::json!({
+            "id": app["id"], "name": app["name"], "provider": app["provider"],
+            "actions": app["actions"], "icon": app["icon"],
+            "configured": configured, "connected": connected,
+        }));
+    }
+    Ok(Json(serde_json::json!({ "apps": apps })))
+}
+
+// POST /api/integrations/:app/connect
+pub async fn connect_integration(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Path(app_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_operator_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if app_id == "notion" {
+        if let Some(ref notion) = state.integrations_config.notion {
+            if let Some(ref store) = state.integration_store {
+                let token = ryvos_memory::IntegrationToken {
+                    app_id: "notion".into(),
+                    provider: "notion".into(),
+                    access_token: notion.api_key.clone(),
+                    refresh_token: None,
+                    token_expiry: None,
+                    scopes: "all".into(),
+                    connected_at: chrono::Utc::now().to_rfc3339(),
+                };
+                store
+                    .save_token(&token)
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            }
+            return Ok(Json(
+                serde_json::json!({ "connected": true, "app": "notion" }),
+            ));
+        }
+        return Ok(Json(
+            serde_json::json!({ "error": "Notion not configured" }),
+        ));
+    }
+    let provider = crate::oauth::get_provider(&app_id, &state.integrations_config);
+    let Some(provider_config) = provider else {
+        return Ok(Json(
+            serde_json::json!({ "error": format!("{} not configured", app_id) }),
+        ));
+    };
+    let bind = &state.config.bind;
+    let redirect_uri = format!("http://{}/api/integrations/callback", bind);
+    let auth_url = crate::oauth::generate_auth_url(&provider_config, &redirect_uri, &app_id);
+    Ok(Json(
+        serde_json::json!({ "redirect_url": auth_url, "app": app_id }),
+    ))
+}
+
+// GET /api/integrations/callback
+pub async fn integration_callback(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let code = params.get("code").cloned().unwrap_or_default();
+    let app_id = params.get("state").cloned().unwrap_or_default();
+    if code.is_empty() || app_id.is_empty() {
+        return axum::response::Redirect::to("/#/integrations?error=missing_code").into_response();
+    }
+    let provider = crate::oauth::get_provider(&app_id, &state.integrations_config);
+    let Some(provider_config) = provider else {
+        return axum::response::Redirect::to("/#/integrations?error=not_configured")
+            .into_response();
+    };
+    let bind = &state.config.bind;
+    let redirect_uri = format!("http://{}/api/integrations/callback", bind);
+    match crate::oauth::exchange_code(&provider_config, &code, &redirect_uri).await {
+        Ok(token_resp) => {
+            if let Some(ref store) = state.integration_store {
+                let token = ryvos_memory::IntegrationToken {
+                    app_id: app_id.clone(),
+                    provider: app_id.clone(),
+                    access_token: token_resp.access_token,
+                    refresh_token: token_resp.refresh_token,
+                    token_expiry: token_resp.expires_in.map(|e| {
+                        (chrono::Utc::now() + chrono::Duration::seconds(e as i64)).to_rfc3339()
+                    }),
+                    scopes: token_resp.scope.unwrap_or_default(),
+                    connected_at: chrono::Utc::now().to_rfc3339(),
+                };
+                let _ = store.save_token(&token).await;
+            }
+            axum::response::Redirect::to(&format!("/#/integrations?connected={}", app_id))
+                .into_response()
+        }
+        Err(e) => {
+            tracing::error!(app = %app_id, error = %e, "OAuth token exchange failed");
+            axum::response::Redirect::to(&format!("/#/integrations?error=exchange&app={}", app_id))
+                .into_response()
+        }
+    }
+}
+
+// DELETE /api/integrations/:app
+pub async fn disconnect_integration(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Path(app_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_operator_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if let Some(ref store) = state.integration_store {
+        let deleted = store.delete(&app_id).await.unwrap_or(false);
+        Ok(Json(
+            serde_json::json!({ "disconnected": deleted, "app": app_id }),
+        ))
+    } else {
+        Ok(Json(
+            serde_json::json!({ "error": "Integration store not available" }),
+        ))
+    }
+}

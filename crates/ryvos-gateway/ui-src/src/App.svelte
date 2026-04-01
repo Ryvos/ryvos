@@ -18,6 +18,7 @@
   import VikingBrowser from './lib/pages/VikingBrowser.svelte';
   import ConfigEditor from './lib/pages/ConfigEditor.svelte';
   import Channels from './lib/pages/Channels.svelte';
+  import Integrations from './lib/pages/Integrations.svelte';
   import CronManager from './lib/pages/Graph.svelte';
 
   let isAuthenticated = false;
@@ -113,6 +114,8 @@
         <ConfigEditor />
       {:else if currentRoute === 'channels'}
         <Channels />
+      {:else if currentRoute === 'integrations'}
+        <Integrations />
       {:else if currentRoute === 'cron'}
         <CronManager />
       {:else}

@@ -805,6 +805,14 @@ async fn main() -> anyhow::Result<()> {
             }
             server.set_config_path(cli.config.clone());
 
+            // Integration store for OAuth tokens
+            let integration_store = Arc::new(
+                ryvos_memory::IntegrationStore::open(&workspace.join("integrations.db"))
+                    .expect("Failed to open integration store"),
+            );
+            server.set_integration_store(integration_store);
+            server.set_integrations_config(config.integrations.clone());
+
             if let Some(ref wa_config) = config.channels.whatsapp {
                 let wa_adapter = ryvos_channels::WhatsAppAdapter::new(
                     wa_config.clone(),
@@ -955,6 +963,14 @@ async fn main() -> anyhow::Result<()> {
                 }
                 server.set_config_path(cli.config.clone());
                 server.set_session_meta(session_meta.clone());
+
+                // Integration store for OAuth tokens
+                let integration_store = Arc::new(
+                    ryvos_memory::IntegrationStore::open(&workspace.join("integrations.db"))
+                        .expect("Failed to open integration store"),
+                );
+                server.set_integration_store(integration_store);
+                server.set_integrations_config(config.integrations.clone());
 
                 // Wire WhatsApp webhook handle into gateway if configured
                 if let Some(ref wa_config) = config.channels.whatsapp {
@@ -2096,6 +2112,7 @@ fn create_env_config() -> anyhow::Result<AppConfig> {
         notion: None,
         jira: None,
         linear: None,
+        integrations: Default::default(),
     })
 }
 

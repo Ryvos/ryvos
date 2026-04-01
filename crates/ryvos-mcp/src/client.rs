@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use http::{HeaderName, HeaderValue};
 use tokio::sync::{broadcast, Mutex};
 use tracing::{debug, info, warn};
 
@@ -8,7 +9,9 @@ use rmcp::model::{
     ResourceContents, SubscribeRequestParams, Tool as McpTool,
 };
 use rmcp::service::RunningService;
-use rmcp::transport::streamable_http_client::StreamableHttpClientTransport;
+use rmcp::transport::streamable_http_client::{
+    StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
+};
 use rmcp::{RoleClient, ServiceExt};
 
 use ryvos_core::config::{McpServerConfig, McpTransport};
@@ -69,7 +72,23 @@ impl McpClientManager {
                 })?
             }
             McpTransport::Sse { url } => {
-                let transport = StreamableHttpClientTransport::from_uri(url.as_str());
+                // Build custom headers from config
+                let custom_headers: HashMap<HeaderName, HeaderValue> = config
+                    .headers
+                    .iter()
+                    .filter_map(|(k, v)| {
+                        let name = HeaderName::from_bytes(k.as_bytes()).ok()?;
+                        let value = HeaderValue::from_str(v).ok()?;
+                        Some((name, value))
+                    })
+                    .collect();
+
+                let transport_config = StreamableHttpClientTransportConfig {
+                    uri: url.as_str().into(),
+                    custom_headers,
+                    ..Default::default()
+                };
+                let transport = StreamableHttpClientTransport::from_config(transport_config);
 
                 <RyvosClientHandler as ServiceExt<RoleClient>>::serve(handler, transport)
                     .await

@@ -74,6 +74,12 @@ mime_guess = "2"
 ratatui = "0.29"
 crossterm = "0.28"
 
+# HTTP types (HeaderName, HeaderValue — used by MCP custom headers)
+http = "1"
+
+# URL encoding
+urlencoding = "2"
+
 # MCP
 rmcp = { version = "0.16", features = ["client", "server", "macros", "transport-child-process", "transport-streamable-http-client-reqwest"] }
 
