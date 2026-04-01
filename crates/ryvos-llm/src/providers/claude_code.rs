@@ -294,7 +294,7 @@ async fn parse_stream_json(
                             )
                             .unwrap_or_default();
                             if input_str.len() > 120 {
-                                format!("{}...", &input_str[..120])
+                                format!("{}...", input_str.chars().take(120).collect::<String>())
                             } else {
                                 input_str
                             }

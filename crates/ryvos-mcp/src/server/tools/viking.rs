@@ -23,7 +23,7 @@ pub async fn search(
                             r.path,
                             r.relevance_score,
                             if r.content.len() > 200 {
-                                format!("{}...", &r.content[..200])
+                                format!("{}...", r.content.chars().take(200).collect::<String>())
                             } else {
                                 r.content.clone()
                             }

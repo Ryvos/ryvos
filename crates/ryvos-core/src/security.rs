@@ -235,7 +235,7 @@ pub fn summarize_input(tool_name: &str, input: &serde_json::Value) -> String {
             .and_then(|v| v.as_str())
             .map(|s| {
                 if s.len() > 80 {
-                    format!("{}...", &s[..80])
+                    format!("{}...", s.chars().take(80).collect::<String>())
                 } else {
                     s.to_string()
                 }
@@ -244,7 +244,7 @@ pub fn summarize_input(tool_name: &str, input: &serde_json::Value) -> String {
         _ => {
             let s = serde_json::to_string(input).unwrap_or_default();
             if s.len() > 120 {
-                format!("{}...", &s[..120])
+                format!("{}...", s.chars().take(120).collect::<String>())
             } else {
                 s
             }

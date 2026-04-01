@@ -92,7 +92,7 @@ impl Tool for SessionHistoryTool {
             for msg in &messages {
                 let text = msg.text();
                 let preview = if text.len() > 200 {
-                    &text[..200]
+                    &text.chars().take(200).collect::<String>()
                 } else {
                     &text
                 };

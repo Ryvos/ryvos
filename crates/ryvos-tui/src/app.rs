@@ -92,7 +92,10 @@ impl App {
                 self.active_tool = None;
                 let status = if result.is_error { "ERROR" } else { "ok" };
                 let content = if result.content.len() > 200 {
-                    format!("{}...", &result.content[..200])
+                    format!(
+                        "{}...",
+                        result.content.chars().take(200).collect::<String>()
+                    )
                 } else {
                     result.content.clone()
                 };

@@ -248,7 +248,7 @@ async fn parse_copilot_event(
                         )
                         .unwrap_or_default();
                         if s.len() > 120 {
-                            format!("{}...", &s[..120])
+                            format!("{}...", s.chars().take(120).collect::<String>())
                         } else {
                             s
                         }
