@@ -592,7 +592,7 @@ fn default_heartbeat_interval() -> u64 {
     1800
 }
 fn default_ack_max_chars() -> usize {
-    300
+    2000
 }
 fn default_heartbeat_file() -> String {
     "HEARTBEAT.md".to_string()
