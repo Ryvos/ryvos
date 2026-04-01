@@ -99,6 +99,10 @@ impl ChannelDispatcher {
                                 Ok(AgentEvent::HeartbeatOk { response_chars, .. }) => {
                                     (MessageContent::Text(format!("[Heartbeat] All clear ({} chars)", response_chars)), None)
                                 }
+                                Ok(AgentEvent::CronJobComplete { name, response, channel }) => {
+                                    let msg = format!("[Cron: {}] {}", name, response);
+                                    (MessageContent::Text(msg), channel)
+                                }
                                 _ => continue,
                             };
 
