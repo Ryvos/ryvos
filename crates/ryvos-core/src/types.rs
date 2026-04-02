@@ -221,6 +221,14 @@ pub enum StreamDelta {
         tool_name: String,
         input_summary: String,
     },
+
+    /// Tool result from a CLI provider (claude-code, copilot).
+    /// Captures the output for post-hoc safety evaluation and healing.
+    CliToolResult {
+        tool_name: String,
+        output_summary: String,
+        is_error: bool,
+    },
 }
 
 /// Result of a tool execution.

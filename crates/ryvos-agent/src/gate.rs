@@ -79,21 +79,6 @@ impl SecurityGate {
 
         // 1. Log to audit trail (pre-execution)
         let input_summary = summarize_input(name, &input);
-        if let Some(ref trail) = self.audit_trail {
-            let entry = AuditEntry {
-                timestamp: Utc::now(),
-                session_id: ctx.session_id.to_string(),
-                tool_name: name.to_string(),
-                input_summary: input_summary.clone(),
-                output_summary: String::new(), // Filled post-execution
-                safety_reasoning: None,
-                outcome: SafetyOutcome::Harmless,
-                lessons_available: vec![],
-            };
-            if let Err(e) = trail.log_tool_call(&entry).await {
-                debug!(error = %e, "Failed to log pre-execution audit entry");
-            }
-        }
 
         // 2. Check safety memory (informational, never blocking)
         let mut lesson_ids = Vec::new();
@@ -109,6 +94,14 @@ impl SecurityGate {
                 }
             }
         }
+
+        // 2b. Generate safety reasoning
+        let safety_reasoning = Some(match (tool_has_side_effects(name), lesson_ids.len()) {
+            (false, 0) => "Read-only, no prior incidents".to_string(),
+            (true, 0) => format!("Side-effect tool ({})", name),
+            (false, n) => format!("{} lesson(s) from past experience", n),
+            (true, n) => format!("Side-effect tool ({}); {} lesson(s) available", name, n),
+        });
 
         // 3. Optional soft checkpoint (pause_before)
         if self.policy.should_pause(name) && tool_has_side_effects(name) {
@@ -163,7 +156,7 @@ impl SecurityGate {
                         tool_name: name.to_string(),
                         input_summary: input_summary.clone(),
                         output_summary: output_preview,
-                        safety_reasoning: None,
+                        safety_reasoning: safety_reasoning.clone(),
                         outcome: outcome.clone(),
                         lessons_available: lesson_ids.clone(),
                     };
@@ -226,7 +219,7 @@ impl SecurityGate {
                         tool_name: name.to_string(),
                         input_summary,
                         output_summary: format!("ERROR: {}", e),
-                        safety_reasoning: None,
+                        safety_reasoning: safety_reasoning.clone(),
                         outcome: SafetyOutcome::Incident {
                             what_happened: e.to_string(),
                             severity: crate::safety_memory::Severity::Low,

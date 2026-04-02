@@ -125,10 +125,7 @@ impl Guardian {
                         }
                         AgentEvent::ToolStart { ref name, ref input } => {
                             run_active = true;
-                            let fingerprint = {
-                                let s = serde_json::to_string(input).unwrap_or_default();
-                                s.chars().take(200).collect::<String>()
-                            };
+                            let fingerprint = normalize_fingerprint(input);
                             recent_tools.push_back(ToolCallRecord {
                                 name: name.clone(),
                                 input_fingerprint: fingerprint,
@@ -355,9 +352,45 @@ impl Guardian {
     }
 }
 
+/// Normalize a JSON value into a canonical fingerprint for doom loop detection.
+/// Sorts object keys recursively, strips whitespace, takes first 300 chars.
+/// This catches LLM retry patterns where it varies whitespace or argument order.
+fn normalize_fingerprint(input: &serde_json::Value) -> String {
+    fn sort_value(v: &serde_json::Value) -> serde_json::Value {
+        match v {
+            serde_json::Value::Object(map) => {
+                let sorted: serde_json::Map<String, serde_json::Value> =
+                    map.iter().map(|(k, v)| (k.clone(), sort_value(v))).collect();
+                serde_json::Value::Object(sorted)
+            }
+            serde_json::Value::Array(arr) => {
+                serde_json::Value::Array(arr.iter().map(sort_value).collect())
+            }
+            other => other.clone(),
+        }
+    }
+    let normalized = sort_value(input);
+    let s = serde_json::to_string(&normalized).unwrap_or_default();
+    s.chars().filter(|c| !c.is_whitespace()).take(300).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fingerprint_normalizes_key_order() {
+        let a = serde_json::json!({"b": 1, "a": 2});
+        let b = serde_json::json!({"a": 2, "b": 1});
+        assert_eq!(normalize_fingerprint(&a), normalize_fingerprint(&b));
+    }
+
+    #[test]
+    fn fingerprint_strips_whitespace() {
+        let a = serde_json::json!({"command": "echo hello"});
+        let b = serde_json::json!({"command":"echo hello"});
+        assert_eq!(normalize_fingerprint(&a), normalize_fingerprint(&b));
+    }
 
     #[tokio::test]
     async fn doom_loop_detection() {

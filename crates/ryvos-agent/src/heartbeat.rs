@@ -42,6 +42,7 @@ pub struct Heartbeat {
     cancel: CancellationToken,
     workspace: PathBuf,
     session_meta: Option<Arc<SessionMetaStore>>,
+    audit_trail: Option<Arc<crate::AuditTrail>>,
 }
 
 impl Heartbeat {
@@ -59,12 +60,18 @@ impl Heartbeat {
             cancel,
             workspace,
             session_meta: None,
+            audit_trail: None,
         }
     }
 
     /// Set the session meta store for CLI session resumption.
     pub fn set_session_meta(&mut self, store: Arc<SessionMetaStore>) {
         self.session_meta = Some(store);
+    }
+
+    /// Set the audit trail for safety retrospective during heartbeats.
+    pub fn set_audit_trail(&mut self, trail: Arc<crate::AuditTrail>) {
+        self.audit_trail = Some(trail);
     }
 
     /// Run the heartbeat loop. Blocks until cancelled.
@@ -98,7 +105,39 @@ impl Heartbeat {
             self.event_bus
                 .publish(AgentEvent::HeartbeatFired { timestamp: now });
 
-            let prompt = self.build_prompt();
+            let mut prompt = self.build_prompt();
+
+            // Inject safety retrospective: recent non-Harmless audit entries
+            if let Some(ref trail) = self.audit_trail {
+                if let Ok(entries) = trail.recent_entries("", 50).await {
+                    let flagged: Vec<_> = entries
+                        .iter()
+                        .filter(|e| {
+                            !matches!(
+                                e.outcome,
+                                crate::safety_memory::SafetyOutcome::Harmless
+                            )
+                        })
+                        .collect();
+                    if !flagged.is_empty() {
+                        prompt.push_str("\n\n## Safety Retrospective\n\n");
+                        prompt.push_str(
+                            "The following recent actions had non-harmless safety outcomes. \
+                             Evaluate whether corrective lessons should be recorded via viking_write \
+                             to viking://agent/lessons/:\n\n",
+                        );
+                        for entry in flagged.iter().take(10) {
+                            prompt.push_str(&format!(
+                                "- **{}** `{}`: {:?}\n",
+                                entry.tool_name,
+                                entry.input_summary.chars().take(80).collect::<String>(),
+                                entry.outcome
+                            ));
+                        }
+                    }
+                }
+            }
+
             let session_key = "heartbeat:default";
 
             info!(session = %session_id, "Heartbeat firing");

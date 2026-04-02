@@ -2586,6 +2586,7 @@ dependencies = [
  "chrono",
  "cron",
  "futures",
+ "regex",
  "reqwest 0.12.28",
  "rusqlite",
  "ryvos-core",

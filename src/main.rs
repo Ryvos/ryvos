@@ -428,16 +428,19 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize safety memory (self-learning from past incidents)
     let safety_db_path = workspace.join("safety.db");
-    match ryvos_agent::SafetyMemory::open(&safety_db_path) {
-        Ok(memory) => {
-            let memory = Arc::new(memory);
-            gate_inner.set_safety_memory(memory);
-            info!("Safety memory initialized (self-learning security)");
-        }
-        Err(e) => {
-            error!(error = %e, "Failed to initialize safety memory");
-        }
-    }
+    let safety_memory: Option<Arc<ryvos_agent::SafetyMemory>> =
+        match ryvos_agent::SafetyMemory::open(&safety_db_path) {
+            Ok(memory) => {
+                let memory = Arc::new(memory);
+                gate_inner.set_safety_memory(memory.clone());
+                info!("Safety memory initialized (self-learning security)");
+                Some(memory)
+            }
+            Err(e) => {
+                error!(error = %e, "Failed to initialize safety memory");
+                None
+            }
+        };
 
     // Initialize audit trail (post-hoc accountability)
     let audit_db_path = workspace.join("audit.db");
@@ -541,6 +544,9 @@ async fn main() -> anyhow::Result<()> {
     }
     if let Some(ref cs) = cost_store {
         runtime_inner.set_cost_store(cs.clone());
+    }
+    if let Some(ref sm) = safety_memory {
+        runtime_inner.set_safety_memory(sm.clone());
     }
 
     let session_id = cli
@@ -929,6 +935,9 @@ async fn main() -> anyhow::Result<()> {
                         workspace.clone(),
                     );
                     heartbeat.set_session_meta(session_meta.clone());
+                    if let Some(ref trail) = audit_trail {
+                        heartbeat.set_audit_trail(trail.clone());
+                    }
                     tokio::spawn(async move {
                         heartbeat.run().await;
                     });

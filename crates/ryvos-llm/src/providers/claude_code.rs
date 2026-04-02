@@ -320,6 +320,40 @@ async fn parse_stream_json(
                             input_summary,
                         }));
                     }
+
+                    // Capture tool_result blocks for post-hoc safety evaluation
+                    if block["type"].as_str() == Some("tool_result") {
+                        let tool_use_id = block["tool_use_id"]
+                            .as_str()
+                            .unwrap_or("unknown")
+                            .to_string();
+                        let is_error = block["is_error"].as_bool().unwrap_or(false);
+                        let output = block
+                            .get("content")
+                            .and_then(|c| {
+                                // content can be a string or an array of content blocks
+                                if let Some(s) = c.as_str() {
+                                    Some(s.to_string())
+                                } else if let Some(arr) = c.as_array() {
+                                    Some(
+                                        arr.iter()
+                                            .filter_map(|b| b["text"].as_str())
+                                            .collect::<Vec<_>>()
+                                            .join("\n"),
+                                    )
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or_default();
+                        let summary: String = output.chars().take(500).collect();
+
+                        return Some(Ok(StreamDelta::CliToolResult {
+                            tool_name: tool_use_id,
+                            output_summary: summary,
+                            is_error,
+                        }));
+                    }
                 }
             }
             None

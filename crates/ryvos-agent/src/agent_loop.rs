@@ -56,6 +56,8 @@ pub struct AgentRuntime {
     pub spawner: Arc<tokio::sync::Mutex<Option<Arc<dyn ryvos_core::types::AgentSpawner>>>>,
     /// OpenViking client for hierarchical memory (set after Arc wrapping if auto-started).
     pub viking_client: Arc<tokio::sync::Mutex<Option<Arc<ryvos_memory::VikingClient>>>>,
+    /// Safety memory for self-learning lessons (injected into context each run).
+    safety_memory: Option<Arc<crate::safety_memory::SafetyMemory>>,
 }
 
 impl AgentRuntime {
@@ -82,6 +84,7 @@ impl AgentRuntime {
             cli_session_override: Arc::new(std::sync::Mutex::new(None)),
             spawner: Arc::new(tokio::sync::Mutex::new(None)),
             viking_client: Arc::new(tokio::sync::Mutex::new(None)),
+            safety_memory: None,
         }
     }
 
@@ -110,7 +113,13 @@ impl AgentRuntime {
             cli_session_override: Arc::new(std::sync::Mutex::new(None)),
             spawner: Arc::new(tokio::sync::Mutex::new(None)),
             viking_client: Arc::new(tokio::sync::Mutex::new(None)),
+            safety_memory: None,
         }
+    }
+
+    /// Set the safety memory for self-learning lessons injected into context.
+    pub fn set_safety_memory(&mut self, memory: Arc<crate::safety_memory::SafetyMemory>) {
+        self.safety_memory = Some(memory);
     }
 
     /// Set the failure journal for self-healing pattern tracking.
@@ -238,6 +247,23 @@ impl AgentRuntime {
                     "Viking context injected into system prompt"
                 );
                 extended.viking_context = viking_ctx;
+            }
+        }
+
+        // Load safety lessons from past experience (self-learning pipeline)
+        if let Some(ref sm) = self.safety_memory {
+            let tool_names: Vec<String> = if let Some(ref gate) = self.gate {
+                gate.definitions().await.iter().map(|t| t.name.clone()).collect()
+            } else {
+                self.tools.read().await.definitions().iter().map(|t| t.name.clone()).collect()
+            };
+            let safety_ctx = sm.format_for_context(&tool_names, 5).await;
+            if !safety_ctx.is_empty() {
+                info!(
+                    len = safety_ctx.len(),
+                    "Safety lessons injected into system prompt"
+                );
+                extended.safety_context = safety_ctx;
             }
         }
 
@@ -520,28 +546,147 @@ impl AgentRuntime {
                         );
                         self.event_bus.publish(AgentEvent::ToolStart {
                             name: tool_name.clone(),
-                            input: serde_json::json!({ "summary": input_summary }),
+                            input: serde_json::json!({ "summary": &input_summary }),
                         });
-                        self.event_bus.publish(AgentEvent::ToolEnd {
-                            name: tool_name.clone(),
-                            result: ToolResult::success("[executed by CLI provider]"),
-                        });
+
+                        // Assess the input for destructive patterns (pre-execution)
+                        let input_json = serde_json::json!({ "command": &input_summary });
+                        let outcome = crate::safety_memory::assess_outcome(
+                            &tool_name, &input_json, "", false,
+                        );
+
                         // Log to gate's audit trail if available
                         if let Some(ref gate) = self.gate {
+                            let has_side_effects = ryvos_core::security::tool_has_side_effects(&tool_name);
+                            let reasoning = if has_side_effects {
+                                format!("CLI side-effect tool ({})", tool_name)
+                            } else {
+                                "CLI read-only tool".to_string()
+                            };
                             if let Some(trail) = gate.audit_trail() {
                                 let entry = crate::audit::AuditEntry {
                                     timestamp: chrono::Utc::now(),
                                     session_id: session_id.to_string(),
                                     tool_name: tool_name.clone(),
                                     input_summary: input_summary.clone(),
-                                    output_summary: "[CLI provider — executed internally]"
-                                        .to_string(),
-                                    safety_reasoning: None,
-                                    outcome: crate::safety_memory::SafetyOutcome::Harmless,
+                                    output_summary: "[awaiting result]".to_string(),
+                                    safety_reasoning: Some(reasoning),
+                                    outcome: outcome.clone(),
                                     lessons_available: vec![],
                                 };
                                 if let Err(e) = trail.log_tool_call(&entry).await {
                                     debug!(error = %e, "Failed to log CLI tool to audit trail");
+                                }
+                            }
+                            // Record safety lesson if input analysis found something
+                            if let Some(sm) = gate.safety_memory() {
+                                if let crate::safety_memory::SafetyOutcome::NearMiss { ref what_could_have_happened } = outcome {
+                                    let lesson = crate::safety_memory::SafetyLesson {
+                                        id: uuid::Uuid::new_v4().to_string(),
+                                        timestamp: chrono::Utc::now(),
+                                        action: format!("{}({})", tool_name, input_summary.chars().take(80).collect::<String>()),
+                                        outcome: outcome.clone(),
+                                        reflection: what_could_have_happened.clone(),
+                                        principle_violated: Some("Proportionality".to_string()),
+                                        corrective_rule: format!(
+                                            "Use caution with {} — verify preconditions",
+                                            tool_name
+                                        ),
+                                        confidence: 0.8,
+                                        times_applied: 0,
+                                    };
+                                    if let Err(e) = sm.record_lesson(&lesson).await {
+                                        debug!(error = %e, "Failed to record CLI safety lesson");
+                                    }
+                                }
+                            }
+                        }
+
+                        self.event_bus.publish(AgentEvent::ToolEnd {
+                            name: tool_name.clone(),
+                            result: ToolResult::success("[executed by CLI provider]"),
+                        });
+                    }
+                    StreamDelta::CliToolResult {
+                        tool_name,
+                        output_summary,
+                        is_error,
+                    } => {
+                        // Post-hoc safety evaluation on CLI tool output
+                        let outcome = crate::safety_memory::assess_outcome(
+                            &tool_name,
+                            &serde_json::Value::Null,
+                            &output_summary,
+                            is_error,
+                        );
+
+                        if !matches!(outcome, crate::safety_memory::SafetyOutcome::Harmless) {
+                            info!(
+                                tool = %tool_name,
+                                outcome = ?outcome,
+                                "CLI tool result flagged by safety evaluation"
+                            );
+                        }
+
+                        // Log to audit trail with actual output
+                        if let Some(ref gate) = self.gate {
+                            if let Some(trail) = gate.audit_trail() {
+                                let entry = crate::audit::AuditEntry {
+                                    timestamp: chrono::Utc::now(),
+                                    session_id: session_id.to_string(),
+                                    tool_name: format!("{}/result", tool_name),
+                                    input_summary: String::new(),
+                                    output_summary: output_summary.chars().take(200).collect(),
+                                    safety_reasoning: Some(format!("{:?}", outcome)),
+                                    outcome: outcome.clone(),
+                                    lessons_available: vec![],
+                                };
+                                if let Err(e) = trail.log_tool_call(&entry).await {
+                                    debug!(error = %e, "Failed to log CLI tool result");
+                                }
+                            }
+                            // Record safety lesson for incidents
+                            if let Some(sm) = gate.safety_memory() {
+                                if let crate::safety_memory::SafetyOutcome::Incident { ref what_happened, ref severity } = outcome {
+                                    let lesson = crate::safety_memory::SafetyLesson {
+                                        id: uuid::Uuid::new_v4().to_string(),
+                                        timestamp: chrono::Utc::now(),
+                                        action: format!("{} output", tool_name),
+                                        outcome: outcome.clone(),
+                                        reflection: what_happened.clone(),
+                                        principle_violated: Some("Secrets".to_string()),
+                                        corrective_rule: format!(
+                                            "Check {} output for sensitive data before logging",
+                                            tool_name
+                                        ),
+                                        confidence: match severity {
+                                            crate::safety_memory::Severity::Critical => 1.0,
+                                            crate::safety_memory::Severity::High => 0.95,
+                                            crate::safety_memory::Severity::Medium => 0.8,
+                                            crate::safety_memory::Severity::Low => 0.6,
+                                        },
+                                        times_applied: 0,
+                                    };
+                                    if let Err(e) = sm.record_lesson(&lesson).await {
+                                        debug!(error = %e, "Failed to record CLI output safety lesson");
+                                    }
+                                }
+                            }
+                        }
+
+                        // Wire into healing pipeline
+                        if is_error {
+                            if let Some(ref journal) = self.journal {
+                                let record = crate::healing::FailureRecord {
+                                    timestamp: chrono::Utc::now(),
+                                    session_id: session_id.0.clone(),
+                                    tool_name: tool_name.clone(),
+                                    error: output_summary.chars().take(200).collect(),
+                                    input_summary: String::new(),
+                                    turn,
+                                };
+                                if let Err(e) = journal.record(record) {
+                                    debug!(error = %e, "Failed to record CLI tool failure");
                                 }
                             }
                         }
