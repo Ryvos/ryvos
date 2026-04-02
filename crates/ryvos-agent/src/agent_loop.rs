@@ -557,7 +557,7 @@ impl AgentRuntime {
 
                         // Log to gate's audit trail if available
                         if let Some(ref gate) = self.gate {
-                            let has_side_effects = ryvos_core::security::tool_has_side_effects(&tool_name);
+                            let has_side_effects = ryvos_core::security::tool_has_side_effects(&tool_name.to_lowercase());
                             let reasoning = if has_side_effects {
                                 format!("CLI side-effect tool ({})", tool_name)
                             } else {
