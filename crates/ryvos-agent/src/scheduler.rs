@@ -9,6 +9,7 @@ use tracing::{error, info, warn};
 
 use ryvos_core::config::CronConfig;
 use ryvos_core::event::EventBus;
+use ryvos_core::goal::{CriterionType, Goal, SuccessCriterion};
 use ryvos_core::types::{AgentEvent, SessionId};
 
 use crate::AgentRuntime;
@@ -19,6 +20,7 @@ struct CronJob {
     prompt: String,
     #[allow(dead_code)]
     channel: Option<String>,
+    goal: Option<String>,
 }
 
 /// Runs scheduled agent tasks based on cron expressions.
@@ -46,6 +48,7 @@ impl CronScheduler {
                         schedule,
                         prompt: job_config.prompt.clone(),
                         channel: job_config.channel.clone(),
+                        goal: job_config.goal.clone(),
                     });
                     info!(name = %job_config.name, schedule = %job_config.schedule, "Cron job registered");
                 }
@@ -111,7 +114,31 @@ impl CronScheduler {
                         });
 
                         let session_id = SessionId::from_string(&format!("cron:{}", job.name));
-                        match self.runtime.run(&session_id, &job.prompt).await {
+
+                        // Use Director orchestration when goal is configured
+                        let run_result = if let Some(ref goal_desc) = job.goal {
+                            let goal = Goal {
+                                description: goal_desc.clone(),
+                                success_criteria: vec![SuccessCriterion {
+                                    id: "llm_judge".into(),
+                                    criterion_type: CriterionType::LlmJudge {
+                                        prompt: format!("Did the agent achieve this goal: {}?", goal_desc),
+                                    },
+                                    weight: 1.0,
+                                    description: "Goal achievement".into(),
+                                }],
+                                constraints: vec![],
+                                success_threshold: 0.7,
+                                version: 0,
+                                metrics: Default::default(),
+                            };
+                            info!(job = %job.name, "Cron job using Director orchestration");
+                            self.runtime.run_with_goal(&session_id, &job.prompt, Some(&goal)).await
+                        } else {
+                            self.runtime.run(&session_id, &job.prompt).await
+                        };
+
+                        match run_result {
                             Ok(response) => {
                                 info!(job = %job.name, "Cron job completed");
                                 self.event_bus.publish(AgentEvent::CronJobComplete {

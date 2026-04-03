@@ -20,6 +20,7 @@
   import Channels from './lib/pages/Channels.svelte';
   import Integrations from './lib/pages/Integrations.svelte';
   import CronManager from './lib/pages/Graph.svelte';
+  import Goals from './lib/pages/Goals.svelte';
 
   let isAuthenticated = false;
   let currentRoute = 'chat';
@@ -118,6 +119,8 @@
         <Integrations />
       {:else if currentRoute === 'cron'}
         <CronManager />
+      {:else if currentRoute === 'goals'}
+        <Goals />
       {:else}
         <Chat sessionId={routeParam} />
       {/if}

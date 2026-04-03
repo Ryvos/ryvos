@@ -1273,3 +1273,123 @@ pub async fn disconnect_integration(
         ))
     }
 }
+
+// ── Goals / Director endpoints ──────────────────────────────
+
+#[derive(Deserialize)]
+pub struct RunGoalBody {
+    pub description: String,
+    #[serde(default)]
+    pub prompt: Option<String>,
+    #[serde(default)]
+    pub channel: Option<String>,
+}
+
+/// POST /api/goals/run — Fire a goal via Director orchestration.
+/// Returns immediately with session_id; events stream via WebSocket.
+pub async fn run_goal(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<RunGoalBody>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_operator_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    if body.description.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let now = chrono::Utc::now();
+    let session_id = SessionId::from_string(&format!("goal:{}", now.format("%Y%m%d-%H%M%S")));
+    let prompt = body.prompt.unwrap_or_else(|| body.description.clone());
+
+    // Construct Goal with LlmJudge criterion
+    let goal = ryvos_core::goal::Goal {
+        description: body.description.clone(),
+        success_criteria: vec![ryvos_core::goal::SuccessCriterion {
+            id: "llm_judge".into(),
+            criterion_type: ryvos_core::goal::CriterionType::LlmJudge {
+                prompt: format!("Did the agent achieve this goal: {}?", body.description),
+            },
+            weight: 1.0,
+            description: "Goal achievement".into(),
+        }],
+        constraints: vec![],
+        success_threshold: 0.7,
+        version: 0,
+        metrics: Default::default(),
+    };
+
+    info!(
+        session = %session_id,
+        goal = %body.description,
+        "Goal execution requested via API"
+    );
+
+    let runtime = state.runtime.clone();
+    let event_bus = state.event_bus.clone();
+    let channel = body.channel.clone();
+    let sid = session_id.clone();
+    let goal_desc = body.description.clone();
+
+    // Spawn non-blocking — events stream via WebSocket
+    tokio::spawn(async move {
+        match runtime.run_with_goal(&sid, &prompt, Some(&goal)).await {
+            Ok(response) => {
+                info!(session = %sid, "Goal completed");
+                // Route to channel if requested
+                if let Some(ch) = channel {
+                    event_bus.publish(ryvos_core::types::AgentEvent::CronJobComplete {
+                        name: format!("goal: {}", goal_desc),
+                        response,
+                        channel: Some(ch),
+                    });
+                }
+            }
+            Err(e) => {
+                tracing::error!(session = %sid, error = %e, "Goal execution failed");
+            }
+        }
+    });
+
+    Ok(Json(serde_json::json!({
+        "session_id": session_id.to_string(),
+        "status": "running",
+        "goal": body.description,
+    })))
+}
+
+/// GET /api/goals/history — List past goal/Director runs.
+pub async fn goal_history(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    if let Some(ref cost_store) = state.cost_store {
+        let (runs, _total) = cost_store
+            .run_history(100, 0)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        // Filter for goal: and cron: sessions (Director-relevant)
+        let goal_runs: Vec<_> = runs
+            .into_iter()
+            .filter(|r| {
+                let sid = r
+                    .get("session_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                sid.starts_with("goal:") || sid.starts_with("cron:")
+            })
+            .collect();
+
+        Ok(Json(serde_json::json!({
+            "runs": goal_runs,
+        })))
+    } else {
+        Ok(Json(serde_json::json!({ "runs": [] })))
+    }
+}

@@ -192,6 +192,9 @@ impl GatewayServer {
                 "/api/integrations/{app}",
                 axum::routing::delete(routes::disconnect_integration),
             )
+            // Goals / Director API
+            .route("/api/goals/run", post(routes::run_goal))
+            .route("/api/goals/history", get(routes::goal_history))
             // Webhooks
             .route("/api/hooks/wake", post(routes::webhook_wake))
             // WhatsApp Cloud API webhooks

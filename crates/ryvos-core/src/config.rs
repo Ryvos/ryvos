@@ -616,6 +616,9 @@ pub struct CronJobConfig {
     pub prompt: String,
     #[serde(default)]
     pub channel: Option<String>,
+    /// Optional goal description — when set, uses Director orchestration instead of plain agent run.
+    #[serde(default)]
+    pub goal: Option<String>,
 }
 
 /// Sandbox configuration for bash tool.

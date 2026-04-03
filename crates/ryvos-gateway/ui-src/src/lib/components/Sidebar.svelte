@@ -24,6 +24,7 @@
     { route: 'dashboard',  label: 'Dashboard',       icon: 'grid' },
     { route: 'sessions',   label: 'Sessions',        icon: 'layers' },
     { route: 'runs',       label: 'Runs',            icon: 'activity' },
+    { route: 'goals',      label: 'Goals',           icon: 'target' },
     { route: 'costs',      label: 'Costs',           icon: 'dollar' },
     { route: 'channels',      label: 'Channels',        icon: 'radio' },
     { route: 'integrations',  label: 'Integrations',    icon: 'plug' },

@@ -40,6 +40,7 @@ pub fn configure() -> Result<Option<CronConfig>> {
             } else {
                 Some(channel)
             },
+            goal: None,
         });
 
         let another = Confirm::new()
