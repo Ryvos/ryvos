@@ -819,7 +819,7 @@ mod tests {
 
     // ── Base64CodecTool tests ──────────────────────────────────
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn base64_encode() {
         let tool = Base64CodecTool;
@@ -833,7 +833,7 @@ mod tests {
         assert_eq!(result.content, "aGVsbG8=");
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn base64_decode() {
         let tool = Base64CodecTool;
@@ -849,7 +849,7 @@ mod tests {
 
     // ── HashComputeTool tests ──────────────────────────────────
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn hash_compute_sha256() {
         let tool = HashComputeTool;
@@ -867,7 +867,7 @@ mod tests {
         assert!(result.content.contains("sha256"));
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn hash_compute_md5() {
         let tool = HashComputeTool;

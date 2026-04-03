@@ -573,23 +573,26 @@ mod tests {
 
     #[test]
     fn test_find_chrome_with_env() {
-        // Test that CHROME_PATH override works
-        let existing = if cfg!(target_os = "windows") {
-            "C:\\Windows\\System32\\cmd.exe"
-        } else {
-            "/bin/sh"
-        };
-        std::env::set_var("CHROME_PATH", existing);
+        // Test that CHROME_PATH override works.
+        // Note: env::set_var is not thread-safe, and on CI runners Chrome may
+        // already be installed. We use a unique temp file to avoid collisions.
+        let tmp = std::env::temp_dir().join("ryvos_chrome_test_bin");
+        std::fs::write(&tmp, "fake chrome").ok();
+        let path_str = tmp.to_string_lossy().to_string();
+
+        unsafe { std::env::set_var("CHROME_PATH", &path_str) };
         let result = find_chrome();
-        assert_eq!(result, Some(existing.to_string()));
-        std::env::remove_var("CHROME_PATH");
+        unsafe { std::env::remove_var("CHROME_PATH") };
+        let _ = std::fs::remove_file(&tmp);
+
+        assert_eq!(result, Some(path_str));
     }
 
     #[test]
     fn test_find_chrome_nonexistent_env() {
-        std::env::set_var("CHROME_PATH", "/nonexistent/path/chrome");
-        // Should fall through to system paths
+        unsafe { std::env::set_var("CHROME_PATH", "/nonexistent/path/chrome") };
+        // Should fall through to system paths since file doesn't exist
         let _result = find_chrome();
-        std::env::remove_var("CHROME_PATH");
+        unsafe { std::env::remove_var("CHROME_PATH") };
     }
 }
