@@ -1,3 +1,18 @@
+//! OAuth 2.0 flow handler for external service integrations.
+//!
+//! Provides a generic OAuth 2.0 authorization code flow with pre-configured
+//! providers for Gmail, Slack, GitHub, Jira, and Linear. Each provider
+//! specifies auth URL, token URL, and required scopes.
+//!
+//! The flow works as follows:
+//! 1. User clicks "Connect" in the Web UI Integrations page.
+//! 2. `generate_auth_url()` builds the authorization URL with state parameter.
+//! 3. User is redirected to the provider's consent screen.
+//! 4. Provider redirects back to `/api/integrations/callback` with a code.
+//! 5. `exchange_code()` swaps the code for access/refresh tokens.
+//! 6. Tokens are stored in the IntegrationStore (SQLite).
+//! 7. `refresh_token()` handles token renewal when access tokens expire.
+
 use serde::Deserialize;
 
 /// OAuth 2.0 provider configuration.

@@ -1,3 +1,23 @@
+//! WebSocket connection handler for the Ryvos Web UI.
+//!
+//! Each WebSocket connection gets:
+//!
+//! - **Event stream**: A background task subscribes to the EventBus and
+//!   converts ~23 AgentEvent types into ServerEvent frames, forwarding them
+//!   to the client in real time. Auto-subscribes to system events (heartbeat,
+//!   cron, budget, guardian alerts).
+//!
+//! - **Lane queue**: A per-session FIFO queue (buffer size 32) that serializes
+//!   incoming RPC requests to prevent concurrent mutations on the same session.
+//!
+//! - **RPC methods**: `agent.send` (send message), `agent.cancel` (cancel run),
+//!   `session.list`, `session.history`, `approval.respond` (approve/deny).
+//!
+//! The WebSocket protocol uses JSON frames:
+//! - Client sends: `{ "type": "request", "id": "...", "method": "...", "params": {...} }`
+//! - Server responds: `{ "type": "response", "id": "...", "result": {...} }`
+//! - Server pushes: `{ "type": "event", "session_id": "...", "event": {...} }`
+
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket};

@@ -1,3 +1,19 @@
+//! Token budgeting, message pruning, and context management.
+//!
+//! The agent's context window is finite. This module ensures the conversation
+//! stays within budget by:
+//!
+//! - **Counting tokens** accurately via tiktoken (cl100k_base BPE tokenizer).
+//! - **Pruning**: Removing oldest non-protected messages when over budget.
+//! - **Summarizing**: Asking the LLM to summarize a batch of old messages
+//!   into a single compact message, preserving key information.
+//! - **Memory flush**: Before pruning, giving the agent a chance to write
+//!   important info to durable storage (memory_write, daily_log_write).
+//! - **Tool output compaction**: Truncating large tool outputs at newline
+//!   boundaries to stay within the per-tool token limit.
+//! - **Failure tracking**: Per-tool failure counters that trigger reflexion
+//!   hints when a tool fails repeatedly.
+
 use std::collections::HashMap;
 use std::sync::OnceLock;
 

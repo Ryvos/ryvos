@@ -1,3 +1,20 @@
+//! Multi-provider LLM client library for Ryvos.
+//!
+//! Abstracts 17+ LLM providers behind a single [`LlmClient`] trait with
+//! streaming support. Each provider translates between the Ryvos message
+//! format and the provider's native wire format.
+//!
+//! **Providers:**
+//! - Anthropic, OpenAI, Google Gemini, Azure OpenAI, Cohere, AWS Bedrock (stub)
+//! - Claude Code CLI and GitHub Copilot CLI (subprocess-based, subscription billing)
+//! - 10 OpenAI-compatible presets: Ollama, Groq, OpenRouter, Together, Fireworks,
+//!   Cerebras, xAI, Mistral, Perplexity, DeepSeek
+//!
+//! **Key components:**
+//! - [`create_client`] / [`create_client_with_security`]: Factory functions
+//! - [`RetryingClient`]: Wraps any client with exponential backoff and model fallback
+//! - [`streaming::SseParser`]: Server-Sent Events parser for HTTP streaming
+
 pub mod providers;
 pub mod retry;
 pub mod streaming;

@@ -1,3 +1,17 @@
+//! Model Context Protocol (MCP) server and client for Ryvos.
+//!
+//! **MCP Server**: Exposes 9 tools to external AI assistants (like Claude Code):
+//! `viking_search`, `viking_read`, `viking_write`, `viking_list`,
+//! `memory_get`, `memory_write`, `audit_query`, `audit_stats`, `daily_log_write`.
+//!
+//! **MCP Client**: Connects to external MCP servers (via stdio or SSE transport)
+//! and bridges their tools into the Ryvos [`ToolRegistry`]. Tool names are
+//! prefixed as `mcp__{server}__{tool}` to avoid collisions.
+//!
+//! The [`McpClientManager`] handles multiple concurrent server connections
+//! with auto-reconnect, and the [`RyvosClientHandler`] broadcasts tool/resource
+//! change notifications through the event system.
+
 mod bridge;
 mod client;
 mod handler;

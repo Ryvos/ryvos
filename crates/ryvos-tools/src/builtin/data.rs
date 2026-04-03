@@ -541,3 +541,357 @@ impl Tool for TextDiffTool {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ryvos_core::traits::Tool;
+    use ryvos_test_utils::test_tool_context;
+
+    // ── JsonQueryTool tests ────────────────────────────────────
+
+    #[tokio::test]
+    async fn json_query_simple_key() {
+        let tool = JsonQueryTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "json": r#"{"name": "ryvos", "version": "0.8"}"#,
+            "path": "name"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("ryvos"));
+    }
+
+    #[tokio::test]
+    async fn json_query_nested_path() {
+        let tool = JsonQueryTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "json": r#"{"a": {"b": {"c": 42}}}"#,
+            "path": "a.b.c"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("42"));
+    }
+
+    #[tokio::test]
+    async fn json_query_array_index() {
+        let tool = JsonQueryTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "json": r#"{"items": ["alpha", "beta", "gamma"]}"#,
+            "path": "items[1]"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("beta"));
+    }
+
+    #[tokio::test]
+    async fn json_query_missing_path_returns_null() {
+        let tool = JsonQueryTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "json": r#"{"a": 1}"#,
+            "path": "nonexistent"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("null"));
+    }
+
+    #[tokio::test]
+    async fn json_query_invalid_json_error() {
+        let tool = JsonQueryTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "json": "not valid json{{{",
+            "path": "x"
+        });
+        let result = tool.execute(input, ctx).await;
+        assert!(result.is_err());
+    }
+
+    // ── CsvParseTool tests ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn csv_parse_basic() {
+        let tool = CsvParseTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "csv": "name,age\nAlice,30\nBob,25"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        let parsed: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        let arr = parsed.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["name"], "Alice");
+        assert_eq!(arr[0]["age"], "30");
+        assert_eq!(arr[1]["name"], "Bob");
+    }
+
+    #[tokio::test]
+    async fn csv_parse_empty_returns_error() {
+        let tool = CsvParseTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({ "csv": "" });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(result.is_error);
+        assert!(result.content.contains("Empty CSV"));
+    }
+
+    #[tokio::test]
+    async fn csv_parse_header_only() {
+        let tool = CsvParseTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({ "csv": "name,age" });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        let parsed: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        assert_eq!(parsed.as_array().unwrap().len(), 0);
+    }
+
+    // ── YamlConvertTool tests ──────────────────────────────────
+
+    #[tokio::test]
+    async fn yaml_convert_json_to_yaml() {
+        let tool = YamlConvertTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "input": r#"{"name": "ryvos", "version": 1}"#,
+            "direction": "json_to_yaml"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("name:"));
+        assert!(result.content.contains("version:"));
+    }
+
+    #[tokio::test]
+    async fn yaml_convert_default_direction_is_yaml_to_json() {
+        let tool = YamlConvertTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "input": "name: test"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        // Default direction is yaml_to_json, which returns preview text
+        assert!(result.content.contains("YAML"));
+    }
+
+    // ── TomlConvertTool tests ──────────────────────────────────
+
+    #[tokio::test]
+    async fn toml_convert_toml_to_json() {
+        let tool = TomlConvertTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "input": "[package]\nname = \"ryvos\"\nversion = \"0.8.0\"",
+            "direction": "toml_to_json"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        let parsed: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        assert_eq!(parsed["package"]["name"], "ryvos");
+        assert_eq!(parsed["package"]["version"], "0.8.0");
+    }
+
+    #[tokio::test]
+    async fn toml_convert_json_to_toml() {
+        let tool = TomlConvertTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "input": r#"{"name": "ryvos", "version": "1.0"}"#,
+            "direction": "json_to_toml"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("name"));
+        assert!(result.content.contains("ryvos"));
+    }
+
+    #[tokio::test]
+    async fn toml_convert_invalid_toml_error() {
+        let tool = TomlConvertTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "input": "this is not valid toml [[[",
+            "direction": "toml_to_json"
+        });
+        let result = tool.execute(input, ctx).await;
+        assert!(result.is_err());
+    }
+
+    // ── RegexReplaceTool tests ─────────────────────────────────
+
+    #[tokio::test]
+    async fn regex_replace_basic() {
+        let tool = RegexReplaceTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "text": "hello world",
+            "pattern": "world",
+            "replacement": "ryvos"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert_eq!(result.content, "hello ryvos");
+    }
+
+    #[tokio::test]
+    async fn regex_replace_captures() {
+        let tool = RegexReplaceTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "text": "foo123bar456",
+            "pattern": r"(\d+)",
+            "replacement": "[$1]"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert_eq!(result.content, "foo[123]bar[456]");
+    }
+
+    #[tokio::test]
+    async fn regex_replace_invalid_pattern_error() {
+        let tool = RegexReplaceTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "text": "abc",
+            "pattern": "[invalid",
+            "replacement": "x"
+        });
+        let result = tool.execute(input, ctx).await;
+        assert!(result.is_err());
+    }
+
+    // ── TextDiffTool tests ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn text_diff_identical() {
+        let tool = TextDiffTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "original": "line1\nline2",
+            "modified": "line1\nline2"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains(" line1"));
+        assert!(result.content.contains(" line2"));
+        // No - or + lines for identical content
+        assert!(!result.content.contains("-line"));
+        assert!(!result.content.contains("+line"));
+    }
+
+    #[tokio::test]
+    async fn text_diff_changed_line() {
+        let tool = TextDiffTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "original": "hello\nworld",
+            "modified": "hello\nearth"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("--- original"));
+        assert!(result.content.contains("+++ modified"));
+        assert!(result.content.contains("-world"));
+        assert!(result.content.contains("+earth"));
+    }
+
+    #[tokio::test]
+    async fn text_diff_added_line() {
+        let tool = TextDiffTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "original": "line1",
+            "modified": "line1\nline2"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("+line2"));
+    }
+
+    // ── Base64CodecTool tests ──────────────────────────────────
+
+    #[cfg(not(target_os = "windows"))]
+    #[tokio::test]
+    async fn base64_encode() {
+        let tool = Base64CodecTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "input": "hello",
+            "action": "encode"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert_eq!(result.content, "aGVsbG8=");
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[tokio::test]
+    async fn base64_decode() {
+        let tool = Base64CodecTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "input": "aGVsbG8=",
+            "action": "decode"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert_eq!(result.content, "hello");
+    }
+
+    // ── HashComputeTool tests ──────────────────────────────────
+
+    #[cfg(not(target_os = "windows"))]
+    #[tokio::test]
+    async fn hash_compute_sha256() {
+        let tool = HashComputeTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "input": "hello",
+            "algorithm": "sha256"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        // sha256 of "hello" is well-known
+        assert!(result
+            .content
+            .contains("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"));
+        assert!(result.content.contains("sha256"));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[tokio::test]
+    async fn hash_compute_md5() {
+        let tool = HashComputeTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "input": "hello",
+            "algorithm": "md5"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("5d41402abc4b2a76b9719d911017c592"));
+        assert!(result.content.contains("md5"));
+    }
+
+    #[tokio::test]
+    async fn hash_compute_unsupported_algorithm() {
+        let tool = HashComputeTool;
+        let ctx = test_tool_context();
+        let input = serde_json::json!({
+            "input": "hello",
+            "algorithm": "sha3"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(result.is_error);
+        assert!(result.content.contains("Unsupported algorithm"));
+    }
+}

@@ -182,3 +182,56 @@ impl RyvosServerHandler {
         audit::stats(audit).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmcp::ServerHandler;
+
+    fn test_handler() -> RyvosServerHandler {
+        RyvosServerHandler::new(None, None, std::path::PathBuf::from("/tmp/ryvos-test"))
+    }
+
+    #[test]
+    fn get_info_server_name() {
+        let handler = test_handler();
+        let info = handler.get_info();
+        assert_eq!(info.server_info.name, "ryvos");
+    }
+
+    #[test]
+    fn get_info_version_matches_cargo() {
+        let handler = test_handler();
+        let info = handler.get_info();
+        assert_eq!(info.server_info.version, env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn get_info_capabilities_include_tools() {
+        let handler = test_handler();
+        let info = handler.get_info();
+        assert!(info.capabilities.tools.is_some());
+    }
+
+    #[test]
+    fn get_info_instructions_present() {
+        let handler = test_handler();
+        let info = handler.get_info();
+        let instructions = info.instructions.expect("instructions should be present");
+        assert!(instructions.contains("viking"));
+        assert!(instructions.contains("audit"));
+    }
+
+    #[test]
+    fn get_info_title_and_description() {
+        let handler = test_handler();
+        let info = handler.get_info();
+        assert_eq!(info.server_info.title.as_deref(), Some("Ryvos Agent"));
+        assert!(info
+            .server_info
+            .description
+            .as_ref()
+            .unwrap()
+            .contains("memory"));
+    }
+}

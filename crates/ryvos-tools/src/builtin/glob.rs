@@ -108,3 +108,78 @@ impl Tool for GlobTool {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ryvos_core::traits::Tool;
+    use ryvos_test_utils::test_tool_context_with_dir;
+
+    #[tokio::test]
+    async fn glob_finds_matching_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.txt"), "a").unwrap();
+        std::fs::write(dir.path().join("two.txt"), "b").unwrap();
+        std::fs::write(dir.path().join("three.rs"), "c").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = GlobTool;
+        let input = serde_json::json!({ "pattern": "*.txt" });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("2 files matched"));
+        assert!(result.content.contains("one.txt"));
+        assert!(result.content.contains("two.txt"));
+        assert!(!result.content.contains("three.rs"));
+    }
+
+    #[tokio::test]
+    async fn glob_no_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("file.txt"), "x").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = GlobTool;
+        let input = serde_json::json!({ "pattern": "*.py" });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("No files matched"));
+    }
+
+    #[tokio::test]
+    async fn glob_recursive_pattern() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(dir.path().join("top.rs"), "").unwrap();
+        std::fs::write(sub.join("nested.rs"), "").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = GlobTool;
+        let input = serde_json::json!({ "pattern": "**/*.rs" });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("top.rs"));
+        assert!(result.content.contains("nested.rs"));
+    }
+
+    #[tokio::test]
+    async fn glob_with_custom_base_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("mydir");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("a.txt"), "").unwrap();
+        std::fs::write(dir.path().join("b.txt"), "").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = GlobTool;
+        let input = serde_json::json!({
+            "pattern": "*.txt",
+            "path": sub.to_str().unwrap()
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("1 files matched"));
+        assert!(result.content.contains("a.txt"));
+    }
+}

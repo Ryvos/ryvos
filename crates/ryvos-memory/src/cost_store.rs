@@ -1,3 +1,20 @@
+//! Per-run cost tracking and monthly spend aggregation.
+//!
+//! Maintains two SQLite tables:
+//!
+//! - **cost_events**: Atomic events from individual LLM calls (run_id,
+//!   session_id, input/output tokens, cost in cents, model, provider).
+//! - **run_log**: Aggregate stats per run (start/end time, cumulative
+//!   tokens, total cost, turn count, status: running/complete/error).
+//!
+//! The Guardian watchdog reads `monthly_spend_cents()` to enforce budget
+//! limits, and the Web UI reads `cost_summary()` and `cost_by_group()`
+//! for the Costs dashboard page.
+//!
+//! Cost estimation uses the pricing table in `pricing.rs`, which maps
+//! model names to input/output per-token rates. Subscription-based
+//! providers (Claude Code, Copilot) report 0 cost.
+
 use std::path::Path;
 use std::sync::Mutex;
 

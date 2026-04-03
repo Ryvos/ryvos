@@ -1,3 +1,31 @@
+//! SQLite-backed hierarchical memory store with FTS5 full-text search.
+//!
+//! The Viking store organizes agent memory into a hierarchical namespace
+//! using the `viking://` URI protocol. Each entry has three detail levels
+//! that are auto-generated on write:
+//!
+//! - **L0 (summary)**: First sentence, max 100 characters. For lightweight
+//!   context loading when you need a quick reminder of what an entry contains.
+//! - **L1 (details)**: First 3 paragraphs or 500 characters. Structured
+//!   fields and key information without the full content.
+//! - **L2 (full)**: The complete entry content.
+//!
+//! # FTS5 Search
+//!
+//! A separate `viking_fts` virtual table (porter tokenizer, unicode61)
+//! provides full-text search with BM25 scoring. Search terms are sanitized
+//! and wrapped for phrase safety. Scores are negated and clamped to [0, 1].
+//!
+//! # Memory Categories
+//!
+//! Standard paths include:
+//! - `viking://user/profile/` - Name, role, background
+//! - `viking://user/preferences/` - Tools, languages, habits
+//! - `viking://user/entities/` - Credentials, servers, paths
+//! - `viking://agent/events/` - Session events
+//! - `viking://agent/cases/` - Bug fixes, error resolutions
+//! - `viking://agent/patterns/` - Learned rules, best practices
+
 use std::sync::Mutex;
 
 use chrono::Utc;

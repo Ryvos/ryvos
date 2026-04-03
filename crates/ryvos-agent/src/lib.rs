@@ -1,3 +1,23 @@
+//! Agent runtime, orchestration, and safety systems for Ryvos.
+//!
+//! This is the largest and most complex crate in the workspace. It contains:
+//!
+//! - **ReAct loop** ([`AgentRuntime`]): The core agent execution loop that
+//!   streams from the LLM, executes tools, evaluates goals, and manages context.
+//! - **Director** ([`Director`]): Goal-driven OODA loop orchestration that
+//!   generates DAG workflows, executes them, evaluates results, and auto-evolves.
+//! - **Guardian** ([`Guardian`]): Background watchdog that detects doom loops,
+//!   stalls, and budget overruns, injecting corrective hints.
+//! - **SecurityGate** ([`SecurityGate`]): Passthrough security layer that
+//!   audits every tool call, consults safety lessons, and optionally pauses
+//!   for approval, but never blocks execution.
+//! - **SafetyMemory** ([`SafetyMemory`]): Self-learning safety database that
+//!   detects destructive patterns, records lessons, and injects context.
+//! - **FailureJournal** ([`FailureJournal`]): Tracks tool failures, detects
+//!   patterns, and provides reflexion hints for self-healing.
+//! - **Intelligence**: Token budgeting, message pruning, and summarization.
+//! - **Graph**: DAG workflow engine with nodes, edges, and conditional routing.
+
 pub mod agent_loop;
 pub mod approval;
 pub mod audit;

@@ -20,3 +20,7 @@ serenity = { version = "0.12", default-features = false, features = ["client", "
 reqwest.workspace = true
 tokio-tungstenite.workspace = true
 rand.workspace = true
+
+[dev-dependencies]
+ryvos-test-utils = { path = "../ryvos-test-utils" }
+tokio = { version = "1", features = ["test-util", "macros", "rt"] }

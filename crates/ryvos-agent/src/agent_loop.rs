@@ -28,6 +28,11 @@ use crate::judge::Judge;
 use crate::output_validator::OutputCleaner;
 
 /// Accumulator for streaming tool call deltas.
+///
+/// As the LLM streams a tool call, it arrives in pieces:
+/// 1. `ToolUseStart { id, name }` initializes the accumulator.
+/// 2. `ToolInputDelta { delta }` appends JSON fragments to `input_json`.
+/// 3. On `Stop(ToolUse)`, the accumulated JSON is parsed and the tool executes.
 #[derive(Debug, Default)]
 struct ToolCallAccumulator {
     id: String,
@@ -35,7 +40,38 @@ struct ToolCallAccumulator {
     input_json: String,
 }
 
-/// The agent runtime — runs a ReAct loop with streaming.
+/// The agent runtime: Ryvos's core execution engine.
+///
+/// Runs a ReAct (Reason + Act) loop where the LLM alternates between
+/// generating text/reasoning and calling tools until a final answer is
+/// produced or a stop condition is reached.
+///
+/// # Execution Flow
+///
+/// 1. **Context building**: Load the three-layer system prompt (identity,
+///    narrative, focus), inject Viking memory context, and append safety lessons.
+/// 2. **Message pruning**: If the conversation exceeds 85% of the token budget,
+///    trigger a memory flush (let the agent save important info), then prune
+///    or summarize older messages.
+/// 3. **Streaming**: Call `llm.chat_stream()` and accumulate deltas into
+///    text blocks, thinking blocks, and tool call accumulators.
+/// 4. **Tool execution**: For each accumulated tool call, run it through
+///    the SecurityGate (audit, safety check, optional approval pause),
+///    then execute and collect results.
+/// 5. **Reflexion**: If a tool has failed repeatedly (tracked by FailureTracker),
+///    inject a corrective hint from the FailureJournal.
+/// 6. **Judge evaluation**: If a Goal was provided, evaluate the response
+///    against success criteria. On Retry, inject feedback and loop.
+/// 7. **Checkpoint**: Save conversation state after each turn for `--resume`.
+/// 8. **Cost tracking**: Record token usage and cost in the CostStore.
+///
+/// # Stop Conditions
+///
+/// - `StopReason::EndTurn` with no tool calls: final response reached.
+/// - `StopReason::MaxTokens`: response truncated, returned as-is.
+/// - `max_turns` exceeded: returns an error.
+/// - `max_duration_secs` exceeded: returns an error.
+/// - Guardian sends `CancelRun`: the CancellationToken fires.
 pub struct AgentRuntime {
     config: AppConfig,
     llm: Arc<dyn LlmClient>,

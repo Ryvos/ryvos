@@ -174,4 +174,107 @@ mod tests {
             .await
             .is_none());
     }
+
+    #[tokio::test]
+    async fn test_deny_pairing() {
+        let mgr = PairingManager::new();
+        let code = mgr
+            .create_pairing("telegram", "user1", Some("Bob"))
+            .await
+            .unwrap();
+
+        // Deny returns true for existing code
+        assert!(mgr.deny(&code).await);
+        // Second deny returns false (already removed)
+        assert!(!mgr.deny(&code).await);
+        // Approve after deny returns None
+        assert!(mgr.approve(&code).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_deny_nonexistent_code() {
+        let mgr = PairingManager::new();
+        assert!(!mgr.deny("NONEXIST").await);
+    }
+
+    #[tokio::test]
+    async fn test_list_pending() {
+        let mgr = PairingManager::new();
+        mgr.create_pairing("telegram", "u1", Some("Alice")).await;
+        mgr.create_pairing("discord", "u2", Some("Bob")).await;
+
+        let pending = mgr.list_pending().await;
+        assert_eq!(pending.len(), 2);
+
+        let channels: Vec<&str> = pending.iter().map(|r| r.channel.as_str()).collect();
+        assert!(channels.contains(&"telegram"));
+        assert!(channels.contains(&"discord"));
+    }
+
+    #[tokio::test]
+    async fn test_list_pending_excludes_approved() {
+        let mgr = PairingManager::new();
+        let code = mgr.create_pairing("telegram", "u1", None).await.unwrap();
+        mgr.create_pairing("discord", "u2", None).await;
+
+        // Approve the first one
+        mgr.approve(&code).await;
+
+        let pending = mgr.list_pending().await;
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].channel, "discord");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_prefix() {
+        let mgr = PairingManager::new();
+        let code = mgr
+            .create_pairing("telegram", "u1", Some("Charlie"))
+            .await
+            .unwrap();
+
+        // Search by first 3 characters
+        let prefix = &code[..3];
+        let found = mgr.find_by_prefix(prefix).await;
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().code, code);
+    }
+
+    #[tokio::test]
+    async fn test_find_by_prefix_case_insensitive() {
+        let mgr = PairingManager::new();
+        let code = mgr.create_pairing("telegram", "u1", None).await.unwrap();
+
+        // Codes are uppercase, search with lowercase prefix
+        let prefix = code[..3].to_lowercase();
+        let found = mgr.find_by_prefix(&prefix).await;
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().code, code);
+    }
+
+    #[tokio::test]
+    async fn test_find_by_prefix_no_match() {
+        let mgr = PairingManager::new();
+        mgr.create_pairing("telegram", "u1", None).await;
+
+        let found = mgr.find_by_prefix("ZZZZZZZZ").await;
+        assert!(found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_code_generation_excludes_ambiguous_chars() {
+        // Generate many codes and ensure no ambiguous characters appear
+        for _ in 0..50 {
+            let code = generate_code();
+            assert_eq!(code.len(), 8);
+            for ch in code.chars() {
+                assert!(
+                    !"01OIL".contains(ch),
+                    "Code '{}' contains ambiguous char '{}'",
+                    code,
+                    ch
+                );
+            }
+        }
+    }
 }

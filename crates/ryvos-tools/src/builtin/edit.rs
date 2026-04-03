@@ -130,3 +130,107 @@ fn resolve_path(file_path: &str, working_dir: &std::path::Path) -> PathBuf {
         working_dir.join(path)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ryvos_core::traits::Tool;
+    use ryvos_test_utils::test_tool_context_with_dir;
+
+    #[tokio::test]
+    async fn edit_single_replacement() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("edit_me.txt");
+        std::fs::write(&file_path, "hello world\ngoodbye world\n").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = EditTool;
+        let input = serde_json::json!({
+            "file_path": file_path.to_str().unwrap(),
+            "old_string": "hello world",
+            "new_string": "hi world"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("Edited"));
+        let content = std::fs::read_to_string(&file_path).unwrap();
+        assert!(content.contains("hi world"));
+        assert!(content.contains("goodbye world"));
+    }
+
+    #[tokio::test]
+    async fn edit_replace_all() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("multi.txt");
+        std::fs::write(&file_path, "foo bar foo baz foo\n").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = EditTool;
+        let input = serde_json::json!({
+            "file_path": file_path.to_str().unwrap(),
+            "old_string": "foo",
+            "new_string": "qux",
+            "replace_all": true
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("Replaced 3 occurrences"));
+        let content = std::fs::read_to_string(&file_path).unwrap();
+        assert!(!content.contains("foo"));
+        assert_eq!(content.matches("qux").count(), 3);
+    }
+
+    #[tokio::test]
+    async fn edit_multiple_matches_without_replace_all_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("dup.txt");
+        std::fs::write(&file_path, "aaa bbb aaa\n").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = EditTool;
+        let input = serde_json::json!({
+            "file_path": file_path.to_str().unwrap(),
+            "old_string": "aaa",
+            "new_string": "ccc"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(result.is_error);
+        assert!(result.content.contains("found 2 times"));
+    }
+
+    #[tokio::test]
+    async fn edit_old_string_not_found_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("miss.txt");
+        std::fs::write(&file_path, "some content").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = EditTool;
+        let input = serde_json::json!({
+            "file_path": file_path.to_str().unwrap(),
+            "old_string": "nonexistent",
+            "new_string": "replacement"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(result.is_error);
+        assert!(result.content.contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn edit_identical_strings_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("same.txt");
+        std::fs::write(&file_path, "hello").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = EditTool;
+        let input = serde_json::json!({
+            "file_path": file_path.to_str().unwrap(),
+            "old_string": "hello",
+            "new_string": "hello"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(result.is_error);
+        assert!(result.content.contains("identical"));
+    }
+}

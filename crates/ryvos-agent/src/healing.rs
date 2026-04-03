@@ -1,3 +1,22 @@
+//! Failure journal and self-healing for the Ryvos agent.
+//!
+//! Tracks tool failures in a SQLite database, detects patterns, and provides
+//! reflexion hints to help the agent recover from repeated errors.
+//!
+//! # Components
+//!
+//! - **FailureJournal**: SQLite-backed log of tool failures with pattern
+//!   detection. Stores the tool name, error message, input summary, and
+//!   turn number for every failure. Can detect when the same tool fails
+//!   repeatedly and provide context-specific recovery hints.
+//!
+//! - **Decision audit trail**: Records every tool choice the agent makes
+//!   (chosen option, alternatives considered) for post-hoc analysis.
+//!   Outcomes are linked back to decisions for learning.
+//!
+//! - **Health tracking**: Success and failure journals feed into per-tool
+//!   health scores displayed by `ryvos health`.
+
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;

@@ -2,6 +2,101 @@
 
 All notable changes to Ryvos will be documented in this file.
 
+## [0.8.2] — 2026-04-03
+
+### Director Orchestration (fully wired)
+- Director OODA loop now fires in production for goal-driven runs
+- New Goals page in Web UI for creating, tracking, and evaluating goals
+- Cron jobs with `goal` field route through Director instead of plain ReAct
+- Improved output formatting across all channels
+
+### Fixes
+- `cargo fmt` and `cargo clippy` clean across entire workspace
+
+## [0.8.1] — 2026-04-02
+
+### Heartbeat Auto-Bootstrap
+- HEARTBEAT.md is auto-created on `ryvos init` and on first heartbeat fire
+- New users no longer need to manually create the heartbeat prompt file
+
+## [0.8.0] — 2026-03-31
+
+### Constitutional AI Safety Pipeline (fully wired)
+- SafetyMemory, Reflexion, and corrective rules are now active in production
+- Self-learning safety: destructive patterns detected, lessons recorded, context injected
+- 2,500+ audit entries processed with 100% Harmless classification
+- Case-insensitive tool name matching for CLI provider side-effects check
+
+## [0.7.2] — 2026-03-29
+
+### Native OAuth Integrations
+- One-click OAuth for Gmail, Slack, GitHub, Jira, and Linear
+- Browser-based OAuth flow via Web UI Integration Settings page
+- Tokens stored securely in `~/.ryvos/integrations.db` and refreshed automatically
+- 5 pre-configured OAuth providers with `generate_auth_url()` and `exchange_code()`
+
+### Fixes
+- Cron job results now correctly route to Telegram via CronJobComplete event handler
+- Fixed cron schedule timezone (08:00 IST was firing at 13:30 IST, now correct)
+
+## [0.7.1] — 2026-03-28
+
+### Fixes
+- Fixed UTF-8 panic caused by emoji truncation in `&s[..120]` byte slicing
+- Changed 7 locations to use `chars().take(N)` instead of byte slicing
+- This bug was killing heartbeat cycles silently for ~10 hours
+
+## [0.7.0] — 2026-03-27
+
+### Dormant Systems Activated
+- Director orchestration, Reflexion self-healing, Guardian watchdog, and CostStore now activate on every daemon start (previously required explicit config)
+- CostStore always created (was gated on `[budget]` config existing)
+
+### Web UI Management Pages
+- Cron job editor (add, remove, list scheduled tasks)
+- Budget controls (view spend, set monthly limit, warn/hard-stop thresholds)
+- Model switcher (change provider and model from browser)
+- Integration settings (configure OAuth apps, view token status)
+- Audit trail with tool breakdown statistics
+
+### Admin Auth Fix
+- Anonymous access defaults to Admin role for self-hosted single-user mode
+- Previously defaulted to Viewer, blocking all writes from Web UI
+
+## [0.6.11] — 2026-03-25
+
+### Neo-Brutalist Theme Overhaul
+- Complete Web UI rewrite: 13 Svelte pages in Neo-Brutalist design
+- Light background (#FEFCF9), 2px solid borders, brutal shadows (4px 4px 0px)
+- DM Serif Display headings, Plus Jakarta Sans body, JetBrains Mono code
+- Dashboard with metrics strip, tool usage chart, activity feed, Guardian alerts
+- New pages: VikingBrowser, ConfigEditor, CommandPalette (Cmd+K)
+- Responsive sidebar with mobile hamburger menu
+
+### MCP Server Capabilities Fix
+- Server now declares `"capabilities": {"tools": {}}` so Claude Code discovers all 9 tools
+- Previously returned empty capabilities object
+
+## [0.6.0] — 2026-03-18
+
+### Security Overhaul
+- Deprecated tier-based blocking in favor of passthrough security
+- SecurityGate: logs all tool calls, never blocks, learns from outcomes
+- SafetyMemory (SQLite): detects destructive patterns, records lessons, injects context
+- 7 Constitutional AI principles in every system prompt
+
+### Viking Server
+- Standalone HTTP/REST memory server (`ryvos viking-server`, port 1933)
+- Viking context injection into agent system prompt before every run
+- Dual-write pattern: tools write to both SQLite and Viking
+
+### Global Audit Trail
+- Every tool execution logged to audit.db with safety reasoning
+- Audit stats API with tool breakdown and session counts
+
+### Web Sessions Fix
+- Web chat sessions now properly register with session manager
+
 ## [0.5.0] — 2026-03-13
 
 ### Browser Automation (5 new tools, 67 total)

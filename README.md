@@ -64,6 +64,23 @@ Written in **Rust**. Ships as a **single binary**. Uses **15–30 MB of RAM**.
 
 ---
 
+## Performance
+
+Benchmarks from a live v0.8.2 instance on Linux x86_64 (Intel i3-10105, 12 GB RAM).
+
+| Metric | Value |
+|--------|-------|
+| Binary size | 45 MB (stripped, thin LTO) |
+| CLI startup | < 6 ms |
+| Daemon RSS | 57 MB (9 threads, all subsystems active) |
+| Heartbeat cycle | ~38 s average |
+| Telegram response | ~11 s |
+| Data on disk | ~9 MB (all databases combined) |
+| Rust LOC | 39,863 |
+| Dependencies | 467 transitive, 31 direct |
+
+---
+
 ## Features
 
 ### Goal-Driven Execution
@@ -154,7 +171,7 @@ Written in **Rust**. Ships as a **single binary**. Uses **15–30 MB of RAM**.
 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
 
 # Pin a specific version
-RYVOS_VERSION=v0.6.5 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
+RYVOS_VERSION=v0.8.2 curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh
 
 # Custom install directory
 RYVOS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/Ryvos/ryvos/main/install.sh | sh

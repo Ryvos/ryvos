@@ -90,3 +90,64 @@ fn resolve_path(file_path: &str, working_dir: &std::path::Path) -> PathBuf {
         working_dir.join(path)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ryvos_core::traits::Tool;
+    use ryvos_test_utils::test_tool_context_with_dir;
+
+    #[tokio::test]
+    async fn write_creates_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("output.txt");
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = WriteTool;
+        let input = serde_json::json!({
+            "file_path": file_path.to_str().unwrap(),
+            "content": "hello from test"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("File written successfully"));
+        assert_eq!(
+            std::fs::read_to_string(&file_path).unwrap(),
+            "hello from test"
+        );
+    }
+
+    #[tokio::test]
+    async fn write_creates_parent_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("a/b/c/deep.txt");
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = WriteTool;
+        let input = serde_json::json!({
+            "file_path": file_path.to_str().unwrap(),
+            "content": "deep content"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(file_path.exists());
+        assert_eq!(std::fs::read_to_string(&file_path).unwrap(), "deep content");
+    }
+
+    #[tokio::test]
+    async fn write_overwrites_existing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("overwrite.txt");
+        std::fs::write(&file_path, "old content").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = WriteTool;
+        let input = serde_json::json!({
+            "file_path": file_path.to_str().unwrap(),
+            "content": "new content"
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert_eq!(std::fs::read_to_string(&file_path).unwrap(), "new content");
+    }
+}

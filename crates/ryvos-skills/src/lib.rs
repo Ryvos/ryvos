@@ -1,3 +1,17 @@
+//! Skill system for Ryvos: loadable tool extensions via TOML manifests.
+//!
+//! Skills are executable scripts or binaries packaged with a `skill.toml`
+//! manifest that declares the tool's name, description, input schema,
+//! security tier, and prerequisites (required binaries, env vars, OS).
+//!
+//! - **SkillTool**: Wraps a shell command as a [`Tool`] implementation.
+//!   JSON input is piped to stdin, stdout/stderr captured as the result.
+//! - **SkillManifest**: TOML configuration with `$SKILL_DIR` substitution.
+//! - **Registry**: Remote skill index with SHA-256 verified downloads.
+//!
+//! Skills are loaded from `~/.ryvos/skills/` and registered into the
+//! [`ToolRegistry`] alongside built-in tools.
+
 pub mod manifest;
 pub mod registry;
 pub mod skill_tool;

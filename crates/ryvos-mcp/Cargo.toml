@@ -17,3 +17,8 @@ http.workspace = true
 chrono.workspace = true
 rusqlite.workspace = true
 schemars = "1"
+
+[dev-dependencies]
+ryvos-test-utils = { path = "../ryvos-test-utils" }
+tokio = { version = "1", features = ["test-util", "macros", "rt"] }
+serde_json = { workspace = true }

@@ -207,3 +207,100 @@ impl Default for ToolRegistry {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ryvos_test_utils::{test_tool_context, MockTool};
+
+    #[test]
+    fn registry_register_and_get() {
+        let mut registry = ToolRegistry::new();
+        registry.register(MockTool::new("my_tool"));
+        assert!(registry.get("my_tool").is_some());
+        assert!(registry.get("other").is_none());
+    }
+
+    #[test]
+    fn registry_unregister() {
+        let mut registry = ToolRegistry::new();
+        registry.register(MockTool::new("removable"));
+        assert!(registry.unregister("removable"));
+        assert!(registry.get("removable").is_none());
+        // Unregistering non-existent returns false
+        assert!(!registry.unregister("removable"));
+    }
+
+    #[test]
+    fn registry_list_returns_all_names() {
+        let mut registry = ToolRegistry::new();
+        registry.register(MockTool::new("alpha"));
+        registry.register(MockTool::new("beta"));
+        registry.register(MockTool::new("gamma"));
+        let mut names = registry.list();
+        names.sort();
+        assert_eq!(names, vec!["alpha", "beta", "gamma"]);
+    }
+
+    #[test]
+    fn registry_definitions_returns_all() {
+        let mut registry = ToolRegistry::new();
+        registry.register(MockTool::new("tool_a").with_description("desc A"));
+        registry.register(MockTool::new("tool_b").with_description("desc B"));
+        let defs = registry.definitions();
+        assert_eq!(defs.len(), 2);
+        let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
+        assert!(names.contains(&"tool_a"));
+        assert!(names.contains(&"tool_b"));
+    }
+
+    #[tokio::test]
+    async fn registry_execute_calls_tool() {
+        let mut registry = ToolRegistry::new();
+        registry.register(MockTool::new("exec_tool"));
+        let ctx = test_tool_context();
+        let result = registry
+            .execute("exec_tool", serde_json::json!({"x": 1}), ctx)
+            .await
+            .unwrap();
+        assert!(!result.is_error);
+        assert_eq!(result.content, "mock output");
+    }
+
+    #[tokio::test]
+    async fn registry_execute_unknown_tool_errors() {
+        let registry = ToolRegistry::new();
+        let ctx = test_tool_context();
+        let result = registry
+            .execute("no_such_tool", serde_json::json!({}), ctx)
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn registry_with_builtins_has_tools() {
+        let registry = ToolRegistry::with_builtins();
+        let names = registry.list();
+        // Spot-check a few known builtins
+        assert!(names.contains(&"read"));
+        assert!(names.contains(&"write"));
+        assert!(names.contains(&"edit"));
+        assert!(names.contains(&"glob"));
+        assert!(names.contains(&"json_query"));
+        assert!(names.contains(&"csv_parse"));
+        assert!(names.contains(&"file_info"));
+        assert!(names.contains(&"bash"));
+        // Should have many tools
+        assert!(names.len() > 40);
+    }
+
+    #[test]
+    fn registry_register_overwrites_same_name() {
+        let mut registry = ToolRegistry::new();
+        registry.register(MockTool::new("dup").with_description("first"));
+        registry.register(MockTool::new("dup").with_description("second"));
+        let defs = registry.definitions();
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].description, "second");
+    }
+}

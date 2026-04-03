@@ -597,3 +597,188 @@ impl Tool for ArchiveExtractTool {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ryvos_core::traits::Tool;
+    use ryvos_test_utils::test_tool_context_with_dir;
+
+    // ── FileInfoTool tests ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn file_info_returns_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("info.txt");
+        std::fs::write(&file_path, "twelve chars").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = FileInfoTool;
+        let input = serde_json::json!({ "path": file_path.to_str().unwrap() });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("Size: 12 bytes"));
+        assert!(result.content.contains("Is file: true"));
+        assert!(result.content.contains("Is dir: false"));
+    }
+
+    #[tokio::test]
+    async fn file_info_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = FileInfoTool;
+        let input = serde_json::json!({ "path": dir.path().to_str().unwrap() });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("Is dir: true"));
+        assert!(result.content.contains("Is file: false"));
+    }
+
+    #[tokio::test]
+    async fn file_info_nonexistent_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = FileInfoTool;
+        let input = serde_json::json!({ "path": "/tmp/ryvos_no_such_file_xyz_test" });
+        let result = tool.execute(input, ctx).await;
+        assert!(result.is_err());
+    }
+
+    // ── FileCopyTool tests ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn file_copy_basic() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src.txt");
+        let dst = dir.path().join("dst.txt");
+        std::fs::write(&src, "copy me").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = FileCopyTool;
+        let input = serde_json::json!({
+            "source": src.to_str().unwrap(),
+            "destination": dst.to_str().unwrap()
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("Copied"));
+        assert_eq!(std::fs::read_to_string(&dst).unwrap(), "copy me");
+        // Source should still exist
+        assert!(src.exists());
+    }
+
+    // ── FileMoveTool tests ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn file_move_basic() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("move_src.txt");
+        let dst = dir.path().join("move_dst.txt");
+        std::fs::write(&src, "move me").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = FileMoveTool;
+        let input = serde_json::json!({
+            "source": src.to_str().unwrap(),
+            "destination": dst.to_str().unwrap()
+        });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("Moved"));
+        assert!(!src.exists());
+        assert_eq!(std::fs::read_to_string(&dst).unwrap(), "move me");
+    }
+
+    // ── FileDeleteTool tests ───────────────────────────────────
+
+    #[tokio::test]
+    async fn file_delete_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("delete_me.txt");
+        std::fs::write(&file_path, "bye").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = FileDeleteTool;
+        let input = serde_json::json!({ "path": file_path.to_str().unwrap() });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("Deleted"));
+        assert!(!file_path.exists());
+    }
+
+    #[tokio::test]
+    async fn file_delete_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("sub_dir");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("child.txt"), "x").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = FileDeleteTool;
+        let input = serde_json::json!({ "path": sub.to_str().unwrap() });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(!sub.exists());
+    }
+
+    // ── DirListTool tests ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn dir_list_shows_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("alpha.txt"), "a").unwrap();
+        std::fs::create_dir(dir.path().join("beta_dir")).unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = DirListTool;
+        let input = serde_json::json!({ "path": dir.path().to_str().unwrap() });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("alpha.txt"));
+        assert!(result.content.contains("beta_dir"));
+        assert!(result.content.contains("dir "));
+        assert!(result.content.contains("file"));
+    }
+
+    #[tokio::test]
+    async fn dir_list_defaults_to_working_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("inwd.txt"), "").unwrap();
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = DirListTool;
+        let input = serde_json::json!({});
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("inwd.txt"));
+    }
+
+    // ── DirCreateTool tests ────────────────────────────────────
+
+    #[tokio::test]
+    async fn dir_create_basic() {
+        let dir = tempfile::tempdir().unwrap();
+        let new_dir = dir.path().join("new_folder");
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = DirCreateTool;
+        let input = serde_json::json!({ "path": new_dir.to_str().unwrap() });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.content.contains("Created"));
+        assert!(new_dir.is_dir());
+    }
+
+    #[tokio::test]
+    async fn dir_create_nested() {
+        let dir = tempfile::tempdir().unwrap();
+        let deep = dir.path().join("a/b/c/d");
+
+        let ctx = test_tool_context_with_dir(dir.path().to_path_buf());
+        let tool = DirCreateTool;
+        let input = serde_json::json!({ "path": deep.to_str().unwrap() });
+        let result = tool.execute(input, ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(deep.is_dir());
+    }
+}

@@ -1,3 +1,31 @@
+//! Self-learning safety memory for the Ryvos agent.
+//!
+//! This module implements a SQLite-backed database of safety lessons that
+//! the agent accumulates over time. Unlike traditional security systems
+//! that block actions based on static rules, SafetyMemory learns from
+//! experience and injects relevant lessons into future decisions.
+//!
+//! # How it works
+//!
+//! 1. **Pattern detection**: After each tool execution, `assess_outcome()`
+//!    checks for destructive bash patterns (rm -rf, dd if=, mkfs, fork bombs,
+//!    chmod 777, pipe-to-shell, /dev/sd* writes) and secret leaks (AWS keys,
+//!    GitHub tokens, private keys, Slack tokens, JWTs, passwords).
+//!
+//! 2. **Lesson recording**: When an incident or near-miss is detected,
+//!    `record_lesson()` stores it with a severity, confidence score, and
+//!    the originating tool name.
+//!
+//! 3. **Lesson retrieval**: Before each tool execution, `relevant_lessons()`
+//!    fetches lessons relevant to that tool type, sorted by confidence.
+//!
+//! 4. **Context injection**: `format_for_context()` renders high-confidence
+//!    lessons as markdown and injects them into the agent's system prompt.
+//!
+//! 5. **Reinforcement**: When a lesson proves useful (the agent avoids a
+//!    pattern it was warned about), `reinforce()` increments its times_applied
+//!    counter, increasing future confidence.
+
 use chrono::{DateTime, Utc};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};

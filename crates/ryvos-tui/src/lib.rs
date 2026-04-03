@@ -1,3 +1,15 @@
+//! Terminal UI for Ryvos, built with ratatui and crossterm.
+//!
+//! Provides an interactive terminal interface with:
+//! - Real-time streaming of agent responses
+//! - Tool call display with expandable output
+//! - Approval commands (`/approve`, `/deny`) for human-in-the-loop
+//! - Token usage tracking and status bar
+//! - Scroll navigation and multi-line input
+//!
+//! The TUI multiplexes crossterm keyboard events with the agent EventBus,
+//! rendering both user input and background agent activity in real time.
+
 mod app;
 mod event;
 mod input;

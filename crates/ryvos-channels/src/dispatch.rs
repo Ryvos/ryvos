@@ -1,3 +1,19 @@
+//! Central message router between channel adapters and the agent runtime.
+//!
+//! The [`ChannelDispatcher`] is the bridge between external messaging platforms
+//! and the agent. It:
+//!
+//! 1. Receives [`MessageEnvelope`]s from channel adapters via an mpsc channel.
+//! 2. Checks for special commands (`/approve`, `/deny`) and routes them to
+//!    the [`ApprovalBroker`] for human-in-the-loop decisions.
+//! 3. For regular messages, spawns a tokio task that calls `runtime.run()`,
+//!    manages session resume for CLI providers, and sends the response back
+//!    through the originating adapter.
+//! 4. Subscribes to the EventBus and forwards heartbeat alerts and cron job
+//!    results to the appropriate channel adapters.
+//! 5. Fires lifecycle hooks (on_start, on_session_start, on_message,
+//!    on_response, on_session_end) at each stage.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 

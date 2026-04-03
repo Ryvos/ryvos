@@ -1,3 +1,27 @@
+//! Guardian watchdog: background monitor that detects agent pathologies.
+//!
+//! The Guardian runs as a separate tokio task, subscribing to the EventBus
+//! and watching for these conditions:
+//!
+//! 1. **Doom loops**: The last N tool calls (default 3) have the same name
+//!    and a normalized input fingerprint. Fingerprinting works by recursively
+//!    sorting JSON keys, stripping whitespace, and comparing the first 300 chars.
+//!    When detected, injects a hint: "You called {tool} {N} times with identical
+//!    input. Stop and try a different approach."
+//!
+//! 2. **Stalls**: No progress event received for `stall_timeout_secs` (default
+//!    120s) during an active run. Injects a hint suggesting alternative actions.
+//!
+//! 3. **Token budget**: Warns at 80% of the configured token budget, cancels
+//!    the run at 100%.
+//!
+//! 4. **Dollar budget**: Reads monthly spend from CostStore, warns at
+//!    `warn_pct` of `monthly_budget_cents`, hard-stops at `hard_stop_pct`.
+//!
+//! Actions are sent through an `mpsc` channel to the agent loop, which
+//! processes them between turns: `InjectHint` adds a user message,
+//! `CancelRun` fires the CancellationToken.
+
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;

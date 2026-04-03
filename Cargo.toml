@@ -11,10 +11,11 @@ members = [
     "crates/ryvos-mcp",
     "crates/ryvos-channels",
     "crates/ryvos-skills",
+    "crates/ryvos-test-utils",
 ]
 
 [workspace.package]
-version = "0.8.2"
+version = "0.8.3"
 edition = "2021"
 license = "MIT"
 rust-version = "1.75"
