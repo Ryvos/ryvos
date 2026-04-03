@@ -19,6 +19,9 @@ const DEFAULT_PROMPT: &str =
     "Review the workspace. If everything is fine, respond with HEARTBEAT_OK. \
      If anything needs attention, describe it concisely.";
 
+/// Embedded HEARTBEAT.md template — written to workspace on first fire if missing.
+const HEARTBEAT_TEMPLATE: &str = include_str!("../../../src/onboard/templates/HEARTBEAT.md");
+
 /// Ack patterns — if the response is short AND contains one of these, suppress it.
 const ACK_PATTERNS: &[&str] = &[
     "HEARTBEAT_OK",
@@ -201,6 +204,16 @@ impl Heartbeat {
     /// the configured or default heartbeat prompt.
     fn build_prompt(&self) -> String {
         let heartbeat_path = self.workspace.join(&self.config.heartbeat_file);
+
+        // Create HEARTBEAT.md from built-in template if missing
+        if !heartbeat_path.exists() {
+            if let Err(e) = std::fs::write(&heartbeat_path, HEARTBEAT_TEMPLATE) {
+                warn!(error = %e, "Failed to create default HEARTBEAT.md");
+            } else {
+                info!("Created default HEARTBEAT.md from built-in template");
+            }
+        }
+
         let mut prompt = String::new();
 
         match std::fs::read_to_string(&heartbeat_path) {

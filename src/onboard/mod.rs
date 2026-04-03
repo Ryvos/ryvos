@@ -815,6 +815,7 @@ pub fn create_workspace_templates(workspace: &Path) -> Result<()> {
         ("TOOLS.md", include_str!("templates/TOOLS.md")),
         ("IDENTITY.md", include_str!("templates/IDENTITY.md")),
         ("MEMORY.md", include_str!("templates/MEMORY.md")),
+        ("HEARTBEAT.md", include_str!("templates/HEARTBEAT.md")),
         ("memory/facts.md", include_str!("templates/memory_facts.md")),
         (
             "memory/projects.md",
