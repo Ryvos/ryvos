@@ -359,8 +359,10 @@ fn normalize_fingerprint(input: &serde_json::Value) -> String {
     fn sort_value(v: &serde_json::Value) -> serde_json::Value {
         match v {
             serde_json::Value::Object(map) => {
-                let sorted: serde_json::Map<String, serde_json::Value> =
-                    map.iter().map(|(k, v)| (k.clone(), sort_value(v))).collect();
+                let sorted: serde_json::Map<String, serde_json::Value> = map
+                    .iter()
+                    .map(|(k, v)| (k.clone(), sort_value(v)))
+                    .collect();
                 serde_json::Value::Object(sorted)
             }
             serde_json::Value::Array(arr) => {

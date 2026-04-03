@@ -116,10 +116,7 @@ impl Heartbeat {
                     let flagged: Vec<_> = entries
                         .iter()
                         .filter(|e| {
-                            !matches!(
-                                e.outcome,
-                                crate::safety_memory::SafetyOutcome::Harmless
-                            )
+                            !matches!(e.outcome, crate::safety_memory::SafetyOutcome::Harmless)
                         })
                         .collect();
                     if !flagged.is_empty() {

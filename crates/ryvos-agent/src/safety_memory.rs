@@ -310,17 +310,55 @@ pub fn detect_secret_in_output(output: &str) -> Option<&'static str> {
 
     static PATTERNS: LazyLock<Vec<(regex::Regex, &'static str)>> = LazyLock::new(|| {
         vec![
-            (regex::Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(), "AWS Access Key"),
-            (regex::Regex::new(r"(?i)aws[_\-]?secret[_\-]?access[_\-]?key\s*[:=]\s*\S{20,}").unwrap(), "AWS Secret Key"),
-            (regex::Regex::new(r"ghp_[A-Za-z0-9]{36,}").unwrap(), "GitHub PAT"),
-            (regex::Regex::new(r"gho_[A-Za-z0-9]{36,}").unwrap(), "GitHub OAuth Token"),
-            (regex::Regex::new(r"ghs_[A-Za-z0-9]{36,}").unwrap(), "GitHub App Token"),
-            (regex::Regex::new(r"sk-[A-Za-z0-9]{20,}").unwrap(), "OpenAI/Anthropic API Key"),
-            (regex::Regex::new(r"-----BEGIN\s+(RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----").unwrap(), "Private Key"),
-            (regex::Regex::new(r"xoxb-[0-9]{10,}-[A-Za-z0-9]{20,}").unwrap(), "Slack Bot Token"),
-            (regex::Regex::new(r"xoxp-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{20,}").unwrap(), "Slack User Token"),
-            (regex::Regex::new(r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}").unwrap(), "JWT Token"),
-            (regex::Regex::new(r"(?i)(password|passwd|pwd)\s*[:=]\s*\S{8,}").unwrap(), "Password in output"),
+            (
+                regex::Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(),
+                "AWS Access Key",
+            ),
+            (
+                regex::Regex::new(r"(?i)aws[_\-]?secret[_\-]?access[_\-]?key\s*[:=]\s*\S{20,}")
+                    .unwrap(),
+                "AWS Secret Key",
+            ),
+            (
+                regex::Regex::new(r"ghp_[A-Za-z0-9]{36,}").unwrap(),
+                "GitHub PAT",
+            ),
+            (
+                regex::Regex::new(r"gho_[A-Za-z0-9]{36,}").unwrap(),
+                "GitHub OAuth Token",
+            ),
+            (
+                regex::Regex::new(r"ghs_[A-Za-z0-9]{36,}").unwrap(),
+                "GitHub App Token",
+            ),
+            (
+                regex::Regex::new(r"sk-[A-Za-z0-9]{20,}").unwrap(),
+                "OpenAI/Anthropic API Key",
+            ),
+            (
+                regex::Regex::new(r"-----BEGIN\s+(RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----")
+                    .unwrap(),
+                "Private Key",
+            ),
+            (
+                regex::Regex::new(r"xoxb-[0-9]{10,}-[A-Za-z0-9]{20,}").unwrap(),
+                "Slack Bot Token",
+            ),
+            (
+                regex::Regex::new(r"xoxp-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{20,}").unwrap(),
+                "Slack User Token",
+            ),
+            (
+                regex::Regex::new(
+                    r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
+                )
+                .unwrap(),
+                "JWT Token",
+            ),
+            (
+                regex::Regex::new(r"(?i)(password|passwd|pwd)\s*[:=]\s*\S{8,}").unwrap(),
+                "Password in output",
+            ),
         ]
     });
 
@@ -347,10 +385,7 @@ pub fn assess_outcome(
     // 1. Check input for destructive bash patterns (even on success)
     let tool_lower = tool_name.to_lowercase();
     if tool_lower == "bash" || tool_lower.contains("bash") {
-        if let Some(cmd) = input
-            .get("command")
-            .and_then(|v| v.as_str())
-        {
+        if let Some(cmd) = input.get("command").and_then(|v| v.as_str()) {
             if let Some(pattern) = detect_destructive_command(cmd) {
                 return SafetyOutcome::NearMiss {
                     what_could_have_happened: format!(
@@ -366,10 +401,7 @@ pub fn assess_outcome(
     // 2. Check output for leaked secrets (regardless of error status)
     if let Some(secret_type) = detect_secret_in_output(result) {
         return SafetyOutcome::Incident {
-            what_happened: format!(
-                "Secret detected in {} output: {}",
-                tool_name, secret_type
-            ),
+            what_happened: format!("Secret detected in {} output: {}", tool_name, secret_type),
             severity: Severity::High,
         };
     }

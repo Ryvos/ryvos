@@ -253,9 +253,19 @@ impl AgentRuntime {
         // Load safety lessons from past experience (self-learning pipeline)
         if let Some(ref sm) = self.safety_memory {
             let tool_names: Vec<String> = if let Some(ref gate) = self.gate {
-                gate.definitions().await.iter().map(|t| t.name.clone()).collect()
+                gate.definitions()
+                    .await
+                    .iter()
+                    .map(|t| t.name.clone())
+                    .collect()
             } else {
-                self.tools.read().await.definitions().iter().map(|t| t.name.clone()).collect()
+                self.tools
+                    .read()
+                    .await
+                    .definitions()
+                    .iter()
+                    .map(|t| t.name.clone())
+                    .collect()
             };
             let safety_ctx = sm.format_for_context(&tool_names, 5).await;
             if !safety_ctx.is_empty() {
@@ -552,12 +562,17 @@ impl AgentRuntime {
                         // Assess the input for destructive patterns (pre-execution)
                         let input_json = serde_json::json!({ "command": &input_summary });
                         let outcome = crate::safety_memory::assess_outcome(
-                            &tool_name, &input_json, "", false,
+                            &tool_name,
+                            &input_json,
+                            "",
+                            false,
                         );
 
                         // Log to gate's audit trail if available
                         if let Some(ref gate) = self.gate {
-                            let has_side_effects = ryvos_core::security::tool_has_side_effects(&tool_name.to_lowercase());
+                            let has_side_effects = ryvos_core::security::tool_has_side_effects(
+                                &tool_name.to_lowercase(),
+                            );
                             let reasoning = if has_side_effects {
                                 format!("CLI side-effect tool ({})", tool_name)
                             } else {
@@ -580,11 +595,18 @@ impl AgentRuntime {
                             }
                             // Record safety lesson if input analysis found something
                             if let Some(sm) = gate.safety_memory() {
-                                if let crate::safety_memory::SafetyOutcome::NearMiss { ref what_could_have_happened } = outcome {
+                                if let crate::safety_memory::SafetyOutcome::NearMiss {
+                                    ref what_could_have_happened,
+                                } = outcome
+                                {
                                     let lesson = crate::safety_memory::SafetyLesson {
                                         id: uuid::Uuid::new_v4().to_string(),
                                         timestamp: chrono::Utc::now(),
-                                        action: format!("{}({})", tool_name, input_summary.chars().take(80).collect::<String>()),
+                                        action: format!(
+                                            "{}({})",
+                                            tool_name,
+                                            input_summary.chars().take(80).collect::<String>()
+                                        ),
                                         outcome: outcome.clone(),
                                         reflection: what_could_have_happened.clone(),
                                         principle_violated: Some("Proportionality".to_string()),
@@ -647,7 +669,11 @@ impl AgentRuntime {
                             }
                             // Record safety lesson for incidents
                             if let Some(sm) = gate.safety_memory() {
-                                if let crate::safety_memory::SafetyOutcome::Incident { ref what_happened, ref severity } = outcome {
+                                if let crate::safety_memory::SafetyOutcome::Incident {
+                                    ref what_happened,
+                                    ref severity,
+                                } = outcome
+                                {
                                     let lesson = crate::safety_memory::SafetyLesson {
                                         id: uuid::Uuid::new_v4().to_string(),
                                         timestamp: chrono::Utc::now(),

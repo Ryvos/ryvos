@@ -1378,10 +1378,7 @@ pub async fn goal_history(
         let goal_runs: Vec<_> = runs
             .into_iter()
             .filter(|r| {
-                let sid = r
-                    .get("session_id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let sid = r.get("session_id").and_then(|v| v.as_str()).unwrap_or("");
                 sid.starts_with("goal:") || sid.starts_with("cron:")
             })
             .collect();
