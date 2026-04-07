@@ -1390,3 +1390,90 @@ pub async fn goal_history(
         Ok(Json(serde_json::json!({ "runs": [] })))
     }
 }
+
+// ── Skills API ──────────────────────────────────────────────────
+
+// GET /api/skills — list installed skills
+pub async fn list_skills(
+    Authenticated(auth_result): Authenticated,
+    State(_state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let skills_dir = dirs_home().join(".ryvos/skills");
+    let mut skills = Vec::new();
+
+    if skills_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&skills_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let manifest_path = path.join("skill.toml");
+                    if manifest_path.exists() {
+                        if let Ok(content) = std::fs::read_to_string(&manifest_path) {
+                            if let Ok(manifest) =
+                                toml::from_str::<toml::Value>(&content)
+                            {
+                                skills.push(serde_json::json!({
+                                    "name": manifest.get("name").and_then(|v| v.as_str()).unwrap_or("unknown"),
+                                    "description": manifest.get("description").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "command": manifest.get("command").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "timeout_secs": manifest.get("timeout_secs").and_then(|v| v.as_integer()).unwrap_or(30),
+                                    "tier": manifest.get("tier").and_then(|v| v.as_str()).unwrap_or("t2"),
+                                    "enabled": true,
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Json(serde_json::json!({ "skills": skills })))
+}
+
+// ── Heartbeat History API ───────────────────────────────────────
+
+// GET /api/heartbeat/history — recent heartbeat events from audit trail
+pub async fn heartbeat_history(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<HistoryQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let trail = state.audit_trail.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+
+    // Heartbeat sessions are prefixed with "heartbeat:"
+    let all_entries = trail
+        .recent_entries("", q.limit.min(100))
+        .await
+        .unwrap_or_default();
+
+    let heartbeat_events: Vec<serde_json::Value> = all_entries
+        .into_iter()
+        .filter(|e| e.session_id.starts_with("heartbeat:"))
+        .map(|e| {
+            serde_json::json!({
+                "timestamp": e.timestamp.to_rfc3339(),
+                "session_id": e.session_id,
+                "tool_name": e.tool_name,
+                "input_summary": e.input_summary,
+                "outcome": format!("{:?}", e.outcome),
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({ "events": heartbeat_events })))
+}
+
+fn dirs_home() -> std::path::PathBuf {
+    std::env::var("HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("/tmp"))
+}

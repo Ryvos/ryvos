@@ -192,6 +192,10 @@ impl GatewayServer {
                 "/api/integrations/{app}",
                 axum::routing::delete(routes::disconnect_integration),
             )
+            // Skills API
+            .route("/api/skills", get(routes::list_skills))
+            // Heartbeat history API
+            .route("/api/heartbeat/history", get(routes::heartbeat_history))
             // Goals / Director API
             .route("/api/goals/run", post(routes::run_goal))
             .route("/api/goals/history", get(routes::goal_history))
