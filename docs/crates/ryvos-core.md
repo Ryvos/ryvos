@@ -126,12 +126,12 @@ cases and set the timestamp to `Utc::now()`. The `text()` method flattens all
 all `ContentBlock::ToolUse` blocks as tuples of `(id, name, input)` for the
 agent loop's dispatch phase.
 
-`ContentBlock` has four variants: `Text`, `ToolUse`, `ToolResult`, and
-`Thinking`. The tag-based serde representation (`#[serde(tag = "type")]`)
+`ContentBlock` has three variants: `Text`, `ToolUse`, and `ToolResult`.
+The tag-based serde representation (`#[serde(tag = "type")]`)
 means blocks round-trip cleanly through JSON, which the checkpoint store, the
 run logger, and the gateway WebSocket all depend on.
 
-`StreamDelta` is the wire format for streaming LLM responses. It has ten
+`StreamDelta` is the wire format for streaming LLM responses. It has nine
 variants: `TextDelta` and `ThinkingDelta` carry streamed text chunks;
 `ToolUseStart`, `ToolInputDelta`, and the terminal `Stop(StopReason)` form
 the tool-call protocol; `Usage` reports per-call token counts; `MessageId`
@@ -303,7 +303,7 @@ cannot keep up it loses messages. See
 [../internals/event-bus.md](../internals/event-bus.md) for the full delivery
 semantics and ADR-005 for the design rationale.
 
-`AgentEvent` has 29 variants covering every lifecycle moment in the
+`AgentEvent` has 28 variants covering every lifecycle moment in the
 runtime: `RunStarted`, `TextDelta`, `ToolStart`, `ToolEnd`, `TurnComplete`,
 `RunComplete`, `RunError`, `CronFired`, `CronJobComplete`,
 `ApprovalRequested`, `ApprovalResolved`, `ToolBlocked`, `GuardianStall`,

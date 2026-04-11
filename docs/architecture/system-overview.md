@@ -1,6 +1,6 @@
 # System overview
 
-Ryvos is a Cargo workspace of ten crates that compile into a single 45 MB
+Ryvos is a Cargo workspace of eleven crates that compile into a single 45 MB
 binary. This document explains how those crates fit together, what each
 architectural layer is responsible for, and the invariants every component
 upholds. It is the starting point for anyone trying to build a mental model of
@@ -14,7 +14,7 @@ structure.
 
 ## Crate dependency graph
 
-The ten crates sit in four layers. Lower layers know nothing about higher ones.
+The eleven crates sit in four layers. Lower layers know nothing about higher ones.
 Every arrow below points from a crate to something it depends on.
 
 ```mermaid
@@ -110,8 +110,9 @@ cost tracking reports `$0.00`. See ADR-004 for the rationale.
 
 `ryvos-memory` provides SQLite-backed implementations of session storage,
 history storage, and the local [Viking](../glossary.md#viking) store. Ryvos
-uses seven separate SQLite databases — `sessions.db`, `audit.db`, `cost.db`,
-`healing.db`, `viking.db`, `safety.db`, `integrations.db` — one per subsystem.
+uses eight separate SQLite databases — `sessions.db`, `audit.db`, `cost.db`,
+`healing.db`, `viking.db`, `safety.db`, `integrations.db`, `session_meta.db` —
+one per subsystem.
 The separation is deliberate: each subsystem has its own schema lifecycle and
 its own backup cadence, and no single-DB lock contends across them. See ADR-006.
 
@@ -261,7 +262,7 @@ coupled to it. See ADR-005.
 
 ### Each subsystem owns its database
 
-The seven SQLite files are never joined across. `audit.db` does not know about
+The eight SQLite files are never joined across. `audit.db` does not know about
 `cost.db`, and neither knows about `safety.db`. Each subsystem manages its own
 schema migrations and its own backups. Cross-subsystem correlation happens on
 the EventBus (which carries event IDs), not in SQL. See ADR-006.

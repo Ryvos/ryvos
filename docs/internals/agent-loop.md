@@ -968,7 +968,7 @@ ran.
 
 If the per-turn loop runs all the way to `max_turns` without returning,
 the runtime records an error-status completion in the cost store and
-returns a typed error. See `crates/ryvos-agent/src/agent_loop.rs:1163`:
+returns a typed error. See `crates/ryvos-agent/src/agent_loop.rs:1185`:
 
 ```rust
 if let Some(ref cost_store) = self.cost_store {
