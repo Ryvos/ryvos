@@ -312,45 +312,83 @@ impl Default for ContextLevelPolicy {
 
 /// Load Viking context for injection into the system prompt.
 /// Returns formatted context string with L0 summaries relevant to the query.
+///
+/// `min_relevance` filters out semantic search results below this score (0.0-1.0).
 pub async fn load_viking_context(
     viking: &VikingClient,
     query_hint: &str,
     policy: &ContextLevelPolicy,
 ) -> String {
-    let mut context_parts = Vec::new();
+    load_viking_context_filtered(viking, query_hint, policy, 0.0).await
+}
 
-    // Load L0 summaries from user/ directory
+/// Load Viking context with minimum relevance filtering for search results.
+pub async fn load_viking_context_filtered(
+    viking: &VikingClient,
+    query_hint: &str,
+    policy: &ContextLevelPolicy,
+    min_relevance: f64,
+) -> String {
+    let mut context_parts = Vec::new();
+    let query_keywords = extract_keywords(query_hint);
+
+    // Load L0 summaries from user/ directory, filtered by keyword relevance
     if let Ok(entries) = viking.list_directory("viking://user/").await {
         let mut user_section = String::from("## User Context\n");
-        for entry in entries.iter().take(policy.max_l0_entries) {
+        let mut count = 0;
+        for entry in &entries {
+            if count >= policy.max_l0_entries {
+                break;
+            }
             if let Some(ref summary) = entry.summary {
+                // If we have query keywords, only include entries with keyword overlap
+                if !query_keywords.is_empty()
+                    && !entry_matches_keywords(summary, &entry.path, &query_keywords)
+                {
+                    continue;
+                }
                 user_section.push_str(&format!("- {}: {}\n", entry.path, summary));
+                count += 1;
             }
         }
-        if !user_section.ends_with("## User Context\n") {
+        if count > 0 {
             context_parts.push(user_section);
         }
     }
 
-    // Load L0 summaries from agent/ directory
+    // Load L0 summaries from agent/ directory, filtered by keyword relevance
     if let Ok(entries) = viking.list_directory("viking://agent/").await {
         let mut agent_section = String::from("## Agent Context\n");
-        for entry in entries.iter().take(policy.max_l0_entries) {
+        let mut count = 0;
+        for entry in &entries {
+            if count >= policy.max_l0_entries {
+                break;
+            }
             if let Some(ref summary) = entry.summary {
+                if !query_keywords.is_empty()
+                    && !entry_matches_keywords(summary, &entry.path, &query_keywords)
+                {
+                    continue;
+                }
                 agent_section.push_str(&format!("- {}: {}\n", entry.path, summary));
+                count += 1;
             }
         }
-        if !agent_section.ends_with("## Agent Context\n") {
+        if count > 0 {
             context_parts.push(agent_section);
         }
     }
 
-    // Semantic search with user's message as query hint
+    // Semantic search with user's message as query hint, filtered by min relevance
     if !query_hint.is_empty() {
         if let Ok(results) = viking.search(query_hint, None, 5).await {
-            if !results.is_empty() {
+            let filtered: Vec<_> = results
+                .iter()
+                .filter(|r| r.relevance_score >= min_relevance)
+                .collect();
+            if !filtered.is_empty() {
                 let mut recall_section = String::from("## Recalled Memories\n");
-                for result in &results {
+                for result in &filtered {
                     recall_section.push_str(&format!(
                         "- [score:{:.2}] {}: {}\n",
                         result.relevance_score,
@@ -371,6 +409,30 @@ pub async fn load_viking_context(
         "# Sustained Context (Viking)\n\n{}",
         context_parts.join("\n")
     )
+}
+
+/// Extract lowercase keywords from a query for simple relevance matching.
+fn extract_keywords(query: &str) -> Vec<String> {
+    const STOP_WORDS: &[&str] = &[
+        "a", "an", "the", "is", "are", "was", "were", "do", "does", "did", "has", "have", "had",
+        "be", "been", "being", "i", "me", "my", "you", "your", "we", "our", "it", "its", "to",
+        "of", "in", "on", "at", "for", "with", "and", "or", "not", "this", "that", "what", "how",
+        "can", "will", "would", "should", "could", "may", "might",
+    ];
+    query
+        .split_whitespace()
+        .map(|w| w.to_lowercase().trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+        .filter(|w| w.len() >= 3 && !STOP_WORDS.contains(&w.as_str()))
+        .collect()
+}
+
+/// Check if a Viking entry's summary or path contains any of the query keywords.
+fn entry_matches_keywords(summary: &str, path: &str, keywords: &[String]) -> bool {
+    let lower_summary = summary.to_lowercase();
+    let lower_path = path.to_lowercase();
+    keywords
+        .iter()
+        .any(|kw| lower_summary.contains(kw.as_str()) || lower_path.contains(kw.as_str()))
 }
 
 #[cfg(test)]

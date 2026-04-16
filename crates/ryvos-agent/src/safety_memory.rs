@@ -469,6 +469,98 @@ pub fn assess_outcome(
     SafetyOutcome::Harmless
 }
 
+// ── Public query methods for audit/inspection ──
+
+impl SafetyMemory {
+    /// List all lessons, paginated by limit and offset, ordered by confidence DESC.
+    pub async fn list_lessons(
+        &self,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<SafetyLesson>, String> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, timestamp, action, outcome, reflection, principle_violated, \
+                 corrective_rule, confidence, times_applied \
+                 FROM safety_lessons ORDER BY confidence DESC LIMIT ?1 OFFSET ?2",
+            )
+            .map_err(|e| e.to_string())?;
+        let lessons = stmt
+            .query_map(rusqlite::params![limit, offset], |row| {
+                Ok(SafetyLesson {
+                    id: row.get(0)?,
+                    timestamp: row
+                        .get::<_, String>(1)?
+                        .parse()
+                        .unwrap_or_else(|_| Utc::now()),
+                    action: row.get(2)?,
+                    outcome: serde_json::from_str(&row.get::<_, String>(3)?)
+                        .unwrap_or(SafetyOutcome::Harmless),
+                    reflection: row.get(4)?,
+                    principle_violated: row.get(5)?,
+                    corrective_rule: row.get(6)?,
+                    confidence: row.get(7)?,
+                    times_applied: row.get(8)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(lessons)
+    }
+
+    /// Count total lessons in the database.
+    pub async fn count_lessons(&self) -> Result<usize, String> {
+        let conn = self.conn.lock().await;
+        conn.query_row("SELECT COUNT(*) FROM safety_lessons", [], |row| {
+            row.get::<_, usize>(0)
+        })
+        .map_err(|e| e.to_string())
+    }
+
+    /// Search lessons by keyword in action or corrective_rule fields.
+    pub async fn search_lessons(
+        &self,
+        keyword: &str,
+        limit: usize,
+    ) -> Result<Vec<SafetyLesson>, String> {
+        let conn = self.conn.lock().await;
+        let pattern = format!("%{}%", keyword);
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, timestamp, action, outcome, reflection, principle_violated, \
+                 corrective_rule, confidence, times_applied \
+                 FROM safety_lessons \
+                 WHERE action LIKE ?1 OR corrective_rule LIKE ?1 \
+                 ORDER BY confidence DESC LIMIT ?2",
+            )
+            .map_err(|e| e.to_string())?;
+        let lessons = stmt
+            .query_map(rusqlite::params![pattern, limit], |row| {
+                Ok(SafetyLesson {
+                    id: row.get(0)?,
+                    timestamp: row
+                        .get::<_, String>(1)?
+                        .parse()
+                        .unwrap_or_else(|_| Utc::now()),
+                    action: row.get(2)?,
+                    outcome: serde_json::from_str(&row.get::<_, String>(3)?)
+                        .unwrap_or(SafetyOutcome::Harmless),
+                    reflection: row.get(4)?,
+                    principle_violated: row.get(5)?,
+                    corrective_rule: row.get(6)?,
+                    confidence: row.get(7)?,
+                    times_applied: row.get(8)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(lessons)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

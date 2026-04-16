@@ -1,5 +1,7 @@
 pub mod audit;
+pub mod healing;
 pub mod memory;
+pub mod safety;
 pub mod viking;
 
 use schemars::JsonSchema;
@@ -66,5 +68,35 @@ pub struct DailyLogWriteParams {
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct AuditQueryParams {
     /// Number of recent entries to return (default 20)
+    pub limit: Option<usize>,
+}
+
+// ── Safety Tool Parameters ──
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct SafetyLessonsParams {
+    /// Search keyword to filter lessons (optional)
+    pub search: Option<String>,
+    /// Max results (default 20)
+    pub limit: Option<usize>,
+}
+
+// ── Healing Tool Parameters ──
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct DecisionsQueryParams {
+    /// Filter by session ID prefix (optional)
+    pub session_id: Option<String>,
+    /// Max results (default 20)
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct FailurePatternsParams {
+    /// Search by error message pattern (optional)
+    pub pattern: Option<String>,
+    /// Filter by tool name (optional)
+    pub tool: Option<String>,
+    /// Max results (default 20)
     pub limit: Option<usize>,
 }

@@ -82,6 +82,9 @@ pub struct MessageMetadata {
     /// Keys from tool output that should be preserved in summaries.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub output_keys: Vec<String>,
+    /// Turn number when this message was created (for TTL-based expiry).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at_turn: Option<usize>,
 }
 
 /// A chat message in the conversation.

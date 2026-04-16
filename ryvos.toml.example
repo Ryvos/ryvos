@@ -13,6 +13,31 @@ workspace = "~/.ryvos"
 # token_budget = 0              # 0 = unlimited
 # token_warn_pct = 80           # soft warning at this %
 
+# Context management — controls what gets loaded into the system prompt
+# [agent.context]
+# daily_log_mode = "relevant"   # "always" | "relevant" | "never" — saves ~2K tokens when irrelevant
+# daily_log_days = 3            # how many days of daily logs to load
+# viking_max_l0 = 10            # max Viking L0 summaries per directory (default 10, was 20)
+# viking_min_relevance = 0.3    # minimum relevance score for Viking search results
+# max_safety_lessons = 3        # max safety lessons to inject into context
+# safety_filter_by_tools = true # only inject lessons for tools actually available
+# protected_ttl = 20            # turns before protected messages can be pruned (0 = never)
+
+# Director orchestration — OODA-loop graph execution for complex tasks
+# [agent.director]
+# enabled = true
+# max_evolution_cycles = 3      # replanning attempts
+# failure_threshold = 3         # failures before evolution
+
+# Docker sandbox — run bash commands in isolated containers
+# [agent.sandbox]
+# enabled = false
+# mode = "docker"
+# image = "ubuntu:24.04"
+# memory_mb = 512
+# timeout_secs = 120
+# mount_workspace = true
+
 [model]
 # Provider: "anthropic", "openai", "gemini", "azure", "cohere", "ollama",
 #   "groq", "openrouter", "together", "fireworks", "cerebras", "xai",
@@ -156,3 +181,10 @@ max_tokens = 8192
 # Memory flush — persist important info before context compaction
 # [agent]
 # disable_memory_flush = false    # Set to true to opt out
+
+# OpenViking hierarchical memory — persistent memory across sessions
+# [openviking]
+# enabled = true
+# base_url = "http://localhost:1933"
+# user_id = "ryvos-default"
+# auto_iterate = true             # auto-extract memories after sessions

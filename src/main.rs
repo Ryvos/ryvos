@@ -140,6 +140,36 @@ enum Commands {
         #[arg(long, short = 'y')]
         yes: bool,
     },
+    /// List and search safety lessons learned by the agent
+    SafetyLessons {
+        /// Search keyword (optional)
+        #[arg(long)]
+        search: Option<String>,
+        /// Max entries to show (default: 20)
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
+    /// List agent decision audit trail
+    Decisions {
+        /// Filter by session ID (optional)
+        #[arg(long)]
+        session: Option<String>,
+        /// Max entries to show (default: 20)
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
+    /// Search failure patterns in the healing journal
+    Failures {
+        /// Search by error message pattern (optional)
+        #[arg(long)]
+        pattern: Option<String>,
+        /// Filter by tool name (optional)
+        #[arg(long)]
+        tool: Option<String>,
+        /// Max entries to show (default: 20)
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
 }
 
 #[derive(Subcommand)]
@@ -735,6 +765,146 @@ async fn main() -> anyhow::Result<()> {
                             }
                         }
                         Err(e) => eprintln!("Failed to query tool health: {}", e),
+                    }
+                }
+                Err(e) => eprintln!("Failed to open healing journal: {}", e),
+            }
+            return Ok(());
+        }
+        Some(Commands::SafetyLessons { search, limit }) => {
+            let safety_path = workspace.join("safety.db");
+            match ryvos_agent::SafetyMemory::open(&safety_path) {
+                Ok(sm) => {
+                    let rt = tokio::runtime::Handle::current();
+                    let lessons = if let Some(ref keyword) = search {
+                        rt.block_on(sm.search_lessons(keyword, limit))
+                    } else {
+                        rt.block_on(sm.list_lessons(limit, 0))
+                    };
+                    match lessons {
+                        Ok(lessons) => {
+                            let total = rt.block_on(sm.count_lessons()).unwrap_or(0);
+                            println!("Safety Lessons ({} total, showing {}):", total, lessons.len());
+                            if lessons.is_empty() {
+                                println!("  No lessons recorded yet.");
+                            }
+                            for lesson in &lessons {
+                                println!("  ──────────────────────────────────────");
+                                println!("  Action:     {}", lesson.action);
+                                println!("  Rule:       {}", lesson.corrective_rule);
+                                println!(
+                                    "  Confidence: {:.0}%  Applied: {} times",
+                                    lesson.confidence * 100.0,
+                                    lesson.times_applied
+                                );
+                                if let Some(ref principle) = lesson.principle_violated {
+                                    println!("  Principle:  {}", principle);
+                                }
+                                println!(
+                                    "  Recorded:   {}",
+                                    lesson.timestamp.format("%Y-%m-%d %H:%M")
+                                );
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to query safety lessons: {}", e),
+                    }
+                }
+                Err(e) => eprintln!("Failed to open safety database: {}", e),
+            }
+            return Ok(());
+        }
+        Some(Commands::Decisions { session, limit }) => {
+            let journal_path = workspace.join("healing.db");
+            match ryvos_agent::FailureJournal::open(&journal_path) {
+                Ok(journal) => {
+                    match journal.list_decisions(limit, 0) {
+                        Ok(decisions) => {
+                            let filtered: Vec<_> = if let Some(ref sid) = session {
+                                decisions
+                                    .into_iter()
+                                    .filter(|d| d.session_id.starts_with(sid))
+                                    .collect()
+                            } else {
+                                decisions
+                            };
+                            let total = journal.count_decisions().unwrap_or(0);
+                            println!(
+                                "Agent Decisions ({} total, showing {}):",
+                                total,
+                                filtered.len()
+                            );
+                            if filtered.is_empty() {
+                                println!("  No decisions recorded yet.");
+                            }
+                            for d in &filtered {
+                                println!("  ──────────────────────────────────────");
+                                println!("  Decision:  {}", d.description);
+                                println!("  Chosen:    {}", d.chosen_option);
+                                if !d.alternatives.is_empty() {
+                                    let alts: Vec<_> =
+                                        d.alternatives.iter().map(|a| a.name.as_str()).collect();
+                                    println!("  Alternatives: {}", alts.join(", "));
+                                }
+                                println!(
+                                    "  Session:   {}  Turn: {}",
+                                    &d.session_id[..8.min(d.session_id.len())],
+                                    d.turn
+                                );
+                                println!(
+                                    "  Time:      {}",
+                                    d.timestamp.format("%Y-%m-%d %H:%M")
+                                );
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to query decisions: {}", e),
+                    }
+                }
+                Err(e) => eprintln!("Failed to open healing journal: {}", e),
+            }
+            return Ok(());
+        }
+        Some(Commands::Failures {
+            pattern,
+            tool,
+            limit,
+        }) => {
+            let journal_path = workspace.join("healing.db");
+            match ryvos_agent::FailureJournal::open(&journal_path) {
+                Ok(journal) => {
+                    match journal.search_failures(pattern.as_deref(), tool.as_deref(), limit) {
+                        Ok(failures) => {
+                            let total = journal.count_failures().unwrap_or(0);
+                            println!(
+                                "Failure Journal ({} total, showing {}):",
+                                total,
+                                failures.len()
+                            );
+                            if failures.is_empty() {
+                                println!("  No failures recorded yet.");
+                            }
+                            for f in &failures {
+                                println!("  ──────────────────────────────────────");
+                                println!("  Tool:    {}", f.tool_name);
+                                println!(
+                                    "  Error:   {}",
+                                    if f.error.len() > 120 {
+                                        format!("{}...", &f.error[..120])
+                                    } else {
+                                        f.error.clone()
+                                    }
+                                );
+                                println!(
+                                    "  Session: {}  Turn: {}",
+                                    &f.session_id[..8.min(f.session_id.len())],
+                                    f.turn
+                                );
+                                println!(
+                                    "  Time:    {}",
+                                    f.timestamp.format("%Y-%m-%d %H:%M")
+                                );
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to query failures: {}", e),
                     }
                 }
                 Err(e) => eprintln!("Failed to open healing journal: {}", e),

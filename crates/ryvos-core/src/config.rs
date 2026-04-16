@@ -234,6 +234,9 @@ pub struct AgentConfig {
     /// Director orchestration configuration.
     #[serde(default)]
     pub director: Option<DirectorConfig>,
+    /// Context management tuning (daily logs, Viking L0 cap, safety lessons, TTL).
+    #[serde(default)]
+    pub context: ContextConfig,
 }
 
 impl Default for AgentConfig {
@@ -256,6 +259,7 @@ impl Default for AgentConfig {
             model_overrides: HashMap::new(),
             disable_memory_flush: None,
             director: Some(DirectorConfig::default()),
+            context: ContextConfig::default(),
         }
     }
 }
@@ -403,6 +407,71 @@ fn default_token_budget() -> u64 {
 }
 fn default_token_warn_pct() -> u8 {
     80
+}
+
+/// Context management tuning — controls what gets loaded into the system prompt.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextConfig {
+    /// Daily log loading mode: "always", "relevant", "never" (default: "relevant").
+    /// When "relevant", daily logs are only loaded if the user's query contains
+    /// temporal keywords (yesterday, history, log, previous, etc.).
+    #[serde(default = "default_daily_log_mode")]
+    pub daily_log_mode: String,
+    /// Number of daily log days to load (default: 3).
+    #[serde(default = "default_daily_log_days")]
+    pub daily_log_days: usize,
+    /// Max Viking L0 summaries per directory (default: 10).
+    #[serde(default = "default_viking_max_l0")]
+    pub viking_max_l0: usize,
+    /// Minimum relevance score for Viking semantic search results (default: 0.3).
+    #[serde(default = "default_viking_min_relevance")]
+    pub viking_min_relevance: f64,
+    /// Max safety lessons to inject into context (default: 3).
+    #[serde(default = "default_max_safety_lessons")]
+    pub max_safety_lessons: usize,
+    /// Only inject safety lessons for tools actually available (default: true).
+    #[serde(default = "default_safety_filter_by_tools")]
+    pub safety_filter_by_tools: bool,
+    /// Protected message TTL in turns. After this many turns, protected messages
+    /// become eligible for pruning. 0 = never expire (default: 20).
+    #[serde(default = "default_protected_ttl")]
+    pub protected_ttl: usize,
+}
+
+fn default_daily_log_mode() -> String {
+    "relevant".to_string()
+}
+fn default_daily_log_days() -> usize {
+    3
+}
+fn default_viking_max_l0() -> usize {
+    10
+}
+fn default_viking_min_relevance() -> f64 {
+    0.3
+}
+fn default_max_safety_lessons() -> usize {
+    3
+}
+fn default_safety_filter_by_tools() -> bool {
+    true
+}
+fn default_protected_ttl() -> usize {
+    20
+}
+
+impl Default for ContextConfig {
+    fn default() -> Self {
+        Self {
+            daily_log_mode: default_daily_log_mode(),
+            daily_log_days: default_daily_log_days(),
+            viking_max_l0: default_viking_max_l0(),
+            viking_min_relevance: default_viking_min_relevance(),
+            max_safety_lessons: default_max_safety_lessons(),
+            safety_filter_by_tools: default_safety_filter_by_tools(),
+            protected_ttl: default_protected_ttl(),
+        }
+    }
 }
 
 fn default_max_turns() -> usize {

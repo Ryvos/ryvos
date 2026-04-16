@@ -21,8 +21,8 @@ use crate::gate::SecurityGate;
 use crate::guardian::GuardianAction;
 use crate::healing::{reflexion_hint_with_history, FailureJournal, FailureRecord};
 use crate::intelligence::{
-    compact_tool_output, is_flush_complete, memory_flush_prompt, prune_to_budget, reflexion_hint,
-    summarize_and_prune, FailureTracker,
+    compact_tool_output, expire_protected_messages, is_flush_complete, memory_flush_prompt,
+    prune_to_budget, reflexion_hint, summarize_and_prune, FailureTracker,
 };
 use crate::judge::Judge;
 use crate::output_validator::OutputCleaner;
@@ -271,12 +271,24 @@ impl AgentRuntime {
             .map(|spec| context::resolve_system_prompt(spec, &workspace));
 
         // Load Viking sustained context (Layer 2.5 Recall)
-        let mut extended = context::ExtendedContext::default();
+        let ctx_config = &self.config.agent.context;
+        let mut extended = context::ExtendedContext {
+            query_hint: user_message.to_string(),
+            daily_log_mode: ctx_config.daily_log_mode.clone(),
+            daily_log_days: ctx_config.daily_log_days,
+            ..Default::default()
+        };
         if let Some(ref vc) = *self.viking_client.lock().await {
             let query_hint = user_message;
-            let policy = ryvos_memory::viking::ContextLevelPolicy::default();
-            let viking_ctx =
-                ryvos_memory::viking::load_viking_context(vc, query_hint, &policy).await;
+            let mut policy = ryvos_memory::viking::ContextLevelPolicy::default();
+            policy.max_l0_entries = ctx_config.viking_max_l0;
+            let viking_ctx = ryvos_memory::viking::load_viking_context_filtered(
+                vc,
+                query_hint,
+                &policy,
+                ctx_config.viking_min_relevance,
+            )
+            .await;
             if !viking_ctx.is_empty() {
                 info!(
                     len = viking_ctx.len(),
@@ -303,7 +315,8 @@ impl AgentRuntime {
                     .map(|t| t.name.clone())
                     .collect()
             };
-            let safety_ctx = sm.format_for_context(&tool_names, 5).await;
+            let max_lessons = ctx_config.max_safety_lessons;
+            let safety_ctx = sm.format_for_context(&tool_names, max_lessons).await;
             if !safety_ctx.is_empty() {
                 info!(
                     len = safety_ctx.len(),
@@ -464,6 +477,9 @@ impl AgentRuntime {
                 );
             }
         } else {
+            // Expire protected messages past their TTL before pruning
+            let protected_ttl = self.config.agent.context.protected_ttl;
+            expire_protected_messages(&mut messages, 0, protected_ttl);
             let pruned = prune_to_budget(&mut messages, budget, 6);
             if pruned > 0 {
                 info!(pruned, "Pruned messages to fit context budget");
@@ -1121,6 +1137,7 @@ impl AgentRuntime {
                 timestamp: Some(chrono::Utc::now()),
                 metadata: Some(MessageMetadata {
                     protected: true,
+                    created_at_turn: Some(turn),
                     ..Default::default()
                 }),
             };
@@ -1130,7 +1147,9 @@ impl AgentRuntime {
                 .await?;
             messages.push(results_msg);
 
-            // Re-prune before next LLM call (fast, no LLM call mid-loop)
+            // Expire protected messages past their TTL, then re-prune
+            let protected_ttl = self.config.agent.context.protected_ttl;
+            expire_protected_messages(&mut messages, turn, protected_ttl);
             let pruned = prune_to_budget(&mut messages, budget, 6);
             if pruned > 0 {
                 debug!(pruned, "Re-pruned messages after tool execution");

@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use ryvos_agent::{AgentRuntime, ApprovalBroker, AuditTrail, SessionManager};
+use ryvos_agent::{AgentRuntime, ApprovalBroker, AuditTrail, FailureJournal, SafetyMemory, SessionManager};
 use ryvos_channels::WhatsAppWebhookHandle;
 use ryvos_core::config::{BudgetConfig, GatewayConfig, IntegrationsConfig};
 use ryvos_core::event::EventBus;
@@ -37,6 +37,8 @@ pub struct GatewayServer {
     session_meta: Option<Arc<SessionMetaStore>>,
     integration_store: Option<Arc<IntegrationStore>>,
     integrations_config: IntegrationsConfig,
+    safety_memory: Option<Arc<SafetyMemory>>,
+    failure_journal: Option<Arc<FailureJournal>>,
 }
 
 impl GatewayServer {
@@ -65,6 +67,8 @@ impl GatewayServer {
             session_meta: None,
             integration_store: None,
             integrations_config: IntegrationsConfig::default(),
+            safety_memory: None,
+            failure_journal: None,
         }
     }
 
@@ -113,6 +117,16 @@ impl GatewayServer {
         self.integrations_config = config;
     }
 
+    /// Set the safety memory for the data audit API.
+    pub fn set_safety_memory(&mut self, memory: Arc<SafetyMemory>) {
+        self.safety_memory = Some(memory);
+    }
+
+    /// Set the failure journal for the data audit API.
+    pub fn set_failure_journal(&mut self, journal: Arc<FailureJournal>) {
+        self.failure_journal = Some(journal);
+    }
+
     /// Run the gateway server until the cancellation token is triggered.
     pub async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()> {
         let state = Arc::new(AppState {
@@ -132,6 +146,8 @@ impl GatewayServer {
             session_meta: self.session_meta.clone(),
             integration_store: self.integration_store.clone(),
             integrations_config: self.integrations_config.clone(),
+            safety_memory: self.safety_memory.clone(),
+            failure_journal: self.failure_journal.clone(),
         });
 
         let app = Router::new()
@@ -196,6 +212,10 @@ impl GatewayServer {
             .route("/api/skills", get(routes::list_skills))
             // Heartbeat history API
             .route("/api/heartbeat/history", get(routes::heartbeat_history))
+            // Data audit API
+            .route("/api/safety/lessons", get(routes::safety_lessons))
+            .route("/api/decisions", get(routes::list_decisions))
+            .route("/api/failures", get(routes::list_failures))
             // Goals / Director API
             .route("/api/goals/run", post(routes::run_goal))
             .route("/api/goals/history", get(routes::goal_history))

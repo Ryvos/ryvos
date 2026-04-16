@@ -1,17 +1,22 @@
 mod banner;
 mod budget;
 mod channels;
+mod context_tuning;
 mod cron;
+mod director;
 mod embedding;
 mod gateway;
+mod guardian;
 mod health_check;
 mod heartbeat;
 mod hooks;
 mod mcp_servers;
 mod providers;
+mod sandbox;
 mod security;
 mod service;
 mod skills;
+mod viking;
 mod web_search;
 mod whatsapp;
 
@@ -20,8 +25,9 @@ use std::path::Path;
 use anyhow::Result;
 use dialoguer::{Confirm, Input, Select};
 use ryvos_core::config::{
-    AgentConfig, AppConfig, ChannelsConfig, DiscordConfig, DmPolicy, GatewayConfig, McpConfig,
-    ModelConfig, SecurityConfig, TelegramConfig, WizardMetadata,
+    AgentConfig, AppConfig, ChannelsConfig, ContextConfig, DirectorConfig, DiscordConfig, DmPolicy,
+    GatewayConfig, GuardianConfig, McpConfig, ModelConfig, SecurityConfig, TelegramConfig,
+    WizardMetadata,
 };
 
 pub enum OnboardingMode {
@@ -619,6 +625,47 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         OnboardingMode::Manual => budget::configure()?,
     };
 
+    // ── Phase 7b: Advanced agent settings (Manual only) ──
+    let guardian_config = match mode {
+        OnboardingMode::Manual => {
+            println!();
+            guardian::configure()?
+        }
+        OnboardingMode::QuickStart => GuardianConfig::default(),
+    };
+
+    let director_config = match mode {
+        OnboardingMode::Manual => {
+            println!();
+            director::configure()?
+        }
+        OnboardingMode::QuickStart => Some(DirectorConfig::default()),
+    };
+
+    let context_config = match mode {
+        OnboardingMode::Manual => {
+            println!();
+            context_tuning::configure()?
+        }
+        OnboardingMode::QuickStart => ContextConfig::default(),
+    };
+
+    let sandbox_config = match mode {
+        OnboardingMode::Manual => {
+            println!();
+            sandbox::configure()?
+        }
+        OnboardingMode::QuickStart => None,
+    };
+
+    let viking_config = match mode {
+        OnboardingMode::Manual => {
+            println!();
+            viking::configure()?
+        }
+        OnboardingMode::QuickStart => None,
+    };
+
     // ── Phase 8: Embedding + Security ──
     println!();
     let embedding_config = match mode {
@@ -695,8 +742,14 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
     };
     ryvos_llm::apply_preset_defaults(&mut model_config);
 
+    let mut final_agent = agent_config;
+    final_agent.guardian = guardian_config;
+    final_agent.director = director_config;
+    final_agent.context = context_config;
+    final_agent.sandbox = sandbox_config;
+
     let config = AppConfig {
-        agent: agent_config,
+        agent: final_agent,
         model: model_config,
         fallback_models: vec![],
         gateway: gateway_config,
@@ -712,7 +765,7 @@ async fn run_interactive(config_path: &Path) -> Result<()> {
         daily_logs: None,
         registry: registry_config,
         budget: budget_config,
-        openviking: None,
+        openviking: viking_config,
         google: None,
         notion: None,
         jira: None,

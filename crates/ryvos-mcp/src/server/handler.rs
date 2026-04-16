@@ -5,6 +5,7 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{Implementation, ProtocolVersion, ServerCapabilities, ServerInfo};
 use rmcp::{tool, tool_handler, tool_router, ServerHandler};
 
+use ryvos_agent::{FailureJournal, SafetyMemory};
 use ryvos_memory::VikingClient;
 
 use super::audit_reader::AuditReader;
@@ -12,12 +13,14 @@ use super::tools::*;
 
 /// Ryvos MCP Server handler.
 ///
-/// Exposes Viking memory, file-based memory, and audit trail tools
-/// to CLI providers (claude-code, copilot) via the MCP protocol.
+/// Exposes Viking memory, file-based memory, audit trail, safety lessons,
+/// and failure journal tools to CLI providers via MCP.
 #[derive(Clone)]
 pub struct RyvosServerHandler {
     pub(crate) viking: Option<Arc<VikingClient>>,
     pub(crate) audit: Option<Arc<AuditReader>>,
+    pub(crate) safety_memory: Option<Arc<SafetyMemory>>,
+    pub(crate) failure_journal: Option<Arc<FailureJournal>>,
     pub(crate) workspace: std::path::PathBuf,
     tool_router: ToolRouter<Self>,
 }
@@ -32,9 +35,23 @@ impl RyvosServerHandler {
         Self {
             viking,
             audit,
+            safety_memory: None,
+            failure_journal: None,
             workspace,
             tool_router: Self::tool_router(),
         }
+    }
+
+    /// Set the safety memory store for lesson inspection.
+    pub fn with_safety_memory(mut self, sm: Arc<SafetyMemory>) -> Self {
+        self.safety_memory = Some(sm);
+        self
+    }
+
+    /// Set the failure journal for decision/failure inspection.
+    pub fn with_failure_journal(mut self, fj: Arc<FailureJournal>) -> Self {
+        self.failure_journal = Some(fj);
+        self
     }
 }
 
@@ -180,6 +197,48 @@ impl RyvosServerHandler {
             return "Audit trail not available. Ensure the daemon is running.".to_string();
         };
         audit::stats(audit).await
+    }
+
+    // ── Safety & Healing Introspection Tools ──
+
+    /// List or search safety lessons learned by the agent.
+    #[tool(
+        name = "safety_lessons_list",
+        description = "List or search safety lessons — rules the agent learned from past incidents and corrections."
+    )]
+    async fn safety_lessons_list(&self, params: Parameters<SafetyLessonsParams>) -> String {
+        let Some(ref sm) = self.safety_memory else {
+            return "Safety memory not available. Ensure the daemon is running.".to_string();
+        };
+        let limit = params.0.limit.unwrap_or(20);
+        safety::list_lessons(sm, params.0.search.as_deref(), limit).await
+    }
+
+    /// Query agent decision audit trail.
+    #[tool(
+        name = "decisions_query",
+        description = "Query the agent's decision audit trail — shows what tools were chosen, alternatives considered, and outcomes."
+    )]
+    async fn decisions_query(&self, params: Parameters<DecisionsQueryParams>) -> String {
+        let Some(ref fj) = self.failure_journal else {
+            return "Failure journal not available. Ensure the daemon is running.".to_string();
+        };
+        let limit = params.0.limit.unwrap_or(20);
+        healing::query_decisions(fj, params.0.session_id.as_deref(), limit).await
+    }
+
+    /// Search failure patterns in the healing journal.
+    #[tool(
+        name = "failure_patterns",
+        description = "Search failure patterns — shows tool errors, patterns, and context for self-healing analysis."
+    )]
+    async fn failure_patterns(&self, params: Parameters<FailurePatternsParams>) -> String {
+        let Some(ref fj) = self.failure_journal else {
+            return "Failure journal not available. Ensure the daemon is running.".to_string();
+        };
+        let limit = params.0.limit.unwrap_or(20);
+        healing::query_failures(fj, params.0.pattern.as_deref(), params.0.tool.as_deref(), limit)
+            .await
     }
 }
 

@@ -88,7 +88,28 @@ impl ContextBuilder {
     ///
     /// Reads `~/.ryvos/memory/YYYY-MM-DD.md` for the last `days` days
     /// and injects them into the context narrative.
-    pub fn with_daily_logs(mut self, workspace: &Path, days: usize) -> Self {
+    ///
+    /// When `mode` is `"relevant"`, only loads if `query_hint` contains
+    /// temporal keywords. When `"always"`, loads unconditionally.
+    /// When `"never"`, skips entirely.
+    pub fn with_daily_logs(
+        mut self,
+        workspace: &Path,
+        days: usize,
+        mode: &str,
+        query_hint: Option<&str>,
+    ) -> Self {
+        match mode {
+            "never" => return self,
+            "relevant" => {
+                if !query_hint_is_temporal(query_hint.unwrap_or("")) {
+                    debug!("Skipping daily logs — query not temporal");
+                    return self;
+                }
+            }
+            _ => {} // "always" or unknown → load
+        }
+
         let memory_dir = workspace.join("memory");
         if !memory_dir.exists() {
             return self;
@@ -290,21 +311,26 @@ pub struct ExtendedContext {
     pub viking_context: String,
     /// Safety lessons from past experience.
     pub safety_context: String,
+    /// The user's query, used as a hint for conditional context loading.
+    pub query_hint: String,
+    /// Daily log loading mode: "always", "relevant", "never".
+    pub daily_log_mode: String,
+    /// Number of daily log days to load.
+    pub daily_log_days: usize,
 }
 
 /// Build the default context for an agent run using the three-layer onion model.
 ///
 /// When `system_prompt_override` is `Some`, appends it via `with_instructions()`
-/// in Layer 3 (Focus).
+/// in Layer 3 (Focus). Uses "always" mode for daily logs (backwards compatible).
 pub fn build_default_context(
     workspace: &Path,
     system_prompt_override: Option<&str>,
 ) -> ChatMessage {
-    build_default_context_extended(
-        workspace,
-        system_prompt_override,
-        &ExtendedContext::default(),
-    )
+    let mut ext = ExtendedContext::default();
+    ext.daily_log_mode = "always".to_string();
+    ext.daily_log_days = 3;
+    build_default_context_extended(workspace, system_prompt_override, &ext)
 }
 
 /// Build the default context with optional Viking + safety layers.
@@ -313,14 +339,30 @@ pub fn build_default_context_extended(
     system_prompt_override: Option<&str>,
     extended: &ExtendedContext,
 ) -> ChatMessage {
+    let log_mode = if extended.daily_log_mode.is_empty() {
+        "always"
+    } else {
+        &extended.daily_log_mode
+    };
+    let log_days = if extended.daily_log_days == 0 {
+        3
+    } else {
+        extended.daily_log_days
+    };
+    let hint = if extended.query_hint.is_empty() {
+        None
+    } else {
+        Some(extended.query_hint.as_str())
+    };
+
     let mut builder = ContextBuilder::new()
         .with_base_prompt(DEFAULT_SYSTEM_PROMPT)
         // Layer 1: Identity
         .with_identity_layer(workspace)
         // Layer 2: Narrative
         .with_narrative_layer(workspace)
-        // Layer 2b: Daily logs (last 3 days)
-        .with_daily_logs(workspace, 3)
+        // Layer 2b: Daily logs (conditional on mode + query)
+        .with_daily_logs(workspace, log_days, log_mode, hint)
         // Layer 2.5: Recall (Viking sustained context)
         .with_recall_layer(&extended.viking_context)
         // Safety lessons
@@ -337,18 +379,16 @@ pub fn build_default_context_extended(
 /// Build context for a goal-driven agent run.
 ///
 /// Same three-layer structure but Layer 3 includes the goal description,
-/// constraints, and success criteria.
+/// constraints, and success criteria. Uses "always" mode for daily logs.
 pub fn build_goal_context(
     workspace: &Path,
     system_prompt_override: Option<&str>,
     goal: Option<&Goal>,
 ) -> ChatMessage {
-    build_goal_context_extended(
-        workspace,
-        system_prompt_override,
-        goal,
-        &ExtendedContext::default(),
-    )
+    let mut ext = ExtendedContext::default();
+    ext.daily_log_mode = "always".to_string();
+    ext.daily_log_days = 3;
+    build_goal_context_extended(workspace, system_prompt_override, goal, &ext)
 }
 
 /// Build goal context with optional Viking + safety layers.
@@ -358,14 +398,30 @@ pub fn build_goal_context_extended(
     goal: Option<&Goal>,
     extended: &ExtendedContext,
 ) -> ChatMessage {
+    let log_mode = if extended.daily_log_mode.is_empty() {
+        "always"
+    } else {
+        &extended.daily_log_mode
+    };
+    let log_days = if extended.daily_log_days == 0 {
+        3
+    } else {
+        extended.daily_log_days
+    };
+    let hint = if extended.query_hint.is_empty() {
+        None
+    } else {
+        Some(extended.query_hint.as_str())
+    };
+
     let mut builder = ContextBuilder::new()
         .with_base_prompt(DEFAULT_SYSTEM_PROMPT)
         // Layer 1: Identity
         .with_identity_layer(workspace)
         // Layer 2: Narrative
         .with_narrative_layer(workspace)
-        // Layer 2b: Daily logs (last 3 days)
-        .with_daily_logs(workspace, 3)
+        // Layer 2b: Daily logs (conditional on mode + query)
+        .with_daily_logs(workspace, log_days, log_mode, hint)
         // Layer 2.5: Recall (Viking sustained context)
         .with_recall_layer(&extended.viking_context)
         // Safety lessons
@@ -378,6 +434,49 @@ pub fn build_goal_context_extended(
     }
 
     builder.build()
+}
+
+/// Check if a query hint contains temporal keywords that suggest daily logs
+/// would be relevant to the user's request.
+fn query_hint_is_temporal(query: &str) -> bool {
+    let lower = query.to_lowercase();
+    const TEMPORAL_KEYWORDS: &[&str] = &[
+        "yesterday",
+        "last time",
+        "previous",
+        "earlier",
+        "history",
+        "log",
+        "logs",
+        "when did",
+        "when was",
+        "before",
+        "ago",
+        "past",
+        "recent",
+        "today",
+        "this morning",
+        "last night",
+        "last week",
+        "what happened",
+        "recap",
+        "summary of",
+        "daily",
+    ];
+    // Also match date patterns like 2026-04-15
+    if lower.chars().any(|c| c.is_ascii_digit())
+        && (lower.contains('-') || lower.contains('/'))
+        && lower.len() >= 8
+    {
+        // Rough check for date-like patterns (YYYY-MM-DD, MM/DD)
+        let has_date = lower
+            .split_whitespace()
+            .any(|w| w.len() >= 8 && w.chars().filter(|c| c.is_ascii_digit()).count() >= 4);
+        if has_date {
+            return true;
+        }
+    }
+    TEMPORAL_KEYWORDS.iter().any(|kw| lower.contains(kw))
 }
 
 #[cfg(test)]

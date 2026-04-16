@@ -7,6 +7,7 @@ edition.workspace = true
 ryvos-core.workspace = true
 ryvos-tools.workspace = true
 ryvos-memory.workspace = true
+ryvos-agent.workspace = true
 tokio.workspace = true
 futures.workspace = true
 serde.workspace = true

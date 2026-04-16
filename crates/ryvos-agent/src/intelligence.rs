@@ -202,20 +202,60 @@ pub async fn summarize_and_prune(
     }
 }
 
-/// Truncate tool output to fit within `max_tokens * 4` characters.
-/// Prefers truncating at a newline boundary. Appends `[truncated]` if shortened.
+/// Truncate tool output to fit within `max_tokens` using BPE token counting.
+/// Uses ratio-based estimation to find the truncation point efficiently (at most
+/// 2 BPE encode calls). Prefers truncating at a newline boundary.
 pub fn compact_tool_output(content: &str, max_tokens: usize) -> String {
-    let max_chars = max_tokens * 4;
-    if content.len() <= max_chars {
+    let actual_tokens = estimate_tokens(content);
+    if actual_tokens <= max_tokens {
         return content.to_string();
     }
 
-    let truncated = &content[..max_chars];
-    // Try to find the last newline within the truncated region
+    // Estimate character cutoff using the token ratio with a 5% safety margin.
+    let ratio = max_tokens as f64 / actual_tokens as f64;
+    let estimated_chars = (content.len() as f64 * ratio * 0.95) as usize;
+    let safe_end = estimated_chars.min(content.len());
+
+    // Ensure we don't cut in the middle of a multi-byte char.
+    let char_boundary = content.floor_char_boundary(safe_end);
+    let truncated = &content[..char_boundary];
+
+    // Prefer truncating at a newline boundary for readability.
     if let Some(nl_pos) = truncated.rfind('\n') {
-        format!("{}\n[truncated]", &content[..nl_pos])
+        let kept = &content[..nl_pos];
+        let kept_tokens = estimate_tokens(kept);
+        format!(
+            "{}\n[truncated — {} of {} tokens shown]",
+            kept, kept_tokens, actual_tokens
+        )
     } else {
-        format!("{}\n[truncated]", truncated)
+        let kept_tokens = estimate_tokens(truncated);
+        format!(
+            "{}\n[truncated — {} of {} tokens shown]",
+            truncated, kept_tokens, actual_tokens
+        )
+    }
+}
+
+/// Expire protected messages that have exceeded their TTL.
+///
+/// When `ttl` is 0, no messages are expired (infinite TTL). Otherwise, any
+/// protected message whose `created_at_turn` is more than `ttl` turns ago
+/// has its `protected` flag cleared, making it eligible for pruning.
+pub fn expire_protected_messages(messages: &mut [ChatMessage], current_turn: usize, ttl: usize) {
+    if ttl == 0 {
+        return; // 0 = never expire
+    }
+    for msg in messages.iter_mut() {
+        if let Some(ref mut meta) = msg.metadata {
+            if meta.protected {
+                if let Some(created) = meta.created_at_turn {
+                    if current_turn.saturating_sub(created) > ttl {
+                        meta.protected = false;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -329,11 +369,12 @@ mod tests {
 
     #[test]
     fn test_compact_tool_output_truncates() {
-        let content = "line1\nline2\nline3\nline4\nline5";
-        // max_tokens=2 → max_chars=8, content="line1\nli" → truncate at newline → "line1"
+        // Create a string that is definitely more than 2 tokens
+        let content = "This is a long line of text that should be truncated.\nSecond line here.\nThird line of output.";
         let result = compact_tool_output(content, 2);
-        assert!(result.contains("[truncated]"));
-        assert!(result.len() < content.len());
+        assert!(result.contains("[truncated"));
+        assert!(result.contains("tokens shown]"));
+        assert!(result.len() < content.len() + 50); // truncated + suffix
     }
 
     #[test]

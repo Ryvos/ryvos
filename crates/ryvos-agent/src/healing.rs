@@ -352,6 +352,135 @@ fn truncate_str(s: &str, max: usize) -> &str {
     }
 }
 
+// ── Public query methods for audit/inspection ──
+
+impl FailureJournal {
+    /// List decisions, paginated, ordered by timestamp DESC.
+    pub fn list_decisions(
+        &self,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<Decision>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, timestamp, session_id, turn, description, chosen_option, \
+                 alternatives_json, outcome_json \
+                 FROM decisions ORDER BY timestamp DESC LIMIT ?1 OFFSET ?2",
+            )
+            .map_err(|e| e.to_string())?;
+        let decisions = stmt
+            .query_map(rusqlite::params![limit, offset], |row| {
+                let alts_json: String = row.get(6)?;
+                let outcome_json: Option<String> = row.get(7)?;
+                Ok(Decision {
+                    id: row.get(0)?,
+                    timestamp: row
+                        .get::<_, String>(1)?
+                        .parse()
+                        .unwrap_or_else(|_| Utc::now()),
+                    session_id: row.get(2)?,
+                    turn: row.get(3)?,
+                    description: row.get(4)?,
+                    chosen_option: row.get(5)?,
+                    alternatives: serde_json::from_str(&alts_json).unwrap_or_default(),
+                    outcome: outcome_json.and_then(|j| serde_json::from_str(&j).ok()),
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(decisions)
+    }
+
+    /// Search failures by error pattern or tool name.
+    pub fn search_failures(
+        &self,
+        pattern: Option<&str>,
+        tool: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<FailureRecord>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let (sql, params_vec): (String, Vec<Box<dyn rusqlite::types::ToSql>>) =
+            match (pattern, tool) {
+                (Some(p), Some(t)) => (
+                    "SELECT timestamp, session_id, tool_name, error, input_summary, turn \
+                     FROM failure_journal \
+                     WHERE error LIKE ?1 AND tool_name = ?2 \
+                     ORDER BY timestamp DESC LIMIT ?3"
+                        .to_string(),
+                    vec![
+                        Box::new(format!("%{}%", p)),
+                        Box::new(t.to_string()),
+                        Box::new(limit as i64),
+                    ],
+                ),
+                (Some(p), None) => (
+                    "SELECT timestamp, session_id, tool_name, error, input_summary, turn \
+                     FROM failure_journal \
+                     WHERE error LIKE ?1 \
+                     ORDER BY timestamp DESC LIMIT ?2"
+                        .to_string(),
+                    vec![Box::new(format!("%{}%", p)), Box::new(limit as i64)],
+                ),
+                (None, Some(t)) => (
+                    "SELECT timestamp, session_id, tool_name, error, input_summary, turn \
+                     FROM failure_journal \
+                     WHERE tool_name = ?1 \
+                     ORDER BY timestamp DESC LIMIT ?2"
+                        .to_string(),
+                    vec![Box::new(t.to_string()), Box::new(limit as i64)],
+                ),
+                (None, None) => (
+                    "SELECT timestamp, session_id, tool_name, error, input_summary, turn \
+                     FROM failure_journal \
+                     ORDER BY timestamp DESC LIMIT ?1"
+                        .to_string(),
+                    vec![Box::new(limit as i64)],
+                ),
+            };
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params_vec.iter().map(|b| b.as_ref()).collect();
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let records = stmt
+            .query_map(params_refs.as_slice(), |row| {
+                Ok(FailureRecord {
+                    timestamp: row
+                        .get::<_, String>(0)?
+                        .parse()
+                        .unwrap_or_else(|_| Utc::now()),
+                    session_id: row.get(1)?,
+                    tool_name: row.get(2)?,
+                    error: row.get(3)?,
+                    input_summary: row.get(4)?,
+                    turn: row.get(5)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(records)
+    }
+
+    /// Count total failures in the journal.
+    pub fn count_failures(&self) -> Result<usize, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.query_row("SELECT COUNT(*) FROM failure_journal", [], |row| {
+            row.get::<_, usize>(0)
+        })
+        .map_err(|e| e.to_string())
+    }
+
+    /// Count total decisions in the journal.
+    pub fn count_decisions(&self) -> Result<usize, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.query_row("SELECT COUNT(*) FROM decisions", [], |row| {
+            row.get::<_, usize>(0)
+        })
+        .map_err(|e| e.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

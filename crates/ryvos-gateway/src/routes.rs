@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::extract::ws::{WebSocket, WebSocketUpgrade};
@@ -6,6 +7,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
+use serde_json::Value;
 use tracing::{debug, info};
 
 use ryvos_core::types::SessionId;
@@ -1470,6 +1472,183 @@ pub async fn heartbeat_history(
         .collect();
 
     Ok(Json(serde_json::json!({ "events": heartbeat_events })))
+}
+
+// ── Data Audit API ──────────────────────────────────────────────
+
+// GET /api/safety/lessons?search=&limit=20 — safety lesson browser
+pub async fn safety_lessons(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(20);
+    let sm = state
+        .safety_memory
+        .as_ref()
+        .ok_or(StatusCode::NOT_FOUND)?;
+    if let Some(search) = params.get("search") {
+        let lessons = sm
+            .search_lessons(search, limit)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let items: Vec<Value> = lessons
+            .iter()
+            .map(|l| {
+                serde_json::json!({
+                    "id": l.id,
+                    "action": l.action,
+                    "corrective_rule": l.corrective_rule,
+                    "confidence": l.confidence,
+                    "times_applied": l.times_applied,
+                    "reflection": l.reflection,
+                    "principle_violated": l.principle_violated,
+                    "timestamp": l.timestamp.to_rfc3339()
+                })
+            })
+            .collect();
+        Ok(Json(serde_json::json!({
+            "lessons": items,
+            "total": sm.count_lessons().await.unwrap_or(0)
+        })))
+    } else {
+        let lessons = sm
+            .list_lessons(limit, 0)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let items: Vec<Value> = lessons
+            .iter()
+            .map(|l| {
+                serde_json::json!({
+                    "id": l.id,
+                    "action": l.action,
+                    "corrective_rule": l.corrective_rule,
+                    "confidence": l.confidence,
+                    "times_applied": l.times_applied,
+                    "reflection": l.reflection,
+                    "principle_violated": l.principle_violated,
+                    "timestamp": l.timestamp.to_rfc3339()
+                })
+            })
+            .collect();
+        Ok(Json(serde_json::json!({
+            "lessons": items,
+            "total": sm.count_lessons().await.unwrap_or(0)
+        })))
+    }
+}
+
+// GET /api/decisions?session_id=&limit=20 — decision audit browser
+pub async fn list_decisions(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(20);
+    let fj = state
+        .failure_journal
+        .as_ref()
+        .ok_or(StatusCode::NOT_FOUND)?;
+    if let Some(session_id) = params.get("session_id") {
+        let decisions = fj
+            .load_decisions(session_id, limit)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let items: Vec<Value> = decisions
+            .iter()
+            .map(|d| {
+                serde_json::json!({
+                    "id": d.id,
+                    "timestamp": d.timestamp.to_rfc3339(),
+                    "session_id": d.session_id,
+                    "turn": d.turn,
+                    "description": d.description,
+                    "chosen_option": d.chosen_option,
+                    "alternatives": d.alternatives,
+                    "outcome": d.outcome,
+                })
+            })
+            .collect();
+        Ok(Json(serde_json::json!({
+            "decisions": items,
+            "total": fj.count_decisions().unwrap_or(0)
+        })))
+    } else {
+        let decisions = fj
+            .list_decisions(limit, 0)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let items: Vec<Value> = decisions
+            .iter()
+            .map(|d| {
+                serde_json::json!({
+                    "id": d.id,
+                    "timestamp": d.timestamp.to_rfc3339(),
+                    "session_id": d.session_id,
+                    "turn": d.turn,
+                    "description": d.description,
+                    "chosen_option": d.chosen_option,
+                    "alternatives": d.alternatives,
+                    "outcome": d.outcome,
+                })
+            })
+            .collect();
+        Ok(Json(serde_json::json!({
+            "decisions": items,
+            "total": fj.count_decisions().unwrap_or(0)
+        })))
+    }
+}
+
+// GET /api/failures?pattern=&tool=&limit=20 — failure journal browser
+pub async fn list_failures(
+    Authenticated(auth_result): Authenticated,
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, StatusCode> {
+    if !auth::has_viewer_access(&auth_result.role) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(20);
+    let fj = state
+        .failure_journal
+        .as_ref()
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let pattern = params.get("pattern").map(|s| s.as_str());
+    let tool = params.get("tool").map(|s| s.as_str());
+    let failures = fj
+        .search_failures(pattern, tool, limit)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let items: Vec<Value> = failures
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "timestamp": f.timestamp.to_rfc3339(),
+                "session_id": f.session_id,
+                "tool_name": f.tool_name,
+                "error": f.error,
+                "input_summary": f.input_summary,
+                "turn": f.turn,
+            })
+        })
+        .collect();
+    Ok(Json(serde_json::json!({
+        "failures": items,
+        "total": fj.count_failures().unwrap_or(0)
+    })))
 }
 
 fn dirs_home() -> std::path::PathBuf {

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use ryvos_agent::{AgentRuntime, ApprovalBroker, AuditTrail, SessionManager};
+use ryvos_agent::{AgentRuntime, ApprovalBroker, AuditTrail, FailureJournal, SafetyMemory, SessionManager};
 use ryvos_channels::WhatsAppWebhookHandle;
 use ryvos_core::config::IntegrationsConfig;
 use ryvos_core::config::{BudgetConfig, GatewayConfig};
@@ -28,4 +28,6 @@ pub struct AppState {
     pub session_meta: Option<Arc<SessionMetaStore>>,
     pub integration_store: Option<Arc<IntegrationStore>>,
     pub integrations_config: IntegrationsConfig,
+    pub safety_memory: Option<Arc<SafetyMemory>>,
+    pub failure_journal: Option<Arc<FailureJournal>>,
 }
