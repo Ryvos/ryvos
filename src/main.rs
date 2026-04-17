@@ -775,15 +775,14 @@ async fn main() -> anyhow::Result<()> {
             let safety_path = workspace.join("safety.db");
             match ryvos_agent::SafetyMemory::open(&safety_path) {
                 Ok(sm) => {
-                    let rt = tokio::runtime::Handle::current();
                     let lessons = if let Some(ref keyword) = search {
-                        rt.block_on(sm.search_lessons(keyword, limit))
+                        sm.search_lessons(keyword, limit).await
                     } else {
-                        rt.block_on(sm.list_lessons(limit, 0))
+                        sm.list_lessons(limit, 0).await
                     };
                     match lessons {
                         Ok(lessons) => {
-                            let total = rt.block_on(sm.count_lessons()).unwrap_or(0);
+                            let total = sm.count_lessons().await.unwrap_or(0);
                             println!("Safety Lessons ({} total, showing {}):", total, lessons.len());
                             if lessons.is_empty() {
                                 println!("  No lessons recorded yet.");
