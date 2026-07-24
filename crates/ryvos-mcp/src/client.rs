@@ -23,7 +23,7 @@ type McpConnection = RunningService<RoleClient, RyvosClientHandler>;
 
 /// Manages connections to multiple MCP servers.
 pub struct McpClientManager {
-    connections: Mutex<HashMap<String, McpConnection>>,
+    connections: Mutex<HashMap<String, std::sync::Arc<McpConnection>>>,
     server_configs: Mutex<HashMap<String, McpServerConfig>>,
     event_tx: broadcast::Sender<McpEvent>,
 }
@@ -103,7 +103,7 @@ impl McpClientManager {
         self.connections
             .lock()
             .await
-            .insert(name.to_string(), client);
+            .insert(name.to_string(), std::sync::Arc::new(client));
         self.server_configs
             .lock()
             .await
@@ -123,8 +123,10 @@ impl McpClientManager {
         // Remove old connection
         {
             let mut conns = self.connections.lock().await;
-            if let Some(mut old) = conns.remove(server_name) {
-                let _ = old.close().await;
+            if let Some(old) = conns.remove(server_name) {
+                if let Ok(mut old_inner) = std::sync::Arc::try_unwrap(old) {
+                    let _ = old_inner.close().await;
+                }
             }
         }
 
@@ -162,10 +164,13 @@ impl McpClientManager {
 
     /// List tools from a connected server.
     pub async fn list_tools(&self, server_name: &str) -> Result<Vec<McpTool>, RyvosError> {
-        let conns = self.connections.lock().await;
-        let client = conns
-            .get(server_name)
-            .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?;
+        let client = {
+            let conns = self.connections.lock().await;
+            conns
+                .get(server_name)
+                .cloned()
+                .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?
+        };
 
         let tools = client.list_all_tools().await.map_err(|e| {
             RyvosError::Mcp(format!(
@@ -211,10 +216,13 @@ impl McpClientManager {
         tool_name: &str,
         arguments: Option<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<String, RyvosError> {
-        let conns = self.connections.lock().await;
-        let client = conns
-            .get(server_name)
-            .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?;
+        let client = {
+            let conns = self.connections.lock().await;
+            conns
+                .get(server_name)
+                .cloned()
+                .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?
+        };
 
         let params = CallToolRequestParams {
             name: tool_name.to_string().into(),
@@ -247,10 +255,13 @@ impl McpClientManager {
 
     /// List resources from a connected server.
     pub async fn list_resources(&self, server_name: &str) -> Result<Vec<Resource>, RyvosError> {
-        let conns = self.connections.lock().await;
-        let client = conns
-            .get(server_name)
-            .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?;
+        let client = {
+            let conns = self.connections.lock().await;
+            conns
+                .get(server_name)
+                .cloned()
+                .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?
+        };
 
         let resources = client.list_all_resources().await.map_err(|e| {
             RyvosError::Mcp(format!(
@@ -265,10 +276,13 @@ impl McpClientManager {
 
     /// Read a resource by URI from a connected server.
     pub async fn read_resource(&self, server_name: &str, uri: &str) -> Result<String, RyvosError> {
-        let conns = self.connections.lock().await;
-        let client = conns
-            .get(server_name)
-            .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?;
+        let client = {
+            let conns = self.connections.lock().await;
+            conns
+                .get(server_name)
+                .cloned()
+                .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?
+        };
 
         let params = ReadResourceRequestParams {
             uri: uri.to_string(),
@@ -298,10 +312,13 @@ impl McpClientManager {
 
     /// Subscribe to resource changes on a server.
     pub async fn subscribe_resource(&self, server_name: &str, uri: &str) -> Result<(), RyvosError> {
-        let conns = self.connections.lock().await;
-        let client = conns
-            .get(server_name)
-            .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?;
+        let client = {
+            let conns = self.connections.lock().await;
+            conns
+                .get(server_name)
+                .cloned()
+                .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?
+        };
 
         let params = SubscribeRequestParams {
             uri: uri.to_string(),
@@ -323,10 +340,13 @@ impl McpClientManager {
 
     /// List prompts from a connected server.
     pub async fn list_prompts(&self, server_name: &str) -> Result<Vec<Prompt>, RyvosError> {
-        let conns = self.connections.lock().await;
-        let client = conns
-            .get(server_name)
-            .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?;
+        let client = {
+            let conns = self.connections.lock().await;
+            conns
+                .get(server_name)
+                .cloned()
+                .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?
+        };
 
         let prompts = client.list_all_prompts().await.map_err(|e| {
             RyvosError::Mcp(format!(
@@ -346,10 +366,13 @@ impl McpClientManager {
         prompt_name: &str,
         arguments: Option<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<Vec<PromptMessage>, RyvosError> {
-        let conns = self.connections.lock().await;
-        let client = conns
-            .get(server_name)
-            .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?;
+        let client = {
+            let conns = self.connections.lock().await;
+            conns
+                .get(server_name)
+                .cloned()
+                .ok_or_else(|| RyvosError::Mcp(format!("Server '{}' not connected", server_name)))?
+        };
 
         let params = GetPromptRequestParams {
             name: prompt_name.to_string(),
