@@ -70,7 +70,7 @@ impl App {
                 self.is_running = true;
                 self.streaming_text.clear();
             }
-            AgentEvent::TextDelta(text) => {
+            AgentEvent::TextDelta { text, .. } => {
                 self.streaming_text.push_str(&text);
             }
             AgentEvent::ToolStart { name, .. } => {
@@ -88,7 +88,7 @@ impl App {
                     text: format!("Running: {}", name),
                 });
             }
-            AgentEvent::ToolEnd { name, result } => {
+            AgentEvent::ToolEnd { name, result, .. } => {
                 self.active_tool = None;
                 let status = if result.is_error { "ERROR" } else { "ok" };
                 let content = if result.content.len() > 200 {

@@ -355,7 +355,7 @@ async fn run_channel_message(
     let mut response_text = String::new();
     loop {
         match event_rx.recv().await {
-            Ok(AgentEvent::TextDelta(delta)) => {
+            Ok(AgentEvent::TextDelta { text: delta, .. }) => {
                 response_text.push_str(&delta);
             }
             Ok(AgentEvent::ToolStart { ref name, .. }) => {
@@ -389,6 +389,7 @@ async fn run_channel_message(
             Ok(AgentEvent::ToolEnd {
                 ref name,
                 ref result,
+                ..
             }) if result.is_error => {
                 if !on_tool_error_cmds.is_empty() {
                     let cmds = on_tool_error_cmds.clone();

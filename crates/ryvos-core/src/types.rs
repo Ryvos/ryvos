@@ -189,7 +189,7 @@ pub enum StopReason {
 /// A streaming delta from the LLM.
 #[derive(Debug, Clone)]
 pub enum StreamDelta {
-    /// A chunk of text content.
+    /// Incremental text output from the model.
     TextDelta(String),
 
     /// A chunk of thinking/reasoning content.
@@ -430,14 +430,15 @@ pub enum AgentEvent {
     /// Agent run started.
     RunStarted { session_id: SessionId },
     /// Text streaming from LLM.
-    TextDelta(String),
+    TextDelta { session_id: SessionId, text: String },
     /// Tool execution started.
     ToolStart {
+        session_id: SessionId,
         name: String,
         input: serde_json::Value,
     },
     /// Tool execution completed.
-    ToolEnd { name: String, result: ToolResult },
+    ToolEnd { session_id: SessionId, name: String, result: ToolResult },
     /// Agent turn completed.
     TurnComplete { turn: usize },
     /// Agent run completed.
