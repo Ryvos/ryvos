@@ -983,7 +983,7 @@ async fn main() -> anyhow::Result<()> {
             // Integration store for OAuth tokens
             let integration_store = Arc::new(
                 ryvos_memory::IntegrationStore::open(&workspace.join("integrations.db"))
-                    .expect("Failed to open integration store"),
+                    .map_err(|e| anyhow::anyhow!("Failed to open integration store: {}", e))?,
             );
             server.set_integration_store(integration_store);
             server.set_integrations_config(config.integrations.clone());
@@ -1058,7 +1058,7 @@ async fn main() -> anyhow::Result<()> {
             std::fs::create_dir_all(&data_dir).ok();
             let session_meta = Arc::new(
                 ryvos_memory::SessionMetaStore::open(&data_dir.join("session_meta.db"))
-                    .expect("Failed to open session meta store"),
+                    .map_err(|e| anyhow::anyhow!("Failed to open session meta store: {}", e))?,
             );
 
             // Hydrate in-memory sessions from persistent store
@@ -1145,7 +1145,7 @@ async fn main() -> anyhow::Result<()> {
                 // Integration store for OAuth tokens
                 let integration_store = Arc::new(
                     ryvos_memory::IntegrationStore::open(&workspace.join("integrations.db"))
-                        .expect("Failed to open integration store"),
+                        .map_err(|e| anyhow::anyhow!("Failed to open integration store: {}", e))?,
                 );
                 server.set_integration_store(integration_store);
                 server.set_integrations_config(config.integrations.clone());
