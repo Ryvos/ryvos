@@ -7,13 +7,25 @@ use ryvos_core::traits::Tool;
 use ryvos_core::types::{ToolContext, ToolResult};
 use serde::Deserialize;
 
-fn resolve(p: &str, wd: &std::path::Path) -> PathBuf {
+fn resolve(p: &str, ctx: &ToolContext) -> Result<PathBuf> {
     let path = PathBuf::from(p);
-    if path.is_absolute() {
+    let resolved = if path.is_absolute() {
         path
     } else {
-        wd.join(path)
+        ctx.working_dir.join(path)
+    };
+
+    if let Some(ref sb) = ctx.sandbox_config {
+        if sb.enabled {
+            let canon_resolved = std::fs::canonicalize(&resolved).unwrap_or_else(|_| resolved.clone());
+            let canon_wd = std::fs::canonicalize(&ctx.working_dir).unwrap_or_else(|_| ctx.working_dir.clone());
+            if !canon_resolved.starts_with(&canon_wd) {
+                return Err(RyvosError::Security(format!("Sandbox escape attempted: path {} is outside working directory", p)));
+            }
+        }
     }
+    
+    Ok(resolved)
 }
 
 // ── FileInfoTool ────────────────────────────────────────────────
@@ -50,7 +62,7 @@ impl Tool for FileInfoTool {
         Box::pin(async move {
             let p: FileInfoInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
-            let path = resolve(&p.path, &ctx.working_dir);
+            let path = resolve(&p.path, &ctx)?;
             let meta = tokio::fs::metadata(&path)
                 .await
                 .map_err(|e| RyvosError::ToolExecution {
@@ -116,8 +128,8 @@ impl Tool for FileCopyTool {
         Box::pin(async move {
             let p: FileCopyInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
-            let src = resolve(&p.source, &ctx.working_dir);
-            let dst = resolve(&p.destination, &ctx.working_dir);
+            let src = resolve(&p.source, &ctx)?;
+            let dst = resolve(&p.destination, &ctx)?;
             if p.recursive || src.is_dir() {
                 let output = tokio::process::Command::new("cp")
                     .args(["-r", &src.to_string_lossy(), &dst.to_string_lossy()])
@@ -184,8 +196,8 @@ impl Tool for FileMoveTool {
         Box::pin(async move {
             let p: FileMoveInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
-            let src = resolve(&p.source, &ctx.working_dir);
-            let dst = resolve(&p.destination, &ctx.working_dir);
+            let src = resolve(&p.source, &ctx)?;
+            let dst = resolve(&p.destination, &ctx)?;
             tokio::fs::rename(&src, &dst)
                 .await
                 .map_err(|e| RyvosError::ToolExecution {
@@ -235,7 +247,7 @@ impl Tool for FileDeleteTool {
         Box::pin(async move {
             let p: FileDeleteInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
-            let path = resolve(&p.path, &ctx.working_dir);
+            let path = resolve(&p.path, &ctx)?;
             let meta = tokio::fs::metadata(&path)
                 .await
                 .map_err(|e| RyvosError::ToolExecution {
@@ -290,10 +302,10 @@ impl Tool for DirListTool {
         Box::pin(async move {
             let p: DirListInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
-            let dir = p
-                .path
-                .map(|d| resolve(&d, &ctx.working_dir))
-                .unwrap_or_else(|| ctx.working_dir.clone());
+            let dir = match p.path {
+                Some(d) => resolve(&d, &ctx)?,
+                None => ctx.working_dir.clone(),
+            };
             let mut entries =
                 tokio::fs::read_dir(&dir)
                     .await
@@ -370,7 +382,7 @@ impl Tool for DirCreateTool {
         Box::pin(async move {
             let p: DirCreateInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
-            let path = resolve(&p.path, &ctx.working_dir);
+            let path = resolve(&p.path, &ctx)?;
             tokio::fs::create_dir_all(&path)
                 .await
                 .map_err(|e| RyvosError::ToolExecution {
@@ -416,7 +428,7 @@ impl Tool for FileWatchTool {
         Box::pin(async move {
             let p: FileWatchInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
-            let path = resolve(&p.path, &ctx.working_dir);
+            let path = resolve(&p.path, &ctx)?;
             match tokio::fs::metadata(&path).await {
                 Ok(meta) => {
                     let mtime = meta
@@ -480,8 +492,8 @@ impl Tool for ArchiveCreateTool {
         Box::pin(async move {
             let p: ArchiveCreateInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
-            let src = resolve(&p.source, &ctx.working_dir);
-            let out = resolve(&p.output, &ctx.working_dir);
+            let src = resolve(&p.source, &ctx)?;
+            let out = resolve(&p.output, &ctx)?;
             let output = if p.format == "zip" {
                 tokio::process::Command::new("zip")
                     .args(["-r", &out.to_string_lossy(), &src.to_string_lossy()])
@@ -558,11 +570,11 @@ impl Tool for ArchiveExtractTool {
         Box::pin(async move {
             let p: ArchiveExtractInput = serde_json::from_value(input)
                 .map_err(|e| RyvosError::ToolValidation(e.to_string()))?;
-            let archive = resolve(&p.archive, &ctx.working_dir);
-            let dest = p
-                .destination
-                .map(|d| resolve(&d, &ctx.working_dir))
-                .unwrap_or_else(|| ctx.working_dir.clone());
+            let archive = resolve(&p.archive, &ctx)?;
+            let dest = match p.destination {
+                Some(d) => resolve(&d, &ctx)?,
+                None => ctx.working_dir.clone(),
+            };
             let ext = archive.to_string_lossy();
             let output = if ext.ends_with(".zip") {
                 tokio::process::Command::new("unzip")
