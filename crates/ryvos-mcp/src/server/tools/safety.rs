@@ -1,7 +1,11 @@
 use ryvos_agent::SafetyMemory;
 use std::sync::Arc;
 
-pub async fn list_lessons(safety: &Arc<SafetyMemory>, search: Option<&str>, limit: usize) -> String {
+pub async fn list_lessons(
+    safety: &Arc<SafetyMemory>,
+    search: Option<&str>,
+    limit: usize,
+) -> String {
     let lessons = if let Some(keyword) = search {
         safety.search_lessons(keyword, limit).await
     } else {
@@ -14,7 +18,11 @@ pub async fn list_lessons(safety: &Arc<SafetyMemory>, search: Option<&str>, limi
                 "No safety lessons recorded yet.".to_string()
             } else {
                 let total = safety.count_lessons().await.unwrap_or(0);
-                let mut lines = vec![format!("Safety lessons ({} total, showing {}):", total, lessons.len())];
+                let mut lines = vec![format!(
+                    "Safety lessons ({} total, showing {}):",
+                    total,
+                    lessons.len()
+                )];
                 for l in &lessons {
                     lines.push(format!(
                         "- [confidence:{:.0}%, applied:{}x] {}\n  Rule: {}\n  Recorded: {}",

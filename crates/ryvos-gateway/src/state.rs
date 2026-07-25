@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use ryvos_agent::{AgentRuntime, ApprovalBroker, AuditTrail, FailureJournal, SafetyMemory, SessionManager};
+use ryvos_agent::{
+    AgentRuntime, ApprovalBroker, AuditTrail, FailureJournal, SafetyMemory, SessionManager,
+};
 use ryvos_channels::WhatsAppWebhookHandle;
 use ryvos_core::config::IntegrationsConfig;
 use ryvos_core::config::{BudgetConfig, GatewayConfig};

@@ -237,8 +237,13 @@ impl RyvosServerHandler {
             return "Failure journal not available. Ensure the daemon is running.".to_string();
         };
         let limit = params.0.limit.unwrap_or(20);
-        healing::query_failures(fj, params.0.pattern.as_deref(), params.0.tool.as_deref(), limit)
-            .await
+        healing::query_failures(
+            fj,
+            params.0.pattern.as_deref(),
+            params.0.tool.as_deref(),
+            limit,
+        )
+        .await
     }
 }
 

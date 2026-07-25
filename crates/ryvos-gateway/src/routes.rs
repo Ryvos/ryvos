@@ -1415,9 +1415,7 @@ pub async fn list_skills(
                     let manifest_path = path.join("skill.toml");
                     if manifest_path.exists() {
                         if let Ok(content) = std::fs::read_to_string(&manifest_path) {
-                            if let Ok(manifest) =
-                                toml::from_str::<toml::Value>(&content)
-                            {
+                            if let Ok(manifest) = toml::from_str::<toml::Value>(&content) {
                                 skills.push(serde_json::json!({
                                     "name": manifest.get("name").and_then(|v| v.as_str()).unwrap_or("unknown"),
                                     "description": manifest.get("description").and_then(|v| v.as_str()).unwrap_or(""),
@@ -1489,10 +1487,7 @@ pub async fn safety_lessons(
         .get("limit")
         .and_then(|v| v.parse().ok())
         .unwrap_or(20);
-    let sm = state
-        .safety_memory
-        .as_ref()
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let sm = state.safety_memory.as_ref().ok_or(StatusCode::NOT_FOUND)?;
     if let Some(search) = params.get("search") {
         let lessons = sm
             .search_lessons(search, limit)
