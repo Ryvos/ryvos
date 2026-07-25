@@ -59,34 +59,42 @@ pub async fn handle_connection(
             while let Ok(event) = event_rx.recv().await {
                 let server_event =
                     match &event {
-                        AgentEvent::TextDelta(text) => {
+                        AgentEvent::TextDelta { session_id, text } => {
                             let subs = event_subs.lock().await;
-                            if subs.is_empty() {
+                            if !subs.iter().any(|s| s == "*" || s == &session_id.0) {
                                 continue;
                             }
-                            let sid = subs.last().unwrap().clone();
-                            Some(ServerEvent::new(sid, "text_delta").with_text(text.clone()))
-                        }
-                        AgentEvent::ToolStart { name, input } => {
-                            let subs = event_subs.lock().await;
-                            if subs.is_empty() {
-                                continue;
-                            }
-                            let sid = subs.last().unwrap().clone();
                             Some(
-                                ServerEvent::new(sid, "tool_start")
+                                ServerEvent::new(session_id.to_string(), "text_delta")
+                                    .with_text(text.clone()),
+                            )
+                        }
+                        AgentEvent::ToolStart {
+                            session_id,
+                            name,
+                            input,
+                        } => {
+                            let subs = event_subs.lock().await;
+                            if !subs.iter().any(|s| s == "*" || s == &session_id.0) {
+                                continue;
+                            }
+                            Some(
+                                ServerEvent::new(session_id.to_string(), "tool_start")
                                     .with_tool(name.clone())
                                     .with_data(input.clone()),
                             )
                         }
-                        AgentEvent::ToolEnd { name, result } => {
+                        AgentEvent::ToolEnd {
+                            session_id,
+                            name,
+                            result,
+                        } => {
                             let subs = event_subs.lock().await;
-                            if subs.is_empty() {
+                            if !subs.iter().any(|s| s == "*" || s == &session_id.0) {
                                 continue;
                             }
-                            let sid = subs.last().unwrap().clone();
                             Some(
-                                ServerEvent::new(sid, "tool_end")
+                                ServerEvent::new(session_id.to_string(), "tool_end")
                                     .with_tool(name.clone())
                                     .with_data(serde_json::json!({
                                         "content": result.content,

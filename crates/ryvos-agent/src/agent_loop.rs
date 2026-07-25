@@ -559,7 +559,10 @@ impl AgentRuntime {
 
                 match delta? {
                     StreamDelta::TextDelta(text) => {
-                        self.event_bus.publish(AgentEvent::TextDelta(text.clone()));
+                        self.event_bus.publish(AgentEvent::TextDelta {
+                            session_id: self.session_id.clone(),
+                            text: text.clone(),
+                        });
                         text_content.push_str(&text);
                     }
                     StreamDelta::ThinkingDelta(text) => {
@@ -609,6 +612,7 @@ impl AgentRuntime {
                             "CLI tool executed (audit logged)"
                         );
                         self.event_bus.publish(AgentEvent::ToolStart {
+                            session_id: self.session_id.clone(),
                             name: tool_name.clone(),
                             input: serde_json::json!({ "summary": &input_summary }),
                         });
@@ -679,6 +683,7 @@ impl AgentRuntime {
                         }
 
                         self.event_bus.publish(AgentEvent::ToolEnd {
+                            session_id: self.session_id.clone(),
                             name: tool_name.clone(),
                             result: ToolResult::success("[executed by CLI provider]"),
                         });
@@ -992,6 +997,7 @@ impl AgentRuntime {
 
             for (tc, input) in tool_calls.iter().zip(parsed_inputs.iter()) {
                 self.event_bus.publish(AgentEvent::ToolStart {
+                    session_id: self.session_id.clone(),
                     name: tc.name.clone(),
                     input: input.clone(),
                 });
@@ -1075,6 +1081,7 @@ impl AgentRuntime {
                 };
 
                 self.event_bus.publish(AgentEvent::ToolEnd {
+                    session_id: self.session_id.clone(),
                     name: name.clone(),
                     result: compacted_result,
                 });
