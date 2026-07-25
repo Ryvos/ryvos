@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use rusqlite::{params, Connection};
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tracing::debug;
 
 use ryvos_core::error::{Result, RyvosError};
@@ -13,7 +13,7 @@ use crate::embeddings::cosine_similarity;
 
 /// SQLite-backed session store with FTS5 full-text search.
 pub struct SqliteStore {
-    conn: Mutex<Connection>,
+    conn: Arc<Mutex<Connection>>,
 }
 
 impl SqliteStore {
@@ -115,7 +115,7 @@ impl SqliteStore {
         .map_err(|e| RyvosError::Database(e.to_string()))?;
 
         Ok(Self {
-            conn: Mutex::new(conn),
+            conn: Arc::new(Mutex::new(conn)),
         })
     }
 }
@@ -218,21 +218,25 @@ impl SessionStore for SqliteStore {
             })
             .collect();
 
+        let conn = self.conn.clone();
         Box::pin(async move {
-            let conn = self
-                .conn
-                .lock()
-                .map_err(|e| RyvosError::Database(e.to_string()))?;
+            tokio::task::spawn_blocking(move || {
+                let conn = conn
+                    .lock()
+                    .map_err(|e| RyvosError::Database(e.to_string()))?;
 
-            for (role, content, timestamp) in &msgs {
-                conn.execute(
-                    "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?1, ?2, ?3, ?4)",
-                    params![sid, role, content, timestamp],
-                )
-                .map_err(|e| RyvosError::Database(e.to_string()))?;
-            }
+                for (role, content, timestamp) in &msgs {
+                    conn.execute(
+                        "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?1, ?2, ?3, ?4)",
+                        params![sid, role, content, timestamp],
+                    )
+                    .map_err(|e| RyvosError::Database(e.to_string()))?;
+                }
 
-            Ok(())
+                Ok(())
+            })
+            .await
+            .unwrap_or_else(|e| Err(RyvosError::Database(e.to_string())))
         })
     }
 
@@ -243,102 +247,118 @@ impl SessionStore for SqliteStore {
     ) -> BoxFuture<'_, Result<Vec<ChatMessage>>> {
         let sid = sid.0.clone();
 
+        let conn = self.conn.clone();
         Box::pin(async move {
-            let conn = self
-                .conn
-                .lock()
-                .map_err(|e| RyvosError::Database(e.to_string()))?;
+            tokio::task::spawn_blocking(move || {
+                let conn = conn
+                    .lock()
+                    .map_err(|e| RyvosError::Database(e.to_string()))?;
 
-            let mut stmt = conn
-                .prepare(
-                    "SELECT role, content, timestamp FROM messages
-                     WHERE session_id = ?1
-                     ORDER BY id ASC
-                     LIMIT ?2",
-                )
-                .map_err(|e| RyvosError::Database(e.to_string()))?;
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT role, content, timestamp FROM messages
+                         WHERE session_id = ?1
+                         ORDER BY id ASC
+                         LIMIT ?2",
+                    )
+                    .map_err(|e| RyvosError::Database(e.to_string()))?;
 
-            let rows = stmt
-                .query_map(params![sid, limit as i64], |row| {
-                    let role: String = row.get(0)?;
-                    let content_str: String = row.get(1)?;
-                    let ts_str: String = row.get(2)?;
-                    Ok((role, content_str, ts_str))
-                })
-                .map_err(|e| RyvosError::Database(e.to_string()))?;
+                let rows = stmt
+                    .query_map(params![sid, limit as i64], |row| {
+                        let role: String = row.get(0)?;
+                        let content_str: String = row.get(1)?;
+                        let ts_str: String = row.get(2)?;
+                        Ok((role, content_str, ts_str))
+                    })
+                    .map_err(|e| RyvosError::Database(e.to_string()))?;
 
-            let mut messages = Vec::new();
-            for row in rows {
-                let (role, content_str, ts_str) =
-                    row.map_err(|e| RyvosError::Database(e.to_string()))?;
+                let mut messages = Vec::new();
+                for row in rows {
+                    let (role, content_str, ts_str) =
+                        row.map_err(|e| RyvosError::Database(e.to_string()))?;
 
-                let role = match role.as_str() {
-                    "system" => ryvos_core::types::Role::System,
-                    "user" => ryvos_core::types::Role::User,
-                    "assistant" => ryvos_core::types::Role::Assistant,
-                    "tool" => ryvos_core::types::Role::Tool,
-                    _ => ryvos_core::types::Role::User,
-                };
+                    let role = match role.as_str() {
+                        "system" => ryvos_core::types::Role::System,
+                        "user" => ryvos_core::types::Role::User,
+                        "assistant" => ryvos_core::types::Role::Assistant,
+                        "tool" => ryvos_core::types::Role::Tool,
+                        _ => ryvos_core::types::Role::User,
+                    };
 
-                let content = serde_json::from_str(&content_str).unwrap_or_default();
-                let timestamp = DateTime::parse_from_rfc3339(&ts_str)
-                    .ok()
-                    .map(|dt| dt.with_timezone(&Utc));
+                    let content = serde_json::from_str(&content_str).unwrap_or_default();
+                    let timestamp = DateTime::parse_from_rfc3339(&ts_str)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&Utc));
 
-                messages.push(ChatMessage {
-                    role,
-                    content,
-                    timestamp,
-                    metadata: None,
-                });
-            }
+                    messages.push(ChatMessage {
+                        role,
+                        content,
+                        timestamp,
+                        metadata: None,
+                    });
+                }
 
-            Ok(messages)
+                Ok(messages)
+            })
+            .await
+            .unwrap_or_else(|e| Err(RyvosError::Database(e.to_string())))
         })
     }
 
     fn search(&self, query: &str, limit: usize) -> BoxFuture<'_, Result<Vec<SearchResult>>> {
         let query = query.to_string();
 
+        let conn = self.conn.clone();
         Box::pin(async move {
-            let conn = self
-                .conn
-                .lock()
-                .map_err(|e| RyvosError::Database(e.to_string()))?;
+            tokio::task::spawn_blocking(move || {
+                let conn = conn
+                    .lock()
+                    .map_err(|e| RyvosError::Database(e.to_string()))?;
 
-            let mut stmt = conn
-                .prepare(
-                    "SELECT session_id, role, content, timestamp, rank
-                     FROM messages_fts
-                     WHERE messages_fts MATCH ?1
-                     ORDER BY rank
-                     LIMIT ?2",
-                )
-                .map_err(|e| RyvosError::Database(e.to_string()))?;
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT session_id, role, content, timestamp, rank
+                         FROM messages_fts
+                         WHERE messages_fts MATCH ?1
+                         ORDER BY rank
+                         LIMIT ?2",
+                    )
+                    .map_err(|e| RyvosError::Database(e.to_string()))?;
 
-            let rows = stmt
-                .query_map(params![query, limit as i64], |row| {
-                    Ok(SearchResult {
-                        session_id: row.get(0)?,
-                        role: row.get(1)?,
-                        content: row.get(2)?,
-                        timestamp: {
-                            let ts_str: String = row.get(3)?;
-                            DateTime::parse_from_rfc3339(&ts_str)
-                                .map(|dt| dt.with_timezone(&Utc))
-                                .unwrap_or_else(|_| Utc::now())
-                        },
-                        rank: row.get(4)?,
+                let rows = stmt
+                    .query_map(params![query, limit as i64], |row| {
+                        let sid_str: String = row.get(0)?;
+                        let role_str: String = row.get(1)?;
+                        let content_str: String = row.get(2)?;
+                        let ts_str: String = row.get(3)?;
+                        let similarity: f32 = row.get(4)?;
+                        Ok((sid_str, role_str, content_str, ts_str, similarity))
                     })
-                })
-                .map_err(|e| RyvosError::Database(e.to_string()))?;
+                    .map_err(|e| RyvosError::Database(e.to_string()))?;
 
-            let mut results = Vec::new();
-            for row in rows {
-                results.push(row.map_err(|e| RyvosError::Database(e.to_string()))?);
-            }
+                let mut results = Vec::new();
+                for row in rows {
+                    let (sid_str, role_str, content_str, ts_str, similarity) =
+                        row.map_err(|e| RyvosError::Database(e.to_string()))?;
 
-            Ok(results)
+                    let content = serde_json::from_str(&content_str).unwrap_or_default();
+                    let timestamp = DateTime::parse_from_rfc3339(&ts_str)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&Utc));
+
+                    results.push(SearchResult {
+                        session_id: SessionId::from_string(&sid_str),
+                        role: role_str,
+                        content,
+                        timestamp,
+                        similarity,
+                    });
+                }
+
+                Ok(results)
+            })
+            .await
+            .unwrap_or_else(|e| Err(RyvosError::Database(e.to_string())))
         })
     }
 }
