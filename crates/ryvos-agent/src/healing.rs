@@ -356,11 +356,7 @@ fn truncate_str(s: &str, max: usize) -> &str {
 
 impl FailureJournal {
     /// List decisions, paginated, ordered by timestamp DESC.
-    pub fn list_decisions(
-        &self,
-        limit: usize,
-        offset: usize,
-    ) -> Result<Vec<Decision>, String> {
+    pub fn list_decisions(&self, limit: usize, offset: usize) -> Result<Vec<Decision>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare(

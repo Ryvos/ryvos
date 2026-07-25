@@ -783,7 +783,11 @@ async fn main() -> anyhow::Result<()> {
                     match lessons {
                         Ok(lessons) => {
                             let total = sm.count_lessons().await.unwrap_or(0);
-                            println!("Safety Lessons ({} total, showing {}):", total, lessons.len());
+                            println!(
+                                "Safety Lessons ({} total, showing {}):",
+                                total,
+                                lessons.len()
+                            );
                             if lessons.is_empty() {
                                 println!("  No lessons recorded yet.");
                             }
@@ -815,49 +819,44 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Decisions { session, limit }) => {
             let journal_path = workspace.join("healing.db");
             match ryvos_agent::FailureJournal::open(&journal_path) {
-                Ok(journal) => {
-                    match journal.list_decisions(limit, 0) {
-                        Ok(decisions) => {
-                            let filtered: Vec<_> = if let Some(ref sid) = session {
-                                decisions
-                                    .into_iter()
-                                    .filter(|d| d.session_id.starts_with(sid))
-                                    .collect()
-                            } else {
-                                decisions
-                            };
-                            let total = journal.count_decisions().unwrap_or(0);
-                            println!(
-                                "Agent Decisions ({} total, showing {}):",
-                                total,
-                                filtered.len()
-                            );
-                            if filtered.is_empty() {
-                                println!("  No decisions recorded yet.");
-                            }
-                            for d in &filtered {
-                                println!("  ──────────────────────────────────────");
-                                println!("  Decision:  {}", d.description);
-                                println!("  Chosen:    {}", d.chosen_option);
-                                if !d.alternatives.is_empty() {
-                                    let alts: Vec<_> =
-                                        d.alternatives.iter().map(|a| a.name.as_str()).collect();
-                                    println!("  Alternatives: {}", alts.join(", "));
-                                }
-                                println!(
-                                    "  Session:   {}  Turn: {}",
-                                    &d.session_id[..8.min(d.session_id.len())],
-                                    d.turn
-                                );
-                                println!(
-                                    "  Time:      {}",
-                                    d.timestamp.format("%Y-%m-%d %H:%M")
-                                );
-                            }
+                Ok(journal) => match journal.list_decisions(limit, 0) {
+                    Ok(decisions) => {
+                        let filtered: Vec<_> = if let Some(ref sid) = session {
+                            decisions
+                                .into_iter()
+                                .filter(|d| d.session_id.starts_with(sid))
+                                .collect()
+                        } else {
+                            decisions
+                        };
+                        let total = journal.count_decisions().unwrap_or(0);
+                        println!(
+                            "Agent Decisions ({} total, showing {}):",
+                            total,
+                            filtered.len()
+                        );
+                        if filtered.is_empty() {
+                            println!("  No decisions recorded yet.");
                         }
-                        Err(e) => eprintln!("Failed to query decisions: {}", e),
+                        for d in &filtered {
+                            println!("  ──────────────────────────────────────");
+                            println!("  Decision:  {}", d.description);
+                            println!("  Chosen:    {}", d.chosen_option);
+                            if !d.alternatives.is_empty() {
+                                let alts: Vec<_> =
+                                    d.alternatives.iter().map(|a| a.name.as_str()).collect();
+                                println!("  Alternatives: {}", alts.join(", "));
+                            }
+                            println!(
+                                "  Session:   {}  Turn: {}",
+                                &d.session_id[..8.min(d.session_id.len())],
+                                d.turn
+                            );
+                            println!("  Time:      {}", d.timestamp.format("%Y-%m-%d %H:%M"));
+                        }
                     }
-                }
+                    Err(e) => eprintln!("Failed to query decisions: {}", e),
+                },
                 Err(e) => eprintln!("Failed to open healing journal: {}", e),
             }
             return Ok(());
@@ -897,10 +896,7 @@ async fn main() -> anyhow::Result<()> {
                                     &f.session_id[..8.min(f.session_id.len())],
                                     f.turn
                                 );
-                                println!(
-                                    "  Time:    {}",
-                                    f.timestamp.format("%Y-%m-%d %H:%M")
-                                );
+                                println!("  Time:    {}", f.timestamp.format("%Y-%m-%d %H:%M"));
                             }
                         }
                         Err(e) => eprintln!("Failed to query failures: {}", e),
