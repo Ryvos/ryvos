@@ -899,10 +899,9 @@ impl McpJsonServerEntry {
                 args: self.args.clone(),
                 env: self.env.clone(),
             }
-        } else if let Some(ref url) = self.url {
-            McpTransport::Sse { url: url.clone() }
         } else {
-            return None;
+            let url = self.url.as_ref()?;
+            McpTransport::Sse { url: url.clone() }
         };
 
         Some(McpServerConfig {
