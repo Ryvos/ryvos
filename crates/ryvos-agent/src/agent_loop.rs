@@ -557,7 +557,10 @@ impl AgentRuntime {
 
                 match delta? {
                     StreamDelta::TextDelta(text) => {
-                        self.event_bus.publish(AgentEvent::TextDelta { session_id: self.session_id.clone(), text: text.clone() });
+                        self.event_bus.publish(AgentEvent::TextDelta {
+                            session_id: self.session_id.clone(),
+                            text: text.clone(),
+                        });
                         text_content.push_str(&text);
                     }
                     StreamDelta::ThinkingDelta(text) => {
@@ -606,7 +609,11 @@ impl AgentRuntime {
                             input = %input_summary.chars().take(80).collect::<String>(),
                             "CLI tool executed (audit logged)"
                         );
-                        self.event_bus.publish(AgentEvent::ToolStart { session_id: self.session_id.clone(), name: tool_name.clone(), input: serde_json::json!({ "summary": &input_summary }) });
+                        self.event_bus.publish(AgentEvent::ToolStart {
+                            session_id: self.session_id.clone(),
+                            name: tool_name.clone(),
+                            input: serde_json::json!({ "summary": &input_summary }),
+                        });
 
                         // Assess the input for destructive patterns (pre-execution)
                         let input_json = serde_json::json!({ "command": &input_summary });
@@ -673,7 +680,11 @@ impl AgentRuntime {
                             }
                         }
 
-                        self.event_bus.publish(AgentEvent::ToolEnd { session_id: self.session_id.clone(), name: tool_name.clone(), result: ToolResult::success("[executed by CLI provider]"), });
+                        self.event_bus.publish(AgentEvent::ToolEnd {
+                            session_id: self.session_id.clone(),
+                            name: tool_name.clone(),
+                            result: ToolResult::success("[executed by CLI provider]"),
+                        });
                     }
                     StreamDelta::CliToolResult {
                         tool_name,
@@ -983,7 +994,11 @@ impl AgentRuntime {
                 .collect();
 
             for (tc, input) in tool_calls.iter().zip(parsed_inputs.iter()) {
-                self.event_bus.publish(AgentEvent::ToolStart { session_id: self.session_id.clone(), name: tc.name.clone(), input: input.clone() });
+                self.event_bus.publish(AgentEvent::ToolStart {
+                    session_id: self.session_id.clone(),
+                    name: tc.name.clone(),
+                    input: input.clone(),
+                });
             }
 
             // Collect (name, id, result) tuples — parallel or serial
@@ -1063,7 +1078,11 @@ impl AgentRuntime {
                     is_error: tool_result.is_error,
                 };
 
-                self.event_bus.publish(AgentEvent::ToolEnd { session_id: self.session_id.clone(), name: name.clone(), result: compacted_result, });
+                self.event_bus.publish(AgentEvent::ToolEnd {
+                    session_id: self.session_id.clone(),
+                    name: name.clone(),
+                    result: compacted_result,
+                });
 
                 // Track failures and inject reflexion hint when threshold exceeded
                 if tool_result.is_error {

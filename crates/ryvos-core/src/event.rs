@@ -246,7 +246,10 @@ mod tests {
             session_id: SessionId::from_string("s1"),
         });
         bus.publish(AgentEvent::TurnComplete { turn: 0 });
-        bus.publish(AgentEvent::TextDelta { session_id: SessionId::from_string("s1"), text: "hello".to_string() });
+        bus.publish(AgentEvent::TextDelta {
+            session_id: SessionId::from_string("s1"),
+            text: "hello".to_string(),
+        });
         bus.publish(AgentEvent::TurnComplete { turn: 1 });
 
         let e1 = rx.try_recv().unwrap();
@@ -286,7 +289,10 @@ mod tests {
             "RunStarted"
         );
         assert_eq!(
-            event_type_name(&AgentEvent::TextDelta { session_id: SessionId::from_string("s1"), text: "hi".to_string() }),
+            event_type_name(&AgentEvent::TextDelta {
+                session_id: SessionId::from_string("s1"),
+                text: "hi".to_string()
+            }),
             "TextDelta"
         );
         assert_eq!(
@@ -298,7 +304,10 @@ mod tests {
     #[test]
     fn test_sessionless_events_pass_session_filter() {
         let filter = EventFilter::for_session("s1");
-        assert!(filter.matches(&AgentEvent::TextDelta { session_id: SessionId::from_string("s1"), text: "hi".to_string() }));
+        assert!(filter.matches(&AgentEvent::TextDelta {
+            session_id: SessionId::from_string("s1"),
+            text: "hi".to_string()
+        }));
         // But events with a different session_id are blocked
         assert!(!filter.matches(&AgentEvent::RunStarted {
             session_id: SessionId::from_string("s2"),

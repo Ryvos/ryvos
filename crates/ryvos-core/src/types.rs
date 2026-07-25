@@ -438,7 +438,11 @@ pub enum AgentEvent {
         input: serde_json::Value,
     },
     /// Tool execution completed.
-    ToolEnd { session_id: SessionId, name: String, result: ToolResult },
+    ToolEnd {
+        session_id: SessionId,
+        name: String,
+        result: ToolResult,
+    },
     /// Agent turn completed.
     TurnComplete { turn: usize },
     /// Agent run completed.

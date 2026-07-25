@@ -64,9 +64,16 @@ pub async fn handle_connection(
                             if !subs.iter().any(|s| s == "*" || s == &session_id.0) {
                                 continue;
                             }
-                            Some(ServerEvent::new(session_id.to_string(), "text_delta").with_text(text.clone()))
+                            Some(
+                                ServerEvent::new(session_id.to_string(), "text_delta")
+                                    .with_text(text.clone()),
+                            )
                         }
-                        AgentEvent::ToolStart { session_id, name, input } => {
+                        AgentEvent::ToolStart {
+                            session_id,
+                            name,
+                            input,
+                        } => {
                             let subs = event_subs.lock().await;
                             if !subs.iter().any(|s| s == "*" || s == &session_id.0) {
                                 continue;
@@ -77,7 +84,11 @@ pub async fn handle_connection(
                                     .with_data(input.clone()),
                             )
                         }
-                        AgentEvent::ToolEnd { session_id, name, result } => {
+                        AgentEvent::ToolEnd {
+                            session_id,
+                            name,
+                            result,
+                        } => {
                             let subs = event_subs.lock().await;
                             if !subs.iter().any(|s| s == "*" || s == &session_id.0) {
                                 continue;
