@@ -17,14 +17,19 @@ fn resolve(p: &str, ctx: &ToolContext) -> Result<PathBuf> {
 
     if let Some(ref sb) = ctx.sandbox_config {
         if sb.enabled {
-            let canon_resolved = std::fs::canonicalize(&resolved).unwrap_or_else(|_| resolved.clone());
-            let canon_wd = std::fs::canonicalize(&ctx.working_dir).unwrap_or_else(|_| ctx.working_dir.clone());
+            let canon_resolved =
+                std::fs::canonicalize(&resolved).unwrap_or_else(|_| resolved.clone());
+            let canon_wd =
+                std::fs::canonicalize(&ctx.working_dir).unwrap_or_else(|_| ctx.working_dir.clone());
             if !canon_resolved.starts_with(&canon_wd) {
-                return Err(RyvosError::Security(format!("Sandbox escape attempted: path {} is outside working directory", p)));
+                return Err(RyvosError::Security(format!(
+                    "Sandbox escape attempted: path {} is outside working directory",
+                    p
+                )));
             }
         }
     }
-    
+
     Ok(resolved)
 }
 

@@ -421,7 +421,11 @@ fn extract_keywords(query: &str) -> Vec<String> {
     ];
     query
         .split_whitespace()
-        .map(|w| w.to_lowercase().trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+        .map(|w| {
+            w.to_lowercase()
+                .trim_matches(|c: char| !c.is_alphanumeric())
+                .to_string()
+        })
         .filter(|w| w.len() >= 3 && !STOP_WORDS.contains(&w.as_str()))
         .collect()
 }

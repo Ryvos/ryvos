@@ -8,7 +8,9 @@ use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use ryvos_agent::{AgentRuntime, ApprovalBroker, AuditTrail, FailureJournal, SafetyMemory, SessionManager};
+use ryvos_agent::{
+    AgentRuntime, ApprovalBroker, AuditTrail, FailureJournal, SafetyMemory, SessionManager,
+};
 use ryvos_channels::WhatsAppWebhookHandle;
 use ryvos_core::config::{BudgetConfig, GatewayConfig, IntegrationsConfig};
 use ryvos_core::event::EventBus;
