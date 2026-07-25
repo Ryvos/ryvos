@@ -280,8 +280,10 @@ impl AgentRuntime {
         };
         if let Some(ref vc) = *self.viking_client.lock().await {
             let query_hint = user_message;
-            let mut policy = ryvos_memory::viking::ContextLevelPolicy::default();
-            policy.max_l0_entries = ctx_config.viking_max_l0;
+            let policy = ryvos_memory::viking::ContextLevelPolicy {
+                max_l0_entries: ctx_config.viking_max_l0,
+                ..Default::default()
+            };
             let viking_ctx = ryvos_memory::viking::load_viking_context_filtered(
                 vc,
                 query_hint,
@@ -1004,7 +1006,7 @@ impl AgentRuntime {
                     // Parallel execution
                     let futs: Vec<_> = tool_calls
                         .iter()
-                        .zip(parsed_inputs.into_iter())
+                        .zip(parsed_inputs)
                         .map(|(tc, input)| {
                             let gate = self.gate.clone();
                             let tools = Arc::clone(&self.tools);
@@ -1032,7 +1034,7 @@ impl AgentRuntime {
                 } else {
                     // Serial execution
                     let mut results = Vec::with_capacity(tool_calls.len());
-                    for (tc, input) in tool_calls.iter().zip(parsed_inputs.into_iter()) {
+                    for (tc, input) in tool_calls.iter().zip(parsed_inputs) {
                         let result = self.execute_tool(&tc.name, input, tool_ctx.clone()).await;
                         let tool_result = match result {
                             Ok(r) => r,
