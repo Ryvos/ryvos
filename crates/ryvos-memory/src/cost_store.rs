@@ -79,7 +79,10 @@ impl CostStore {
 
     /// Record a single cost event.
     pub fn record_cost_event(&self, event: &CostEvent) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         conn.execute(
                 "INSERT INTO cost_events (run_id, session_id, timestamp, input_tokens, output_tokens, cost_cents, billing_type, model, provider)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -108,7 +111,10 @@ impl CostStore {
             now.format("%m")
         );
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         let cents: i64 = conn
             .query_row(
                 "SELECT COALESCE(SUM(cost_cents), 0) FROM cost_events WHERE timestamp >= ?1",
@@ -121,7 +127,10 @@ impl CostStore {
 
     /// Get cost summary for a date range.
     pub fn cost_summary(&self, from: &DateTime<Utc>, to: &DateTime<Utc>) -> Result<CostSummary> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         let row = conn
             .query_row(
                 "SELECT COALESCE(SUM(cost_cents), 0), COALESCE(SUM(input_tokens), 0),
@@ -169,7 +178,10 @@ impl CostStore {
             col = group_col
         );
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         let mut stmt = conn
             .prepare(&sql)
             .map_err(|e| RyvosError::Database(e.to_string()))?;
@@ -201,7 +213,10 @@ impl CostStore {
         provider: &str,
         billing_type: BillingType,
     ) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         conn.execute(
                 "INSERT OR IGNORE INTO run_log (run_id, session_id, start_time, model, provider, billing_type)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -228,7 +243,10 @@ impl CostStore {
         cost_cents: u64,
         status: &str,
     ) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         conn.execute(
             "UPDATE run_log SET end_time = ?1, input_tokens = ?2, output_tokens = ?3,
                  total_turns = ?4, cost_cents = ?5, status = ?6 WHERE run_id = ?7",
@@ -248,7 +266,10 @@ impl CostStore {
 
     /// Get paginated run history.
     pub fn run_history(&self, limit: u64, offset: u64) -> Result<(Vec<serde_json::Value>, u64)> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         let total: i64 = conn
             .query_row("SELECT COUNT(*) FROM run_log", [], |row| row.get(0))
             .map_err(|e| RyvosError::Database(e.to_string()))?;

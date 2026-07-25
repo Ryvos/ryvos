@@ -62,7 +62,10 @@ impl SessionMetaStore {
         session_id: &str,
         channel: &str,
     ) -> Result<SessionMeta> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         let existing = Self::get_inner(&conn, session_key)?;
         if let Some(meta) = existing {
             // Update last_active
@@ -97,7 +100,10 @@ impl SessionMetaStore {
 
     /// Get session meta by key.
     pub fn get(&self, session_key: &str) -> Result<Option<SessionMeta>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         Self::get_inner(&conn, session_key)
     }
 
@@ -132,7 +138,10 @@ impl SessionMetaStore {
 
     /// Set the CLI session ID (for --resume).
     pub fn set_cli_session_id(&self, session_key: &str, cli_session_id: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         conn.execute(
             "UPDATE session_meta SET cli_session_id = ?1, last_active = ?2 WHERE session_key = ?3",
             params![cli_session_id, Utc::now().to_rfc3339(), session_key],
@@ -143,7 +152,10 @@ impl SessionMetaStore {
 
     /// Clear the CLI session ID (on resume failure).
     pub fn clear_cli_session_id(&self, session_key: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         conn.execute(
             "UPDATE session_meta SET cli_session_id = NULL WHERE session_key = ?1",
             params![session_key],
@@ -159,7 +171,10 @@ impl SessionMetaStore {
         tokens: u64,
         billing_type: &str,
     ) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         conn.execute(
             "UPDATE session_meta SET total_runs = total_runs + 1, total_tokens = total_tokens + ?1,
                  billing_type = ?2, last_active = ?3 WHERE session_key = ?4",
@@ -171,7 +186,10 @@ impl SessionMetaStore {
 
     /// List all sessions.
     pub fn list(&self) -> Result<Vec<SessionMeta>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RyvosError::Database(e.to_string()))?;
         let mut stmt = conn
             .prepare(
                 "SELECT session_key, session_id, channel, cli_session_id, total_runs,
