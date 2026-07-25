@@ -101,11 +101,9 @@ impl ContextBuilder {
     ) -> Self {
         match mode {
             "never" => return self,
-            "relevant" => {
-                if !query_hint_is_temporal(query_hint.unwrap_or("")) {
-                    debug!("Skipping daily logs — query not temporal");
-                    return self;
-                }
+            "relevant" if !query_hint_is_temporal(query_hint.unwrap_or("")) => {
+                debug!("Skipping daily logs — query not temporal");
+                return self;
             }
             _ => {} // "always" or unknown → load
         }
@@ -327,9 +325,11 @@ pub fn build_default_context(
     workspace: &Path,
     system_prompt_override: Option<&str>,
 ) -> ChatMessage {
-    let mut ext = ExtendedContext::default();
-    ext.daily_log_mode = "always".to_string();
-    ext.daily_log_days = 3;
+    let ext = ExtendedContext {
+        daily_log_mode: "always".to_string(),
+        daily_log_days: 3,
+        ..Default::default()
+    };
     build_default_context_extended(workspace, system_prompt_override, &ext)
 }
 
@@ -385,9 +385,11 @@ pub fn build_goal_context(
     system_prompt_override: Option<&str>,
     goal: Option<&Goal>,
 ) -> ChatMessage {
-    let mut ext = ExtendedContext::default();
-    ext.daily_log_mode = "always".to_string();
-    ext.daily_log_days = 3;
+    let ext = ExtendedContext {
+        daily_log_mode: "always".to_string(),
+        daily_log_days: 3,
+        ..Default::default()
+    };
     build_goal_context_extended(workspace, system_prompt_override, goal, &ext)
 }
 
